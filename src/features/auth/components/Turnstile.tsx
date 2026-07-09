@@ -47,7 +47,7 @@ export function Turnstile({ onVerify }: { onVerify: (token: string) => void }) {
   useEffect(() => {
     let cancelled = false;
     let attempts = 0;
-    let timer: ReturnType<typeof window.setTimeout> | null = null;
+    let timer: number | null = null;
 
     function renderWhenReady() {
       if (cancelled || !siteKey || !ref.current || widgetId.current) return;
@@ -104,3 +104,4 @@ export function Turnstile({ onVerify }: { onVerify: (token: string) => void }) {
     </div>
   );
 }
+
