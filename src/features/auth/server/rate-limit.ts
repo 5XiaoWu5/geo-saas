@@ -41,5 +41,6 @@ export function getClientIp(request: Request): string {
 }
 
 export function rateLimitResponse(resetAt: number): Response {
-  return Response.json({ error: "Too many requests. Please try again later.", resetAt }, { status: 429 });
+  return Response.json({ error: "请求过于频繁，请稍后再试", resetAt }, { status: 429 });
 }
+

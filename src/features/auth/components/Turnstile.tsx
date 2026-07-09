@@ -28,7 +28,7 @@ export function Turnstile({ onVerify }: { onVerify: (token: string) => void }) {
   }, [onVerify, siteKey]);
 
   if (!siteKey) {
-    return <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">Turnstile site key is not configured. Development mode will allow local testing.</div>;
+    return <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">未配置人机验证站点密钥。开发环境允许本地测试。</div>;
   }
 
   return (
@@ -38,3 +38,4 @@ export function Turnstile({ onVerify }: { onVerify: (token: string) => void }) {
     </>
   );
 }
+

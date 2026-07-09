@@ -7,11 +7,7 @@ import { useEffect, useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 
-type SessionUser = {
-  id: string;
-  email: string;
-  name: string | null;
-};
+type SessionUser = { id: string; email: string; name: string | null };
 
 export function UserMenu() {
   const router = useRouter();
@@ -32,12 +28,9 @@ export function UserMenu() {
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2">
       <Avatar className="h-8 w-8 border border-white/10"><AvatarFallback className="bg-primary/15 text-primary">{initials}</AvatarFallback></Avatar>
-      <div className="hidden min-w-0 md:block">
-        <p className="truncate text-sm font-medium">{user?.name ?? "GeoPilot User"}</p>
-        <p className="truncate text-xs text-muted-foreground">{user?.email ?? "Loading session..."}</p>
-      </div>
-      <Button asChild variant="ghost" size="icon" aria-label="Security"><Link href="/profile/security"><ShieldCheck className="h-4 w-4" /></Link></Button>
-      <Button variant="ghost" size="icon" aria-label="Sign out" onClick={() => void logout()}><LogOut className="h-4 w-4" /></Button>
+      <div className="hidden min-w-0 md:block"><p className="truncate text-sm font-medium">{user?.name ?? "GeoPilot 用户"}</p><p className="truncate text-xs text-muted-foreground">{user?.email ?? "正在加载会话..."}</p></div>
+      <Button asChild variant="ghost" size="icon" aria-label="安全设置"><Link href="/profile/security"><ShieldCheck className="h-4 w-4" /></Link></Button>
+      <Button variant="ghost" size="icon" aria-label="退出登录" onClick={() => void logout()}><LogOut className="h-4 w-4" /></Button>
     </div>
   );
 }

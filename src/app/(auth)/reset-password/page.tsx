@@ -3,5 +3,5 @@ import { AuthShell } from "@/features/auth/components/AuthShell";
 import { ResetPasswordForm } from "@/features/auth/components/ResetPasswordForm";
 
 export default function ResetPasswordPage() {
-  return <AuthShell title="Set new password" description="Choose a strong password for your account."><Suspense><ResetPasswordForm /></Suspense></AuthShell>;
+  return <AuthShell title="设置新的安全密码" description="请使用至少 8 位字符，建议包含大小写字母、数字与符号。"><Suspense><ResetPasswordForm /></Suspense></AuthShell>;
 }

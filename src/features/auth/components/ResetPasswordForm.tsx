@@ -3,9 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { AuthAlert, AuthSubmitButton, PasswordField } from "@/features/auth/components/AuthFormControls";
 
 export function ResetPasswordForm() {
   const token = useSearchParams().get("token") ?? "";
@@ -21,11 +19,18 @@ export function ResetPasswordForm() {
     const response = await fetch("/api/auth/reset-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, password: formData.get("password") }) });
     const result = await response.json() as { error?: string };
     setLoading(false);
-    if (!response.ok) { setError(result.error ?? "Unable to reset password."); return; }
-    setMessage("Password updated. You can sign in now.");
+    if (!response.ok) { setError(result.error ?? "重置密码失败，请稍后重试"); return; }
+    setMessage("密码已更新，现在可以登录。");
   }
 
-  if (!token) return <p className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">Invalid reset link.</p>;
+  if (!token) return <AuthAlert type="error">重置链接无效或已过期，请重新申请密码重置邮件。</AuthAlert>;
 
-  return <form onSubmit={onSubmit} className="grid gap-4"><div className="grid gap-2"><Label htmlFor="password">New password</Label><Input id="password" name="password" type="password" minLength={8} autoComplete="new-password" required /></div>{error ? <p className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}{message ? <p className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-300">{message} <Link href="/login" className="underline">Sign in</Link></p> : null}<Button disabled={loading} className="w-full">{loading ? "Updating..." : "Reset password"}</Button></form>;
+  return (
+    <form onSubmit={onSubmit} className="grid gap-5">
+      <PasswordField id="password" label="新的安全密码" autoComplete="new-password" />
+      {error ? <AuthAlert type="error">{error}</AuthAlert> : null}
+      {message ? <AuthAlert type="success">{message} <Link href="/login" className="font-medium underline underline-offset-4">立即登录</Link></AuthAlert> : null}
+      <AuthSubmitButton loading={loading} loadingText="正在更新密码...">确认重置密码</AuthSubmitButton>
+    </form>
+  );
 }

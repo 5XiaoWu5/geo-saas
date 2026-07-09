@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   try {
     const body = resetPasswordSchema.parse(await request.json());
     const reset = await prisma.passwordReset.findUnique({ where: { token: sha256(body.token) } });
-    if (!reset || reset.usedAt || reset.expiresAt <= new Date()) return jsonError("Invalid or expired reset link.", 400);
+    if (!reset || reset.usedAt || reset.expiresAt <= new Date()) return jsonError("重置链接无效或已过期", 400);
 
     await prisma.$transaction([
       prisma.user.update({ where: { id: reset.userId }, data: { passwordHash: await hashPassword(body.password) } }),
@@ -21,3 +21,4 @@ export async function POST(request: Request) {
     return parseError(error);
   }
 }
+

@@ -1,10 +1,9 @@
 ﻿"use client";
 
 import { useState } from "react";
+import { Mail } from "lucide-react";
 import { Turnstile } from "@/features/auth/components/Turnstile";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { AuthAlert, AuthField, AuthSubmitButton } from "@/features/auth/components/AuthFormControls";
 
 export function ForgotPasswordForm() {
   const [message, setMessage] = useState("");
@@ -14,16 +13,25 @@ export function ForgotPasswordForm() {
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setLoading(true);
     setError("");
     setMessage("");
+    if (!turnstileToken) { setError("请先完成人机验证，确认是你本人找回账户。"); return; }
+    setLoading(true);
     const formData = new FormData(event.currentTarget);
-    const response = await fetch("/api/auth/forgot-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: formData.get("email"), turnstileToken }) });
+    const response = await fetch("/api/auth/forgot-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: String(formData.get("email") ?? "").trim().toLowerCase(), turnstileToken }) });
     const result = await response.json() as { error?: string };
     setLoading(false);
-    if (!response.ok) { setError(result.error ?? "Unable to send reset email."); return; }
-    setMessage("If an account exists, a reset email has been sent.");
+    if (!response.ok) { setError(result.error ?? "发送重置邮件失败，请稍后重试"); return; }
+    setMessage("如果该邮箱已注册，密码重置邮件已发送，请前往邮箱查看。");
   }
 
-  return <form onSubmit={onSubmit} className="grid gap-4"><div className="grid gap-2"><Label htmlFor="email">Email</Label><Input id="email" name="email" type="email" autoComplete="email" required /></div><Turnstile onVerify={setTurnstileToken} />{error ? <p className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}{message ? <p className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-300">{message}</p> : null}<Button disabled={loading} className="w-full">{loading ? "Sending..." : "Send reset email"}</Button></form>;
+  return (
+    <form onSubmit={onSubmit} className="grid gap-5">
+      <AuthField id="email" name="email" label="注册邮箱" type="email" autoComplete="email" required icon={<Mail className="h-4 w-4" />} placeholder="you@company.com" />
+      <Turnstile onVerify={setTurnstileToken} />
+      {error ? <AuthAlert type="error">{error}</AuthAlert> : null}
+      {message ? <AuthAlert type="success">{message}</AuthAlert> : null}
+      <AuthSubmitButton loading={loading} loadingText="正在发送安全邮件...">发送密码重置邮件</AuthSubmitButton>
+    </form>
+  );
 }

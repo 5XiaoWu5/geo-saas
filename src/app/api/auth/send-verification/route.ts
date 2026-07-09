@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     if (!limited.success) return rateLimitResponse(limited.resetAt);
 
     const user = await prisma.user.findUnique({ where: { email: parsedEmail } });
-    if (!user) return jsonError("Account not found.", 404);
+    if (!user) return jsonError("账号不存在", 404);
     if (user.emailVerified) return Response.json({ ok: true });
 
     const code = createNumericCode();
@@ -26,3 +26,4 @@ export async function POST(request: Request) {
     return parseError(error);
   }
 }
+

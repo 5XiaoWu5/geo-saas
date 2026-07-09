@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const ip = getClientIp(request);
     const limited = rateLimit({ key: `forgot:${ip}:${body.email}`, limit: 5, windowMs: 60 * 60 * 1000 });
     if (!limited.success) return rateLimitResponse(limited.resetAt);
-    if (!(await verifyTurnstile(body.turnstileToken, ip))) return jsonError("Turnstile verification failed.", 403);
+    if (!(await verifyTurnstile(body.turnstileToken, ip))) return jsonError("人机验证失败，请重试", 403);
 
     const user = await prisma.user.findUnique({ where: { email: body.email } });
     if (user) {
@@ -28,3 +28,4 @@ export async function POST(request: Request) {
     return parseError(error);
   }
 }
+

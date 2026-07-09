@@ -18,3 +18,4 @@
   const result = await response.json() as { success?: boolean };
   return result.success === true;
 }
+

@@ -15,7 +15,7 @@ export async function POST(request: Request) {
       orderBy: { createdAt: "desc" },
     });
 
-    if (!verification) return jsonError("Invalid or expired verification code.", 400);
+    if (!verification) return jsonError("验证码无效或已过期", 400);
 
     await prisma.user.update({ where: { email: body.email }, data: { emailVerified: true } });
     await prisma.verification.deleteMany({ where: { identifier: `email:${body.email}` } });
@@ -24,3 +24,4 @@ export async function POST(request: Request) {
     return parseError(error);
   }
 }
+

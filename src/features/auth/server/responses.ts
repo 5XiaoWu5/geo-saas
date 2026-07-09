@@ -5,7 +5,7 @@ export function jsonError(error: string, status = 400): Response {
 }
 
 export function parseError(error: unknown): Response {
-  if (error instanceof ZodError) return jsonError(error.issues[0]?.message ?? "Invalid request.", 400);
+  if (error instanceof ZodError) return jsonError(error.issues[0]?.message ?? "请求参数无效", 400);
   console.error(error);
-  return jsonError("Internal server error.", 500);
+  return jsonError("服务器暂时不可用，请稍后重试", 500);
 }

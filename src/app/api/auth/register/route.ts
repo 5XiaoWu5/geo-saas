@@ -14,10 +14,10 @@ export async function POST(request: Request) {
     const ip = getClientIp(request);
     const limited = rateLimit({ key: `register:${ip}`, limit: 3, windowMs: 60 * 60 * 1000 });
     if (!limited.success) return rateLimitResponse(limited.resetAt);
-    if (!(await verifyTurnstile(body.turnstileToken, ip))) return jsonError("Turnstile verification failed.", 403);
+    if (!(await verifyTurnstile(body.turnstileToken, ip))) return jsonError("人机验证失败，请重试", 403);
 
     const existing = await prisma.user.findUnique({ where: { email: body.email } });
-    if (existing) return jsonError("An account with this email already exists.", 409);
+    if (existing) return jsonError("该邮箱已注册，请直接登录", 409);
 
     const user = await prisma.user.create({
       data: {
@@ -44,3 +44,4 @@ export async function POST(request: Request) {
     return parseError(error);
   }
 }
+
