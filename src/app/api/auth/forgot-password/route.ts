@@ -1,19 +1,39 @@
-﻿import { prisma } from "@/features/auth/server/prisma";
+import { prisma } from "@/features/auth/server/prisma";
 import { createToken, sha256 } from "@/features/auth/server/tokens";
 import { PASSWORD_RESET_TTL_MINUTES } from "@/features/auth/server/constants";
 import { sendPasswordResetEmail } from "@/features/auth/server/email";
 import { forgotPasswordSchema } from "@/features/auth/server/schemas";
 import { getClientIp, rateLimit, rateLimitResponse } from "@/features/auth/server/rate-limit";
-import { verifyTurnstile } from "@/features/auth/server/turnstile";
-import { jsonError, parseError } from "@/features/auth/server/responses";
+import { parseError } from "@/features/auth/server/responses";
+
+function logForgotPasswordError(event: string, error: unknown, requestId?: string) {
+  console.error(`[AUTH FORGOT_PASSWORD] ${event}`, {
+    requestId,
+    message: error instanceof Error ? error.message : String(error),
+    name: error instanceof Error ? error.name : undefined,
+    stack: error instanceof Error ? error.stack : undefined,
+    databaseUrlPresent: Boolean(process.env.DATABASE_URL),
+    resendApiKeyPresent: Boolean(process.env.RESEND_API_KEY),
+    runtime: process.env.NEXT_RUNTIME ?? "unknown",
+    nodeEnv: process.env.NODE_ENV,
+  });
+}
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
   try {
+    console.info("[AUTH FORGOT_PASSWORD] request entered api", {
+      requestId,
+      databaseUrlPresent: Boolean(process.env.DATABASE_URL),
+      resendApiKeyPresent: Boolean(process.env.RESEND_API_KEY),
+      runtime: process.env.NEXT_RUNTIME ?? "unknown",
+      nodeEnv: process.env.NODE_ENV,
+    });
+
     const body = forgotPasswordSchema.parse(await request.json());
     const ip = getClientIp(request);
     const limited = rateLimit({ key: `forgot:${ip}:${body.email}`, limit: 5, windowMs: 60 * 60 * 1000 });
     if (!limited.success) return rateLimitResponse(limited.resetAt);
-    if (!(await verifyTurnstile(body.turnstileToken, ip))) return jsonError("人机验证失败，请重试", 403);
 
     const user = await prisma.user.findUnique({ where: { email: body.email } });
     if (user) {
@@ -25,7 +45,7 @@ export async function POST(request: Request) {
 
     return Response.json({ ok: true });
   } catch (error) {
+    logForgotPasswordError("request failed", error, requestId);
     return parseError(error);
   }
 }
-
