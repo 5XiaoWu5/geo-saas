@@ -9,7 +9,7 @@ import { verifyTurnstile } from "@/features/auth/server/turnstile";
 import { jsonError, parseError } from "@/features/auth/server/responses";
 
 function logLoginError(event: string, error: unknown, requestId?: string) {
-  console.error(`[AUTH ERROR] login:${event}`, {
+  console.error(`[AUTH LOGIN] ${event}`, {
     requestId,
     message: error instanceof Error ? error.message : String(error),
     name: error instanceof Error ? error.name : undefined,
@@ -22,7 +22,7 @@ function logLoginError(event: string, error: unknown, requestId?: string) {
 }
 
 function logLoginInfo(event: string, data: Record<string, unknown> = {}) {
-  console.info(`[auth:login] ${event}`, {
+  console.info(`[AUTH LOGIN] ${event}`, {
     ...data,
     databaseUrlPresent: Boolean(process.env.DATABASE_URL),
     betterAuthSecretPresent: Boolean(process.env.BETTER_AUTH_SECRET),
@@ -34,12 +34,28 @@ function logLoginInfo(event: string, data: Record<string, unknown> = {}) {
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
   try {
-    logLoginInfo("request:start", { requestId });
-    const body = loginSchema.parse(await request.json());
+    logLoginInfo("request entered api", { requestId });
+    const payload = await request.json();
+    logLoginInfo("request body received", {
+      requestId,
+      emailPresent: typeof payload?.email === "string" && payload.email.length > 0,
+      passwordPresent: typeof payload?.password === "string" && payload.password.length > 0,
+      turnstileTokenPresent: typeof payload?.turnstileToken === "string" && payload.turnstileToken.length > 0,
+      turnstileTokenLength: typeof payload?.turnstileToken === "string" ? payload.turnstileToken.length : 0,
+    });
+
+    const body = loginSchema.parse(payload);
     const ip = getClientIp(request);
-    logLoginInfo("turnstile token received", { requestId, tokenPresent: Boolean(body.turnstileToken), tokenLength: body.turnstileToken.length, ip });
+    logLoginInfo("validated request payload", {
+      requestId,
+      emailPresent: Boolean(body.email),
+      turnstileTokenPresent: Boolean(body.turnstileToken),
+      turnstileTokenLength: body.turnstileToken.length,
+      ipPresent: Boolean(ip),
+    });
 
     const limited = rateLimit({ key: `login:${ip}:${body.email}`, limit: 5, windowMs: 15 * 60 * 1000 });
+    logLoginInfo("rate limit checked", { requestId, success: limited.success, resetAt: limited.resetAt });
     if (!limited.success) return rateLimitResponse(limited.resetAt);
 
     const turnstileValid = await verifyTurnstile(body.turnstileToken, ip);
@@ -49,18 +65,36 @@ export async function POST(request: Request) {
     let user;
     try {
       user = await prisma.user.findUnique({ where: { email: body.email } });
+      logLoginInfo("prisma user query completed", {
+        requestId,
+        userFound: Boolean(user),
+        userId: user?.id,
+        hasPasswordHash: Boolean(user?.passwordHash),
+        emailVerified: Boolean(user?.emailVerified),
+      });
     } catch (error) {
       logLoginError("prisma findUnique failed", error, requestId);
       throw error;
     }
 
-    if (!user?.passwordHash) return jsonError("邮箱或密码错误", 401);
-    if (!(await verifyPassword(user.passwordHash, body.password))) return jsonError("邮箱或密码错误", 401);
-    if (!user.emailVerified) return jsonError("请先完成邮箱验证后再登录", 403);
+    if (!user?.passwordHash) {
+      logLoginInfo("password hash missing or user not found", { requestId, userFound: Boolean(user), hasPasswordHash: Boolean(user?.passwordHash) });
+      return jsonError("邮箱或密码错误", 401);
+    }
+
+    const passwordValid = await verifyPassword(user.passwordHash, body.password);
+    logLoginInfo("password hash verification completed", { requestId, passwordValid });
+    if (!passwordValid) return jsonError("邮箱或密码错误", 401);
+
+    if (!user.emailVerified) {
+      logLoginInfo("email verification required", { requestId, userId: user.id });
+      return jsonError("请先完成邮箱验证后再登录", 403);
+    }
 
     let token;
     try {
       token = await createSession(user.id, request);
+      logLoginInfo("session creation completed", { requestId, userId: user.id, sessionCreated: Boolean(token) });
     } catch (error) {
       logLoginError("create session failed", error, requestId);
       throw error;
@@ -68,6 +102,7 @@ export async function POST(request: Request) {
 
     const cookieStore = await cookies();
     cookieStore.set(AUTH_COOKIE_NAME, token, sessionCookieOptions());
+    logLoginInfo("session cookie set", { requestId, userId: user.id, cookieName: AUTH_COOKIE_NAME });
     logLoginInfo("request:success", { requestId, userId: user.id });
     return Response.json({ ok: true });
   } catch (error) {
@@ -75,3 +110,4 @@ export async function POST(request: Request) {
     return parseError(error);
   }
 }
+
