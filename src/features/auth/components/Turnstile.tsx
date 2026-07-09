@@ -1,11 +1,15 @@
 ﻿"use client";
 
 import Script from "next/script";
-import { useEffect, useId, useRef, useState } from "react";
+import { forwardRef, useEffect, useId, useImperativeHandle, useRef, useState } from "react";
 
 const TURNSTILE_SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js";
 
 type TurnstileCallbackWindow = Window & Record<string, ((token?: string) => void) | undefined>;
+
+export type TurnstileHandle = {
+  reset: () => void;
+};
 
 declare global {
   interface Window {
@@ -15,18 +19,30 @@ declare global {
   }
 }
 
-export function Turnstile({ onVerify }: { onVerify: (token: string) => void }) {
+export const Turnstile = forwardRef<TurnstileHandle, { onVerify: (token: string) => void }>(function Turnstile({ onVerify }, ref) {
   const callbackId = useId().replace(/[^a-zA-Z0-9]/g, "");
   const containerRef = useRef<HTMLDivElement>(null);
+  const widgetIdRef = useRef<string | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   const successCallbackName = `geoPilotTurnstileSuccess${callbackId}`;
   const errorCallbackName = `geoPilotTurnstileError${callbackId}`;
 
+  useImperativeHandle(ref, () => ({
+    reset: () => {
+      onVerify("");
+      setStatus("loading");
+      const widgetId = widgetIdRef.current ?? findWidgetId(containerRef.current);
+      if (widgetId) window.turnstile?.reset(widgetId);
+      else window.turnstile?.reset();
+    },
+  }), [onVerify]);
+
   useEffect(() => {
     const callbackWindow = window as unknown as TurnstileCallbackWindow;
 
     callbackWindow[successCallbackName] = (token?: string) => {
+      widgetIdRef.current = findWidgetId(containerRef.current);
       if (!token) {
         onVerify("");
         setStatus("error");
@@ -43,6 +59,7 @@ export function Turnstile({ onVerify }: { onVerify: (token: string) => void }) {
     };
 
     const timer = window.setTimeout(() => {
+      widgetIdRef.current = findWidgetId(containerRef.current);
       if (!containerRef.current?.querySelector("iframe") && status === "loading") setStatus("error");
     }, 12000);
 
@@ -72,7 +89,12 @@ export function Turnstile({ onVerify }: { onVerify: (token: string) => void }) {
           data-expired-callback={errorCallbackName}
         />
       </div>
-      {status === "error" ? <p className="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs text-red-200">安全校验未完成，请刷新页面后重试。</p> : null}
+      {status === "error" ? <p className="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs text-red-200">安全校验未完成，请重新验证后再试。</p> : null}
     </div>
   );
+});
+
+function findWidgetId(container: HTMLDivElement | null): string | null {
+  const responseInput = container?.querySelector<HTMLInputElement>('input[name="cf-turnstile-response"]');
+  return responseInput?.id?.replace(/_response$/, "") || null;
 }

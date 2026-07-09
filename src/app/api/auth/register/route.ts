@@ -8,8 +8,9 @@ import { getClientIp, rateLimit, rateLimitResponse } from "@/features/auth/serve
 import { verifyTurnstile } from "@/features/auth/server/turnstile";
 import { jsonError, parseError } from "@/features/auth/server/responses";
 
-function logRegisterError(event: string, error: unknown) {
-  console.error(`[auth:register] ${event}`, {
+function logRegisterError(event: string, error: unknown, requestId?: string) {
+  console.error(`[AUTH ERROR] register:${event}`, {
+    requestId,
     message: error instanceof Error ? error.message : String(error),
     name: error instanceof Error ? error.name : undefined,
     stack: error instanceof Error ? error.stack : undefined,
@@ -33,25 +34,26 @@ function logRegisterInfo(event: string, data: Record<string, unknown> = {}) {
 }
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
   try {
-    logRegisterInfo("request:start");
+    logRegisterInfo("request:start", { requestId });
 
     const body = registerSchema.parse(await request.json());
     const ip = getClientIp(request);
-    logRegisterInfo("turnstile token received", { tokenPresent: Boolean(body.turnstileToken), tokenLength: body.turnstileToken.length, ip });
+    logRegisterInfo("turnstile token received", { requestId, tokenPresent: Boolean(body.turnstileToken), tokenLength: body.turnstileToken.length, ip });
 
     const limited = rateLimit({ key: `register:${ip}`, limit: 3, windowMs: 60 * 60 * 1000 });
     if (!limited.success) return rateLimitResponse(limited.resetAt);
 
     const turnstileValid = await verifyTurnstile(body.turnstileToken, ip);
-    logRegisterInfo("turnstile verification completed", { turnstileValid });
+    logRegisterInfo("turnstile verification completed", { requestId, turnstileValid });
     if (!turnstileValid) return jsonError("人机验证失败，请重试", 403);
 
     let existing;
     try {
       existing = await prisma.user.findUnique({ where: { email: body.email } });
     } catch (error) {
-      logRegisterError("prisma findUnique failed", error);
+      logRegisterError("prisma findUnique failed", error, requestId);
       throw error;
     }
 
@@ -61,7 +63,7 @@ export async function POST(request: Request) {
     try {
       passwordHash = await hashPassword(body.password);
     } catch (error) {
-      logRegisterError("password hash failed", error);
+      logRegisterError("password hash failed", error, requestId);
       throw error;
     }
 
@@ -76,7 +78,7 @@ export async function POST(request: Request) {
         },
       });
     } catch (error) {
-      logRegisterError("prisma createUser failed", error);
+      logRegisterError("prisma createUser failed", error, requestId);
       throw error;
     }
 
@@ -91,21 +93,20 @@ export async function POST(request: Request) {
         },
       });
     } catch (error) {
-      logRegisterError("prisma verification create failed", error);
+      logRegisterError("prisma verification create failed", error, requestId);
       throw error;
     }
 
     try {
       await sendVerificationCodeEmail(body.email, code);
     } catch (error) {
-      logRegisterError("resend verification email failed", error);
-      throw error;
+      logRegisterError("resend verification email failed", error, requestId);
     }
 
-    logRegisterInfo("request:success", { userId: user.id, email: body.email });
+    logRegisterInfo("request:success", { requestId, userId: user.id, email: body.email });
     return Response.json({ ok: true, email: body.email });
   } catch (error) {
-    logRegisterError("request failed", error);
+    logRegisterError("request failed", error, requestId);
     return parseError(error);
   }
 }

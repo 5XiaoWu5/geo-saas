@@ -1,10 +1,10 @@
-﻿import { mockProjects } from "@/data/projects";
+import { mockProjects } from "@/data/projects";
 
 export const dashboardMetrics = [
-  { label: "Tracked Projects", value: "24", delta: "+12.5%", tone: "cyan" },
-  { label: "Engine Visibility", value: "78.4%", delta: "+8.2%", tone: "emerald" },
-  { label: "Prompt Coverage", value: "1,284", delta: "+126", tone: "violet" },
-  { label: "Open Findings", value: "37", delta: "-9", tone: "amber" },
+  { label: "跟踪项目", value: "24", delta: "+12.5%", tone: "cyan" },
+  { label: "AI 可见性", value: "78.4%", delta: "+8.2%", tone: "emerald" },
+  { label: "问题覆盖", value: "1,284", delta: "+126", tone: "violet" },
+  { label: "待处理发现", value: "37", delta: "-9", tone: "amber" },
 ];
 
 export const projectDashboardStats = {
@@ -25,23 +25,23 @@ export const projects = mockProjects.map((project) => ({
   status: project.status,
   visibility: `${project.geoScore}%`,
   prompts: project.reportsCount * 37 + 16,
-  owner: "GeoPilot Team",
+  owner: "GeoPilot 团队",
 }));
 
 export const analysisItems = [
-  { topic: "Brand answer consistency", score: 91, trend: "Strong", engine: "Enterprise search" },
-  { topic: "Competitor co-mentions", score: 64, trend: "Needs review", engine: "Answer engines" },
-  { topic: "Citation freshness", score: 77, trend: "Stable", engine: "AI summaries" },
-  { topic: "Knowledge gap coverage", score: 58, trend: "Watch", engine: "Long-form prompts" },
+  { topic: "品牌答案一致性", score: 91, trend: "强", engine: "企业搜索" },
+  { topic: "竞品共同提及", score: 64, trend: "需要复核", engine: "答案引擎" },
+  { topic: "引用新鲜度", score: 77, trend: "稳定", engine: "AI 摘要" },
+  { topic: "知识缺口覆盖", score: 58, trend: "观察", engine: "长问题提示" },
 ];
 
 export const reports = [
-  { title: "Executive Visibility Brief", cadence: "Weekly", audience: "Leadership", status: "Ready" },
-  { title: "Prompt Cluster Performance", cadence: "Monthly", audience: "Growth", status: "Draft" },
-  { title: "Competitive Share of Voice", cadence: "Monthly", audience: "Strategy", status: "Ready" },
+  { title: "管理层可见性简报", cadence: "每周", audience: "管理层", status: "已就绪" },
+  { title: "问题集群表现", cadence: "每月", audience: "增长团队", status: "草稿" },
+  { title: "竞品声量份额", cadence: "每月", audience: "策略团队", status: "已就绪" },
 ];
 
 export const apiKeys = [
-  { name: "Production workspace", prefix: "gpk_live_8f3a", created: "Jun 18, 2026", lastUsed: "2 hours ago" },
-  { name: "Analytics sandbox", prefix: "gpk_test_1c92", created: "Jun 02, 2026", lastUsed: "Yesterday" },
+  { name: "生产工作空间", prefix: "gpk_live_8f3a", created: "2026年6月18日", lastUsed: "2 小时前" },
+  { name: "分析沙盒", prefix: "gpk_test_1c92", created: "2026年6月2日", lastUsed: "昨天" },
 ];

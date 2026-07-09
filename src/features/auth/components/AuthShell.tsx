@@ -1,4 +1,4 @@
-﻿import type { ReactNode } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowUpRight, Bot, ChartNoAxesCombined, Globe2, Radar, ShieldCheck, Sparkles, Zap } from "lucide-react";
 
@@ -28,10 +28,10 @@ export function AuthShell({ title, description, children, footer }: { title: str
               </div>
               <div>
                 <p className="font-semibold tracking-tight">GeoPilot AI</p>
-                <p className="text-xs text-muted-foreground">AI Search Optimization Platform</p>
+                <p className="text-xs text-muted-foreground">AI 搜索优化平台</p>
               </div>
             </Link>
-            <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-muted-foreground">Enterprise Workspace</div>
+            <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-muted-foreground">企业工作空间</div>
           </div>
 
           <div className="max-w-2xl space-y-8">
@@ -56,7 +56,7 @@ export function AuthShell({ title, description, children, footer }: { title: str
 
             <div className="relative max-w-xl overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/30 backdrop-blur-2xl">
               <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-cyan-400/20 blur-2xl" />
-              <div className="mb-5 flex items-center justify-between"><div><p className="text-sm font-medium">AI Search Optimization</p><p className="text-xs text-muted-foreground">Workspace · Monitor · Optimize</p></div><ArrowUpRight className="h-4 w-4 text-cyan-300" /></div>
+              <div className="mb-5 flex items-center justify-between"><div><p className="text-sm font-medium">AI 搜索优化</p><p className="text-xs text-muted-foreground">工作空间 · 监控 · 优化</p></div><ArrowUpRight className="h-4 w-4 text-cyan-300" /></div>
               <div className="grid gap-3">
                 <SignalRow icon={<Globe2 className="h-4 w-4" />} label="网站资产识别" value="已同步" progress="w-[92%]" />
                 <SignalRow icon={<Bot className="h-4 w-4" />} label="AI 搜索可见性" value="监控中" progress="w-[74%]" />
@@ -76,17 +76,17 @@ export function AuthShell({ title, description, children, footer }: { title: str
           <div className="w-full max-w-[464px]">
             <div className="mb-8 flex items-center gap-3 lg:hidden">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-300/10"><Sparkles className="h-5 w-5 text-cyan-300" /></div>
-              <div><p className="font-semibold">GeoPilot AI</p><p className="text-xs text-muted-foreground">AI Search Optimization Platform</p></div>
+              <div><p className="font-semibold">GeoPilot AI</p><p className="text-xs text-muted-foreground">AI 搜索优化平台</p></div>
             </div>
             <div className="relative overflow-hidden rounded-[2.1rem] border border-white/12 bg-slate-950/58 p-6 shadow-2xl shadow-black/45 backdrop-blur-2xl sm:p-8">
               <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/70 to-transparent" />
               <div className="pointer-events-none absolute -right-14 -top-14 h-36 w-36 rounded-full bg-violet-500/18 blur-3xl" />
               <div className="relative mb-7">
                 <div className="mb-5 flex items-center justify-between">
-                  <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-medium tracking-[0.22em] text-cyan-200">WORKSPACE</div>
-                  <div className="text-[11px] text-muted-foreground">AI Search Optimization</div>
+                  <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-medium tracking-[0.22em] text-cyan-200">工作空间</div>
+                  <div className="text-[11px] text-muted-foreground">AI 搜索优化</div>
                 </div>
-                <p className="mb-2 text-sm text-slate-400">Welcome back</p>
+                <p className="mb-2 text-sm text-slate-400">欢迎回来</p>
                 <h2 className="text-3xl font-semibold tracking-[-0.035em]">{title}</h2>
                 <p className="mt-3 text-sm leading-6 text-muted-foreground">{description}</p>
               </div>
