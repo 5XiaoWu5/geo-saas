@@ -1,8 +1,8 @@
 ﻿"use client";
 
-import Script from "next/script";
-import { useCallback, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
+const TURNSTILE_SCRIPT_ID = "cf-turnstile-script";
 const TURNSTILE_SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
 
 declare global {
@@ -14,31 +14,82 @@ declare global {
   }
 }
 
+function loadTurnstileScript(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  if (window.turnstile) return Promise.resolve();
+
+  return new Promise((resolve, reject) => {
+    const existingScript = document.getElementById(TURNSTILE_SCRIPT_ID) as HTMLScriptElement | null;
+
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(), { once: true });
+      existingScript.addEventListener("error", () => reject(new Error("Turnstile script failed to load")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = TURNSTILE_SCRIPT_ID;
+    script.src = TURNSTILE_SCRIPT_SRC;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Turnstile script failed to load"));
+    document.head.appendChild(script);
+  });
+}
+
 export function Turnstile({ onVerify }: { onVerify: (token: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const widgetId = useRef<string | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
-  const renderWidget = useCallback(() => {
-    if (!siteKey || !ref.current || !window.turnstile || widgetId.current) return;
+  useEffect(() => {
+    let cancelled = false;
+    let attempts = 0;
+    let timer: ReturnType<typeof window.setTimeout> | null = null;
 
-    widgetId.current = window.turnstile.render(ref.current, {
-      sitekey: siteKey,
-      theme: "dark",
-      callback: (token) => {
-        setStatus("ready");
-        onVerify(token);
-      },
-      "expired-callback": () => {
-        onVerify("");
-        if (widgetId.current) window.turnstile?.reset(widgetId.current);
-      },
-      "error-callback": () => {
-        onVerify("");
-        setStatus("error");
-      },
-    });
+    function renderWhenReady() {
+      if (cancelled || !siteKey || !ref.current || widgetId.current) return;
+
+      if (!window.turnstile) {
+        attempts += 1;
+        if (attempts > 40) {
+          setStatus("error");
+          return;
+        }
+        timer = window.setTimeout(renderWhenReady, 250);
+        return;
+      }
+
+      widgetId.current = window.turnstile.render(ref.current, {
+        sitekey: siteKey,
+        theme: "dark",
+        callback: (token) => {
+          setStatus("ready");
+          onVerify(token);
+        },
+        "expired-callback": () => {
+          onVerify("");
+          if (widgetId.current) window.turnstile?.reset(widgetId.current);
+        },
+        "error-callback": () => {
+          onVerify("");
+          setStatus("error");
+        },
+      });
+    }
+
+    if (!siteKey) return;
+
+    loadTurnstileScript()
+      .then(renderWhenReady)
+      .catch(() => setStatus("error"));
+
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
   }, [onVerify, siteKey]);
 
   if (!siteKey) {
@@ -47,13 +98,6 @@ export function Turnstile({ onVerify }: { onVerify: (token: string) => void }) {
 
   return (
     <div className="space-y-2">
-      <Script
-        src={TURNSTILE_SCRIPT_SRC}
-        strategy="afterInteractive"
-        onLoad={renderWidget}
-        onReady={renderWidget}
-        onError={() => setStatus("error")}
-      />
       <div ref={ref} className="min-h-[65px]" />
       {status === "loading" ? <p className="text-xs text-muted-foreground">正在加载人机验证...</p> : null}
       {status === "error" ? <p className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive">人机验证加载失败，请刷新页面后重试。</p> : null}
