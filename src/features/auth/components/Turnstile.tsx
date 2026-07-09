@@ -14,28 +14,16 @@ declare global {
   }
 }
 
-function loadTurnstileScript(): Promise<void> {
-  if (typeof window === "undefined") return Promise.resolve();
-  if (window.turnstile) return Promise.resolve();
+function ensureTurnstileScript(onError: () => void): void {
+  if (typeof window === "undefined" || window.turnstile || document.getElementById(TURNSTILE_SCRIPT_ID)) return;
 
-  return new Promise((resolve, reject) => {
-    const existingScript = document.getElementById(TURNSTILE_SCRIPT_ID) as HTMLScriptElement | null;
-
-    if (existingScript) {
-      existingScript.addEventListener("load", () => resolve(), { once: true });
-      existingScript.addEventListener("error", () => reject(new Error("Turnstile script failed to load")), { once: true });
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.id = TURNSTILE_SCRIPT_ID;
-    script.src = TURNSTILE_SCRIPT_SRC;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Turnstile script failed to load"));
-    document.head.appendChild(script);
-  });
+  const script = document.createElement("script");
+  script.id = TURNSTILE_SCRIPT_ID;
+  script.src = TURNSTILE_SCRIPT_SRC;
+  script.async = true;
+  script.defer = true;
+  script.onerror = onError;
+  document.head.appendChild(script);
 }
 
 export function Turnstile({ onVerify }: { onVerify: (token: string) => void }) {
@@ -45,16 +33,18 @@ export function Turnstile({ onVerify }: { onVerify: (token: string) => void }) {
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
   useEffect(() => {
+    if (!siteKey) return;
+
     let cancelled = false;
     let attempts = 0;
     let timer: number | null = null;
 
     function renderWhenReady() {
-      if (cancelled || !siteKey || !ref.current || widgetId.current) return;
+      if (cancelled || !ref.current || widgetId.current) return;
 
       if (!window.turnstile) {
         attempts += 1;
-        if (attempts > 40) {
+        if (attempts > 80) {
           setStatus("error");
           return;
         }
@@ -80,11 +70,8 @@ export function Turnstile({ onVerify }: { onVerify: (token: string) => void }) {
       });
     }
 
-    if (!siteKey) return;
-
-    loadTurnstileScript()
-      .then(renderWhenReady)
-      .catch(() => setStatus("error"));
+    ensureTurnstileScript(() => setStatus("error"));
+    renderWhenReady();
 
     return () => {
       cancelled = true;
@@ -104,4 +91,3 @@ export function Turnstile({ onVerify }: { onVerify: (token: string) => void }) {
     </div>
   );
 }
-
