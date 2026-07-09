@@ -19,7 +19,6 @@ export const loginSchema = z.object({
 
 export const forgotPasswordSchema = z.object({
   email: emailSchema,
-  turnstileToken: turnstileTokenSchema,
 });
 
 export const resetPasswordSchema = z.object({
