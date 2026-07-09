@@ -33,7 +33,10 @@ export function Turnstile({ onVerify }: { onVerify: (token: string) => void }) {
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
   useEffect(() => {
-    if (!siteKey) return;`r`n`r`n    const resolvedSiteKey = siteKey;`r`n    let cancelled = false;
+    if (!siteKey) return;
+
+    const resolvedSiteKey = siteKey;
+    let cancelled = false;
     let attempts = 0;
     let timer: number | null = null;
 
@@ -89,4 +92,3 @@ export function Turnstile({ onVerify }: { onVerify: (token: string) => void }) {
     </div>
   );
 }
-
