@@ -1,0 +1,5 @@
+﻿export const AUTH_COOKIE_NAME = "geopilot_session";
+export const SESSION_DAYS = 30;
+export const SESSION_MAX_AGE_SECONDS = SESSION_DAYS * 24 * 60 * 60;
+export const EMAIL_CODE_TTL_MINUTES = 15;
+export const PASSWORD_RESET_TTL_MINUTES = 30;

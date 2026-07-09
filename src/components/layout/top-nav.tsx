@@ -2,12 +2,12 @@
 
 import { Bell, Search } from "lucide-react";
 import { useI18n } from "@/i18n/provider";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { WorkspaceSwitcher } from "@/features/workspace/components/WorkspaceSwitcher";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 import { MobileNav } from "@/components/layout/sidebar";
+import { UserMenu } from "@/components/layout/user-menu";
 
 export function TopNav() {
   const { t } = useI18n();
@@ -28,12 +28,11 @@ export function TopNav() {
           <Button variant="outline" size="icon" aria-label={t("topNav.notifications")} className="border-white/10 bg-white/[0.04]">
             <Bell className="h-4 w-4" />
           </Button>
-          <Avatar className="h-9 w-9 border border-white/10">
-            <AvatarFallback className="bg-primary/15 text-primary">GP</AvatarFallback>
-          </Avatar>
+          <UserMenu />
         </div>
       </div>
     </header>
   );
 }
+
 
