@@ -8,44 +8,104 @@ import { getClientIp, rateLimit, rateLimitResponse } from "@/features/auth/serve
 import { verifyTurnstile } from "@/features/auth/server/turnstile";
 import { jsonError, parseError } from "@/features/auth/server/responses";
 
+function logRegisterError(event: string, error: unknown) {
+  console.error(`[auth:register] ${event}`, {
+    message: error instanceof Error ? error.message : String(error),
+    name: error instanceof Error ? error.name : undefined,
+    stack: error instanceof Error ? error.stack : undefined,
+    databaseUrlPresent: Boolean(process.env.DATABASE_URL),
+    betterAuthSecretPresent: Boolean(process.env.BETTER_AUTH_SECRET),
+    resendApiKeyPresent: Boolean(process.env.RESEND_API_KEY),
+    runtime: process.env.NEXT_RUNTIME ?? "unknown",
+    nodeEnv: process.env.NODE_ENV,
+  });
+}
+
+function logRegisterInfo(event: string, data: Record<string, unknown> = {}) {
+  console.info(`[auth:register] ${event}`, {
+    ...data,
+    databaseUrlPresent: Boolean(process.env.DATABASE_URL),
+    betterAuthSecretPresent: Boolean(process.env.BETTER_AUTH_SECRET),
+    resendApiKeyPresent: Boolean(process.env.RESEND_API_KEY),
+    runtime: process.env.NEXT_RUNTIME ?? "unknown",
+    nodeEnv: process.env.NODE_ENV,
+  });
+}
+
 export async function POST(request: Request) {
   try {
+    logRegisterInfo("request:start");
+
     const body = registerSchema.parse(await request.json());
     const ip = getClientIp(request);
-    console.info("[auth:register] turnstile token received", { tokenPresent: Boolean(body.turnstileToken), tokenLength: body.turnstileToken.length, ip });
+    logRegisterInfo("turnstile token received", { tokenPresent: Boolean(body.turnstileToken), tokenLength: body.turnstileToken.length, ip });
+
     const limited = rateLimit({ key: `register:${ip}`, limit: 3, windowMs: 60 * 60 * 1000 });
     if (!limited.success) return rateLimitResponse(limited.resetAt);
+
     const turnstileValid = await verifyTurnstile(body.turnstileToken, ip);
-    console.info("[auth:register] turnstile verification completed", { turnstileValid });
+    logRegisterInfo("turnstile verification completed", { turnstileValid });
     if (!turnstileValid) return jsonError("人机验证失败，请重试", 403);
 
-    const existing = await prisma.user.findUnique({ where: { email: body.email } });
+    let existing;
+    try {
+      existing = await prisma.user.findUnique({ where: { email: body.email } });
+    } catch (error) {
+      logRegisterError("prisma findUnique failed", error);
+      throw error;
+    }
+
     if (existing) return jsonError("该邮箱已注册，请直接登录", 409);
 
-    const user = await prisma.user.create({
-      data: {
-        email: body.email,
-        name: body.name,
-        passwordHash: await hashPassword(body.password),
-        emailVerified: false,
-      },
-    });
+    let passwordHash;
+    try {
+      passwordHash = await hashPassword(body.password);
+    } catch (error) {
+      logRegisterError("password hash failed", error);
+      throw error;
+    }
+
+    let user;
+    try {
+      user = await prisma.user.create({
+        data: {
+          email: body.email,
+          name: body.name,
+          passwordHash,
+          emailVerified: false,
+        },
+      });
+    } catch (error) {
+      logRegisterError("prisma createUser failed", error);
+      throw error;
+    }
 
     const code = createNumericCode();
-    await prisma.verification.create({
-      data: {
-        identifier: `email:${body.email}`,
-        value: sha256(code),
-        expiresAt: new Date(Date.now() + EMAIL_CODE_TTL_MINUTES * 60 * 1000),
-        userId: user.id,
-      },
-    });
-    await sendVerificationCodeEmail(body.email, code);
+    try {
+      await prisma.verification.create({
+        data: {
+          identifier: `email:${body.email}`,
+          value: sha256(code),
+          expiresAt: new Date(Date.now() + EMAIL_CODE_TTL_MINUTES * 60 * 1000),
+          userId: user.id,
+        },
+      });
+    } catch (error) {
+      logRegisterError("prisma verification create failed", error);
+      throw error;
+    }
 
+    try {
+      await sendVerificationCodeEmail(body.email, code);
+    } catch (error) {
+      logRegisterError("resend verification email failed", error);
+      throw error;
+    }
+
+    logRegisterInfo("request:success", { userId: user.id, email: body.email });
     return Response.json({ ok: true, email: body.email });
   } catch (error) {
+    logRegisterError("request failed", error);
     return parseError(error);
   }
 }
-
-

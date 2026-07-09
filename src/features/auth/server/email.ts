@@ -28,11 +28,24 @@ export async function sendVerificationCodeEmail(email: string, code: string): Pr
   const html = shell("验证你的邮箱", `<p>你的 GeoPilot AI 邮箱验证码是：</p><div style="margin:20px 0;padding:18px 24px;border-radius:16px;background:#111827;border:1px solid rgba(56,189,248,.25);font-size:32px;letter-spacing:.35em;font-weight:800;color:#38bdf8;text-align:center">${code}</div><p>验证码将在 15 分钟后过期。</p>`);
 
   if (!resend) {
+    console.info("[auth:email] resend missing, verification code logged locally", { email, resendApiKeyPresent: false });
     console.info(`[auth] Verification code for ${email}: ${code}`);
     return;
   }
 
-  await resend.emails.send({ from, to: email, subject: "验证你的 GeoPilot AI 邮箱", html });
+  try {
+    const result = await resend.emails.send({ from, to: email, subject: "验证你的 GeoPilot AI 邮箱", html });
+    console.info("[auth:email] verification email sent", { email, result });
+  } catch (error) {
+    console.error("[auth:email] verification email failed", {
+      email,
+      message: error instanceof Error ? error.message : String(error),
+      name: error instanceof Error ? error.name : undefined,
+      stack: error instanceof Error ? error.stack : undefined,
+      resendApiKeyPresent: Boolean(process.env.RESEND_API_KEY),
+    });
+    throw error;
+  }
 }
 
 export async function sendPasswordResetEmail(email: string, resetUrl: string): Promise<void> {
@@ -40,10 +53,22 @@ export async function sendPasswordResetEmail(email: string, resetUrl: string): P
   const html = shell("重置你的密码", `<p>请使用下方安全链接重置你的 GeoPilot AI 密码。链接将在 30 分钟后过期。</p><p style="margin:24px 0"><a href="${resetUrl}" style="display:inline-block;background:#38bdf8;color:#020617;text-decoration:none;padding:12px 18px;border-radius:12px;font-weight:700">重置密码</a></p><p style="word-break:break-all;color:#94a3b8">${resetUrl}</p>`);
 
   if (!resend) {
+    console.info("[auth:email] resend missing, password reset logged locally", { email, resendApiKeyPresent: false });
     console.info(`[auth] Password reset for ${email}: ${resetUrl}`);
     return;
   }
 
-  await resend.emails.send({ from, to: email, subject: "重置你的 GeoPilot AI 密码", html });
+  try {
+    const result = await resend.emails.send({ from, to: email, subject: "重置你的 GeoPilot AI 密码", html });
+    console.info("[auth:email] password reset email sent", { email, result });
+  } catch (error) {
+    console.error("[auth:email] password reset email failed", {
+      email,
+      message: error instanceof Error ? error.message : String(error),
+      name: error instanceof Error ? error.name : undefined,
+      stack: error instanceof Error ? error.stack : undefined,
+      resendApiKeyPresent: Boolean(process.env.RESEND_API_KEY),
+    });
+    throw error;
+  }
 }
-

@@ -23,14 +23,24 @@ export const auth = betterAuth({
       verify: async ({ hash, password }) => verifyPassword(hash, password),
     },
     sendResetPassword: async ({ user, url }) => {
-      await sendPasswordResetEmail(user.email, url);
+      try {
+        await sendPasswordResetEmail(user.email, url);
+      } catch (error) {
+        console.error("[better-auth] send reset password failed", { email: user.email, message: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined });
+        throw error;
+      }
     },
   },
   emailVerification: {
     sendOnSignUp: false,
     autoSignInAfterVerification: false,
     sendVerificationEmail: async ({ user, token }) => {
-      await sendVerificationCodeEmail(user.email, token);
+      try {
+        await sendVerificationCodeEmail(user.email, token);
+      } catch (error) {
+        console.error("[better-auth] send verification email failed", { email: user.email, message: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined });
+        throw error;
+      }
     },
   },
   advanced: {

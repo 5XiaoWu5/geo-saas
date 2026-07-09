@@ -17,6 +17,7 @@ export async function verifyTurnstile(token: string | null | undefined, ip?: str
     tokenPresent: Boolean(token),
     tokenLength: token?.length ?? 0,
     ipPresent: Boolean(ip),
+    secretPresent: Boolean(process.env.TURNSTILE_SECRET_KEY),
   });
 
   if (!token) {
@@ -63,8 +64,10 @@ export async function verifyTurnstile(token: string | null | undefined, ip?: str
     if (!response.ok) return false;
     return result.success === true;
   } catch (error) {
-    logTurnstile("verify:siteverify-error", {
+    console.error("[turnstile] verify:siteverify-error", {
       message: error instanceof Error ? error.message : String(error),
+      name: error instanceof Error ? error.name : undefined,
+      stack: error instanceof Error ? error.stack : undefined,
     });
     return false;
   }
