@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Mail, UserRound } from "lucide-react";
 import { Turnstile } from "@/features/auth/components/Turnstile";
+import { getTurnstileToken } from "@/features/auth/components/turnstile-token";
 import { AuthAlert, AuthField, AuthSubmitButton, PasswordField } from "@/features/auth/components/AuthFormControls";
 
 export function RegisterForm() {
@@ -16,7 +17,8 @@ export function RegisterForm() {
     event.preventDefault();
     setError("");
 
-    if (!turnstileToken) {
+    const resolvedTurnstileToken = getTurnstileToken(event.currentTarget, turnstileToken);
+    if (!resolvedTurnstileToken) {
       setError("请先完成人机验证，确认是你本人创建账户。");
       return;
     }
@@ -27,7 +29,7 @@ export function RegisterForm() {
     const response = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: String(formData.get("name") ?? "").trim(), email, password: String(formData.get("password") ?? ""), turnstileToken }),
+      body: JSON.stringify({ name: String(formData.get("name") ?? "").trim(), email, password: String(formData.get("password") ?? ""), turnstileToken: resolvedTurnstileToken }),
     });
     const result = await response.json() as { error?: string };
     setLoading(false);
@@ -46,4 +48,3 @@ export function RegisterForm() {
     </form>
   );
 }
-

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Mail } from "lucide-react";
 import { Turnstile } from "@/features/auth/components/Turnstile";
+import { getTurnstileToken } from "@/features/auth/components/turnstile-token";
 import { AuthAlert, AuthField, AuthSubmitButton } from "@/features/auth/components/AuthFormControls";
 
 export function ForgotPasswordForm() {
@@ -15,10 +16,11 @@ export function ForgotPasswordForm() {
     event.preventDefault();
     setError("");
     setMessage("");
-    if (!turnstileToken) { setError("请先完成人机验证，确认是你本人找回账户。"); return; }
+    const resolvedTurnstileToken = getTurnstileToken(event.currentTarget, turnstileToken);
+    if (!resolvedTurnstileToken) { setError("请先完成人机验证，确认是你本人找回账户。"); return; }
     setLoading(true);
     const formData = new FormData(event.currentTarget);
-    const response = await fetch("/api/auth/forgot-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: String(formData.get("email") ?? "").trim().toLowerCase(), turnstileToken }) });
+    const response = await fetch("/api/auth/forgot-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: String(formData.get("email") ?? "").trim().toLowerCase(), turnstileToken: resolvedTurnstileToken }) });
     const result = await response.json() as { error?: string };
     setLoading(false);
     if (!response.ok) { setError(result.error ?? "发送重置邮件失败，请稍后重试"); return; }

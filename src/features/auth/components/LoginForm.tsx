@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Mail } from "lucide-react";
 import { Turnstile } from "@/features/auth/components/Turnstile";
+import { getTurnstileToken } from "@/features/auth/components/turnstile-token";
 import { AuthAlert, AuthField, AuthSubmitButton, PasswordField } from "@/features/auth/components/AuthFormControls";
 
 export function LoginForm() {
@@ -16,10 +17,11 @@ export function LoginForm() {
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
-    if (!turnstileToken) { setError("请先完成人机验证，确认是你本人访问。"); return; }
+    const resolvedTurnstileToken = getTurnstileToken(event.currentTarget, turnstileToken);
+    if (!resolvedTurnstileToken) { setError("请先完成人机验证，确认是你本人访问。"); return; }
     setLoading(true);
     const formData = new FormData(event.currentTarget);
-    const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: String(formData.get("email") ?? "").trim().toLowerCase(), password: String(formData.get("password") ?? ""), turnstileToken }) });
+    const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: String(formData.get("email") ?? "").trim().toLowerCase(), password: String(formData.get("password") ?? ""), turnstileToken: resolvedTurnstileToken }) });
     const result = await response.json() as { error?: string };
     setLoading(false);
     if (!response.ok) { setError(result.error ?? "登录失败，请稍后重试"); return; }
