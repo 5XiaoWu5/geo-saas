@@ -60,18 +60,19 @@ export function Turnstile({ onVerify }: { onVerify: (token: string) => void }) {
   return (
     <div className="space-y-2">
       <Script src={TURNSTILE_SCRIPT_SRC} strategy="afterInteractive" async defer />
-      <div
-        ref={containerRef}
-        className="cf-turnstile min-h-[65px]"
-        data-sitekey={siteKey}
-        data-theme="dark"
-        data-size="normal"
-        data-callback={successCallbackName}
-        data-error-callback={errorCallbackName}
-        data-expired-callback={errorCallbackName}
-      />
-      {status === "loading" ? <p className="text-xs text-muted-foreground">正在加载人机验证...</p> : null}
-      {status === "error" ? <p className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive">人机验证加载失败，请刷新页面后重试。请确认 Turnstile 允许当前域名。</p> : null}
+      <div className="flex min-h-[48px] items-center justify-center rounded-2xl border border-white/8 bg-white/[0.018] px-2 py-1 opacity-70 transition hover:opacity-100">
+        <div
+          ref={containerRef}
+          className="cf-turnstile origin-center scale-[0.9]"
+          data-sitekey={siteKey}
+          data-theme="dark"
+          data-size="normal"
+          data-callback={successCallbackName}
+          data-error-callback={errorCallbackName}
+          data-expired-callback={errorCallbackName}
+        />
+      </div>
+      {status === "error" ? <p className="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs text-red-200">安全校验未完成，请刷新页面后重试。</p> : null}
     </div>
   );
 }
