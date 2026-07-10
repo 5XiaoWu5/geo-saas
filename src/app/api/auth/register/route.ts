@@ -47,10 +47,10 @@ export async function POST(request: Request) {
 
     const turnstileValid = await verifyTurnstile(body.turnstileToken, ip);
     logRegisterInfo("turnstile verification completed", { requestId, turnstileValid });
-    if (!turnstileValid) return jsonError("人机验证失败，请重试", 403);
+    if (!turnstileValid) return jsonError("浜烘満楠岃瘉澶辫触锛岃閲嶈瘯", 403);
     if (!process.env.DATABASE_URL) {
       logRegisterError("database url missing", new Error("DATABASE_URL is not configured"), requestId);
-      return jsonError("??????????? Cloudflare Pages ?? DATABASE_URL", 503);
+      return jsonError("认证数据库连接失败，请检查 Cloudflare Pages 的 DATABASE_URL 配置", 503);
     }
 
     let existing;
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
       throw error;
     }
 
-    if (existing) return jsonError("该邮箱已注册，请直接登录", 409);
+    if (existing) return jsonError("璇ラ偖绠卞凡娉ㄥ唽锛岃鐩存帴鐧诲綍", 409);
 
     let passwordHash;
     try {

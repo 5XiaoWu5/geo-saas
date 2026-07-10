@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     if (!turnstileValid) return jsonError("人机验证失败，请重试", 403);
     if (!process.env.DATABASE_URL) {
       logLoginError("database url missing", new Error("DATABASE_URL is not configured"), requestId);
-      return jsonError("??????????? Cloudflare Pages ?? DATABASE_URL", 503);
+      return jsonError("认证数据库连接失败，请检查 Cloudflare Pages 的 DATABASE_URL 配置", 503);
     }
 
     let user;
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
 
     if (!user.emailVerified) {
       logLoginInfo("email verification required", { requestId, userId: user.id });
-      return jsonError("请先完成邮箱验证后再登录", 403);
+      return jsonError("????????????", 403);
     }
 
     let token;

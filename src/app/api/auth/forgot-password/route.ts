@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     if (!limited.success) return rateLimitResponse(limited.resetAt);
     if (!process.env.DATABASE_URL) {
       logForgotPasswordError("database url missing", new Error("DATABASE_URL is not configured"), requestId);
-      return Response.json({ error: "??????????? Cloudflare Pages ?? DATABASE_URL" }, { status: 503 });
+      return Response.json({ error: "认证数据库连接失败，请检查 Cloudflare Pages 的 DATABASE_URL 配置" }, { status: 503 });
     }
 
     const user = await prisma.user.findUnique({ where: { email: body.email } });
