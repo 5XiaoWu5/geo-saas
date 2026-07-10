@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
@@ -25,7 +25,7 @@ export function RegisterForm() {
 
     const resolvedTurnstileToken = getTurnstileToken(event.currentTarget, turnstileToken);
     if (!resolvedTurnstileToken) {
-      setError("请先完成人机验证，确认是你本人创建账户。");
+      setError("请先完成人机验证");
       return;
     }
 
@@ -37,10 +37,19 @@ export function RegisterForm() {
       const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: String(formData.get("name") ?? "").trim(), email, password: String(formData.get("password") ?? ""), turnstileToken: resolvedTurnstileToken }),
+        body: JSON.stringify({
+          name: String(formData.get("name") ?? "").trim(),
+          email,
+          password: String(formData.get("password") ?? ""),
+          turnstileToken: resolvedTurnstileToken,
+        }),
       });
-      const result = await response.json() as { error?: string };
-      if (!response.ok) { resetTurnstile(); setError(result.error ?? "创建账户失败，请稍后重试"); return; }
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        resetTurnstile();
+        setError(result.error ?? "创建账户失败，请稍后重试");
+        return;
+      }
       router.replace(`/verify-email?email=${encodeURIComponent(email)}`);
     } catch {
       resetTurnstile();
@@ -57,7 +66,7 @@ export function RegisterForm() {
       <PasswordField id="password" label="设置密码" autoComplete="new-password" />
       <Turnstile ref={turnstileRef} onVerify={setTurnstileToken} />
       {error ? <AuthAlert type="error">{error}</AuthAlert> : null}
-      <AuthSubmitButton loading={loading} loadingText="正在创建安全工作区...">开启 GEO 增长工作空间</AuthSubmitButton>
+      <AuthSubmitButton loading={loading} loadingText="正在创建安全工作空间...">开启 GEO 增长工作空间</AuthSubmitButton>
     </form>
   );
 }

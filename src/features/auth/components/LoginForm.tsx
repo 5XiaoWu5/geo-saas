@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -24,14 +24,29 @@ export function LoginForm() {
     event.preventDefault();
     setError("");
     const resolvedTurnstileToken = getTurnstileToken(event.currentTarget, turnstileToken);
-    if (!resolvedTurnstileToken) { setError("请先完成人机验证，确认是你本人访问。"); return; }
+    if (!resolvedTurnstileToken) {
+      setError("请先完成人机验证");
+      return;
+    }
     setLoading(true);
     const formData = new FormData(event.currentTarget);
 
     try {
-      const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: String(formData.get("email") ?? "").trim().toLowerCase(), password: String(formData.get("password") ?? ""), turnstileToken: resolvedTurnstileToken }) });
-      const result = await response.json() as { error?: string };
-      if (!response.ok) { resetTurnstile(); setError(result.error ?? "登录失败，请稍后重试"); return; }
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: String(formData.get("email") ?? "").trim().toLowerCase(),
+          password: String(formData.get("password") ?? ""),
+          turnstileToken: resolvedTurnstileToken,
+        }),
+      });
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        resetTurnstile();
+        setError(result.error ?? "登录失败，请稍后重试");
+        return;
+      }
       router.replace("/dashboard");
       router.refresh();
     } catch {
