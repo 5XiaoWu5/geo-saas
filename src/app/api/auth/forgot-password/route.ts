@@ -47,7 +47,7 @@ export async function POST(request: Request) {
       await sendPasswordResetEmail(body.email, `${baseUrl}/reset-password?token=${token}`);
     }
 
-    return Response.json({ ok: true });
+    return Response.json({ ok: true }, { headers: { "x-geopilot-auth-build": "diag-fcfae58" } });
   } catch (error) {
     logForgotPasswordError("request failed", error, requestId);
     return Response.json({
@@ -55,6 +55,6 @@ export async function POST(request: Request) {
       detail: error instanceof Error ? error.message : String(error),
       name: error instanceof Error ? error.name : undefined,
       databaseUrlPresent: Boolean(process.env.DATABASE_URL),
-    }, { status: 500 });
+    }, { status: 500, headers: { "x-geopilot-auth-build": "diag-fcfae58" } });
   }
 }
