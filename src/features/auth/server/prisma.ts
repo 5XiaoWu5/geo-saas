@@ -3,9 +3,22 @@ import { neon } from "@neondatabase/serverless";
 type Where = Record<string, unknown>;
 type Data = Record<string, unknown>;
 
-type QueryFunction = ReturnType<typeof neon>;
+type QueryFunction = (query: string, params?: unknown[]) => Promise<unknown[]>;
 
-type AuthRow = Record<string, unknown> & { user?: AuthRow | null };
+type AuthRow = Record<string, unknown> & {
+  id: string;
+  email: string;
+  name: string | null;
+  role: string;
+  emailVerified: boolean;
+  image: string | null;
+  passwordHash: string | null;
+  userId: string;
+  token?: string;
+  expiresAt: Date;
+  usedAt?: Date | null;
+  user: AuthRow;
+};
 
 const fallbackDatabaseUrl = "postgresql://postgres:postgres@127.0.0.1:5432/geopilot_ai";
 
@@ -14,7 +27,7 @@ if (!process.env.DATABASE_URL) {
 }
 
 function getSql(): QueryFunction {
-  return neon(process.env.DATABASE_URL ?? fallbackDatabaseUrl);
+  return neon(process.env.DATABASE_URL ?? fallbackDatabaseUrl) as unknown as QueryFunction;
 }
 
 function createId() {
@@ -87,7 +100,7 @@ export const prisma = {
       const sql = getSql();
       return normalizeRow(((await sql('INSERT INTO "Verification" ("id", "identifier", "value", "expiresAt", "userId") VALUES ($1, $2, $3, $4, $5) RETURNING *', [data.id ?? createId(), data.identifier, data.value, data.expiresAt, data.userId ?? null])) as AuthRow[])[0]);
     },
-    async findFirst({ where }: { where: { identifier?: string; value?: string; expiresAt?: { gt?: Date } } }) {
+    async findFirst({ where }: { where: { identifier?: string; value?: string; expiresAt?: { gt?: Date } }; orderBy?: Record<string, unknown> }) {
       const sql = getSql();
       return normalizeRow(((await sql('SELECT * FROM "Verification" WHERE "identifier" = $1 AND "value" = $2 AND "expiresAt" > $3 ORDER BY "createdAt" DESC LIMIT 1', [where.identifier, where.value, where.expiresAt?.gt ?? new Date(0)])) as AuthRow[])[0] ?? null);
     },
@@ -112,7 +125,7 @@ export const prisma = {
       return normalizeRow(((await sql(`UPDATE "PasswordReset" SET ${set.sql} WHERE "id" = $${set.values.length + 1} RETURNING *`, [...set.values, where.id])) as AuthRow[])[0] ?? null);
     },
   },
-  async $transaction<T>(operations: Array<Promise<T>>) {
+  async $transaction(operations: Array<Promise<unknown>>) {
     return Promise.all(operations);
   },
 };
