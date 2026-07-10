@@ -72,6 +72,7 @@ export async function POST(request: Request) {
     try {
       passwordHash = await hashPassword(body.password);
     } catch (error) {
+      console.error(error);
       logRegisterError("password hash failed", error, requestId);
       return jsonError("密码加密服务异常，请稍后重试", 503);
     }
@@ -119,5 +120,6 @@ export async function POST(request: Request) {
     return parseError(error);
   }
 }
+
 
 

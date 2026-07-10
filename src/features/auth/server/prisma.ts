@@ -1,4 +1,4 @@
-﻿import { neon } from "@neondatabase/serverless";
+import { neon } from "@neondatabase/serverless";
 
 type Where = Record<string, unknown>;
 type Data = Record<string, unknown>;
@@ -65,8 +65,9 @@ export const prisma = {
       return null;
     },
     async create({ data }: { data: Data }) {
-      const row = { id: data.id ?? createId(), email: data.email, name: data.name ?? null, role: data.role ?? "admin", emailVerified: data.emailVerified ?? false, image: data.image ?? null, passwordHash: data.passwordHash ?? null };
-      return normalizeRow((await query('INSERT INTO "User" ("id", "email", "name", "role", "emailVerified", "image", "passwordHash") VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *', [row.id, row.email, row.name, row.role, row.emailVerified, row.image, row.passwordHash]))[0]);
+      const now = new Date();
+      const row = { id: data.id ?? createId(), email: data.email, name: data.name ?? null, role: data.role ?? "admin", emailVerified: data.emailVerified ?? false, image: data.image ?? null, passwordHash: data.passwordHash ?? null, createdAt: now, updatedAt: now };
+      return normalizeRow((await query('INSERT INTO "User" ("id", "email", "name", "role", "emailVerified", "image", "passwordHash", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *', [row.id, row.email, row.name, row.role, row.emailVerified, row.image, row.passwordHash, row.createdAt, row.updatedAt]))[0]);
     },
     async update({ where, data }: { where: Where; data: Data }) {
       const set = assignments({ ...data, updatedAt: new Date() });
@@ -77,7 +78,7 @@ export const prisma = {
   },
   session: {
     async create({ data }: { data: Data }) {
-      return normalizeRow((await query('INSERT INTO "Session" ("id", "token", "userId", "expiresAt", "ipAddress", "userAgent") VALUES ($1, $2, $3, $4, $5, $6) RETURNING *', [data.id ?? createId(), data.token, data.userId, data.expiresAt, data.ipAddress ?? null, data.userAgent ?? null]))[0]);
+      return normalizeRow((await query('INSERT INTO "Session" ("id", "token", "userId", "expiresAt", "ipAddress", "userAgent", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *', [data.id ?? createId(), data.token, data.userId, data.expiresAt, data.ipAddress ?? null, data.userAgent ?? null, new Date(), new Date()]))[0]);
     },
     async findUnique({ where, include }: { where: Where; include?: { user?: boolean } }) {
       const session = normalizeRow((await query('SELECT * FROM "Session" WHERE "token" = $1 LIMIT 1', [where.token]))[0] ?? null);
@@ -97,7 +98,7 @@ export const prisma = {
   },
   verification: {
     async create({ data }: { data: Data }) {
-      return normalizeRow((await query('INSERT INTO "Verification" ("id", "identifier", "value", "expiresAt", "userId") VALUES ($1, $2, $3, $4, $5) RETURNING *', [data.id ?? createId(), data.identifier, data.value, data.expiresAt, data.userId ?? null]))[0]);
+      return normalizeRow((await query('INSERT INTO "Verification" ("id", "identifier", "value", "expiresAt", "userId", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *', [data.id ?? createId(), data.identifier, data.value, data.expiresAt, data.userId ?? null, new Date(), new Date()]))[0]);
     },
     async findFirst({ where }: { where: { identifier?: string; value?: string; expiresAt?: { gt?: Date } }; orderBy?: Record<string, unknown> }) {
       return normalizeRow((await query('SELECT * FROM "Verification" WHERE "identifier" = $1 AND "value" = $2 AND "expiresAt" > $3 ORDER BY "createdAt" DESC LIMIT 1', [where.identifier, where.value, where.expiresAt?.gt ?? new Date(0)]))[0] ?? null);
