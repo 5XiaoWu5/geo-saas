@@ -1,4 +1,4 @@
-import { registerSchema } from "@/features/auth/server/schemas";
+﻿import { registerSchema } from "@/features/auth/server/schemas";
 import { prisma } from "@/features/auth/server/prisma";
 import { hashPassword } from "@/features/auth/server/password";
 import { createNumericCode, sha256 } from "@/features/auth/server/tokens";
@@ -9,7 +9,7 @@ import { verifyTurnstile } from "@/features/auth/server/turnstile";
 import { AUTH_DATABASE_ERROR_MESSAGE, jsonError, parseError } from "@/features/auth/server/responses";
 
 function logRegisterError(event: string, error: unknown, requestId?: string) {
-  console.error(`[AUTH ERROR] register:${event}`, {
+  console.error(`[AUTH REGISTER] ${event}`, {
     requestId,
     message: error instanceof Error ? error.message : String(error),
     name: error instanceof Error ? error.name : undefined,
@@ -23,7 +23,7 @@ function logRegisterError(event: string, error: unknown, requestId?: string) {
 }
 
 function logRegisterInfo(event: string, data: Record<string, unknown> = {}) {
-  console.info(`[auth:register] ${event}`, {
+  console.info(`[AUTH REGISTER] ${event}`, {
     ...data,
     databaseUrlPresent: Boolean(process.env.DATABASE_URL),
     betterAuthSecretPresent: Boolean(process.env.BETTER_AUTH_SECRET),
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
 
     const turnstileValid = await verifyTurnstile(body.turnstileToken, ip);
     logRegisterInfo("turnstile verification completed", { requestId, turnstileValid });
-    if (!turnstileValid) return jsonError("浜烘満楠岃瘉澶辫触锛岃閲嶈瘯", 403);
+    if (!turnstileValid) return jsonError("人机验证失败，请重试", 403);
     if (!process.env.DATABASE_URL) {
       logRegisterError("database url missing", new Error("DATABASE_URL is not configured"), requestId);
       return jsonError(AUTH_DATABASE_ERROR_MESSAGE, 503);
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
       throw error;
     }
 
-    if (existing) return jsonError("璇ラ偖绠卞凡娉ㄥ唽锛岃鐩存帴鐧诲綍", 409);
+    if (existing) return jsonError("该邮箱已注册，请直接登录", 409);
 
     let passwordHash;
     try {

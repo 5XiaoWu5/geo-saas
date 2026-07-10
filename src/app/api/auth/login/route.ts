@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+﻿import { cookies } from "next/headers";
 import { AUTH_COOKIE_NAME } from "@/features/auth/server/constants";
 import { createSession, sessionCookieOptions } from "@/features/auth/server/session";
 import { prisma } from "@/features/auth/server/prisma";
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
 
     if (!user.emailVerified) {
       logLoginInfo("email verification required", { requestId, userId: user.id });
-      return jsonError("\u4eba\u673a\u9a8c\u8bc1\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5", 403);
+      return jsonError("请先完成邮箱验证", 403);
     }
 
     let token;
@@ -114,4 +114,3 @@ export async function POST(request: Request) {
     return parseError(error);
   }
 }
-
