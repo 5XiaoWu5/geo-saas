@@ -1,10 +1,7 @@
-﻿import { cookies } from "next/headers";
-import type { User } from "@prisma/client";
-import { AUTH_COOKIE_NAME, SESSION_MAX_AGE_SECONDS } from "@/features/auth/server/constants";
 import { prisma } from "@/features/auth/server/prisma";
 import { createToken } from "@/features/auth/server/tokens";
-
-export type AuthUser = Pick<User, "id" | "email" | "name" | "role" | "emailVerified" | "image">;
+import { SESSION_MAX_AGE_SECONDS, AUTH_COOKIE_NAME } from "@/features/auth/server/constants";
+import { cookies } from "next/headers";
 
 export async function createSession(userId: string, request: Request): Promise<string> {
   const token = createToken(48);
@@ -33,7 +30,7 @@ export function sessionCookieOptions() {
   };
 }
 
-export async function getCurrentUser(): Promise<AuthUser | null> {
+export async function getCurrentUser() {
   const cookieStore = await cookies();
   const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
   if (!token) return null;

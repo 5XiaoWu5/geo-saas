@@ -1,4 +1,4 @@
-﻿import { auth } from "@/features/auth/server/better-auth";
+import { auth } from "@/features/auth/server/better-auth";
 
 function logBetterAuthError(method: string, error: unknown) {
   console.error(`[AUTH ERROR] better-auth:${method}`, {
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     return await auth.handler(request);
   } catch (error) {
     logBetterAuthError("GET", error);
-    throw error;
+    return Response.json({ error: "认证路由暂时不可用" }, { status: 500 });
   }
 }
 
@@ -26,6 +26,6 @@ export async function POST(request: Request) {
     return await auth.handler(request);
   } catch (error) {
     logBetterAuthError("POST", error);
-    throw error;
+    return Response.json({ error: "认证路由暂时不可用" }, { status: 500 });
   }
 }
