@@ -44,14 +44,14 @@ export function LoginForm() {
       const result = (await response.json()) as { error?: string };
       if (!response.ok) {
         resetTurnstile();
-        setError(result.error ?? "登录失败，请稍后重试");
+        setError(result.error ?? `登录失败（${response.status}）`);
         return;
       }
       router.replace("/dashboard");
       router.refresh();
-    } catch {
+    } catch (err) {
       resetTurnstile();
-      setError("网络连接异常，请稍后重试");
+      setError(err instanceof Error ? err.message : "网络连接异常，请稍后重试");
     } finally {
       setLoading(false);
     }
