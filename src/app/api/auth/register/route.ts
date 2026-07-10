@@ -6,7 +6,7 @@ import { EMAIL_CODE_TTL_MINUTES } from "@/features/auth/server/constants";
 import { sendVerificationCodeEmail } from "@/features/auth/server/email";
 import { getClientIp, rateLimit, rateLimitResponse } from "@/features/auth/server/rate-limit";
 import { verifyTurnstile } from "@/features/auth/server/turnstile";
-import { jsonError, parseError } from "@/features/auth/server/responses";
+import { AUTH_DATABASE_ERROR_MESSAGE, jsonError, parseError } from "@/features/auth/server/responses";
 
 function logRegisterError(event: string, error: unknown, requestId?: string) {
   console.error(`[AUTH ERROR] register:${event}`, {
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     if (!turnstileValid) return jsonError("浜烘満楠岃瘉澶辫触锛岃閲嶈瘯", 403);
     if (!process.env.DATABASE_URL) {
       logRegisterError("database url missing", new Error("DATABASE_URL is not configured"), requestId);
-      return jsonError("认证数据库连接失败，请检查 Cloudflare Pages 的 DATABASE_URL 配置", 503);
+      return jsonError(AUTH_DATABASE_ERROR_MESSAGE, 503);
     }
 
     let existing;

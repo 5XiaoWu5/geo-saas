@@ -6,7 +6,7 @@ import { verifyPassword } from "@/features/auth/server/password";
 import { loginSchema } from "@/features/auth/server/schemas";
 import { getClientIp, rateLimit, rateLimitResponse } from "@/features/auth/server/rate-limit";
 import { verifyTurnstile } from "@/features/auth/server/turnstile";
-import { jsonError, parseError } from "@/features/auth/server/responses";
+import { AUTH_DATABASE_ERROR_MESSAGE, jsonError, parseError } from "@/features/auth/server/responses";
 
 function logLoginError(event: string, error: unknown, requestId?: string) {
   console.error(`[AUTH LOGIN] ${event}`, {
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     if (!turnstileValid) return jsonError("人机验证失败，请重试", 403);
     if (!process.env.DATABASE_URL) {
       logLoginError("database url missing", new Error("DATABASE_URL is not configured"), requestId);
-      return jsonError("认证数据库连接失败，请检查 Cloudflare Pages 的 DATABASE_URL 配置", 503);
+      return jsonError(AUTH_DATABASE_ERROR_MESSAGE, 503);
     }
 
     let user;
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
 
     if (!user.emailVerified) {
       logLoginInfo("email verification required", { requestId, userId: user.id });
-      return jsonError("????????????", 403);
+      return jsonError("\u4eba\u673a\u9a8c\u8bc1\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5", 403);
     }
 
     let token;

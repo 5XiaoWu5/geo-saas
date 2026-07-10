@@ -4,7 +4,7 @@ import { PASSWORD_RESET_TTL_MINUTES } from "@/features/auth/server/constants";
 import { sendPasswordResetEmail } from "@/features/auth/server/email";
 import { forgotPasswordSchema } from "@/features/auth/server/schemas";
 import { getClientIp, rateLimit, rateLimitResponse } from "@/features/auth/server/rate-limit";
-import { parseError } from "@/features/auth/server/responses";
+import { AUTH_DATABASE_ERROR_MESSAGE, parseError } from "@/features/auth/server/responses";
 
 function logForgotPasswordError(event: string, error: unknown, requestId?: string) {
   console.error(`[AUTH FORGOT_PASSWORD] ${event}`, {
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     if (!limited.success) return rateLimitResponse(limited.resetAt);
     if (!process.env.DATABASE_URL) {
       logForgotPasswordError("database url missing", new Error("DATABASE_URL is not configured"), requestId);
-      return Response.json({ error: "认证数据库连接失败，请检查 Cloudflare Pages 的 DATABASE_URL 配置" }, { status: 503 });
+      return Response.json({ error: AUTH_DATABASE_ERROR_MESSAGE }, { status: 503 });
     }
 
     const user = await prisma.user.findUnique({ where: { email: body.email } });
