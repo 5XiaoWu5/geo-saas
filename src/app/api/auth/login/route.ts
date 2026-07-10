@@ -6,6 +6,7 @@ import { verifyPassword } from "@/features/auth/server/password";
 import { loginSchema } from "@/features/auth/server/schemas";
 import { getClientIp, rateLimit, rateLimitResponse } from "@/features/auth/server/rate-limit";
 import { verifyTurnstile } from "@/features/auth/server/turnstile";
+import { AUTH_TURNSTILE_ENABLED } from "@/features/auth/server/feature-flags";
 import { AUTH_DATABASE_ERROR_MESSAGE, jsonError, parseError } from "@/features/auth/server/responses";
 
 function logLoginError(event: string, error: unknown, requestId?: string) {
@@ -58,9 +59,13 @@ export async function POST(request: Request) {
     logLoginInfo("rate limit checked", { requestId, success: limited.success, resetAt: limited.resetAt });
     if (!limited.success) return rateLimitResponse(limited.resetAt);
 
-    const turnstileValid = await verifyTurnstile(body.turnstileToken, ip);
-    logLoginInfo("turnstile verification completed", { requestId, turnstileValid });
-    if (!turnstileValid) return jsonError("人机验证失败，请重试", 403);
+    if (AUTH_TURNSTILE_ENABLED) {
+      const turnstileValid = await verifyTurnstile(body.turnstileToken, ip);
+      logLoginInfo("turnstile verification completed", { requestId, turnstileValid });
+      if (!turnstileValid) return jsonError("人机验证失败，请重试", 403);
+    } else {
+      logLoginInfo("turnstile verification skipped", { requestId });
+    }
     if (!process.env.DATABASE_URL) {
       logLoginError("database url missing", new Error("DATABASE_URL is not configured"), requestId);
       return jsonError(AUTH_DATABASE_ERROR_MESSAGE, 503);
@@ -120,3 +125,5 @@ export async function POST(request: Request) {
     return parseError(error);
   }
 }
+
+

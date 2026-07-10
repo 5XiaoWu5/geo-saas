@@ -6,6 +6,7 @@ import { EMAIL_CODE_TTL_MINUTES } from "@/features/auth/server/constants";
 import { sendVerificationCodeEmail } from "@/features/auth/server/email";
 import { getClientIp, rateLimit, rateLimitResponse } from "@/features/auth/server/rate-limit";
 import { verifyTurnstile } from "@/features/auth/server/turnstile";
+import { AUTH_TURNSTILE_ENABLED } from "@/features/auth/server/feature-flags";
 import { AUTH_DATABASE_ERROR_MESSAGE, jsonError, parseError } from "@/features/auth/server/responses";
 
 function logRegisterError(event: string, error: unknown, requestId?: string) {
@@ -45,9 +46,13 @@ export async function POST(request: Request) {
     const limited = rateLimit({ key: `register:${ip}`, limit: 3, windowMs: 60 * 60 * 1000 });
     if (!limited.success) return rateLimitResponse(limited.resetAt);
 
-    const turnstileValid = await verifyTurnstile(body.turnstileToken, ip);
-    logRegisterInfo("turnstile verification completed", { requestId, turnstileValid });
-    if (!turnstileValid) return jsonError("人机验证失败，请重试", 403);
+    if (AUTH_TURNSTILE_ENABLED) {
+      const turnstileValid = await verifyTurnstile(body.turnstileToken, ip);
+      logRegisterInfo("turnstile verification completed", { requestId, turnstileValid });
+      if (!turnstileValid) return jsonError("人机验证失败，请重试", 403);
+    } else {
+      logRegisterInfo("turnstile verification skipped", { requestId });
+    }
     if (!process.env.DATABASE_URL) {
       logRegisterError("database url missing", new Error("DATABASE_URL is not configured"), requestId);
       return jsonError(AUTH_DATABASE_ERROR_MESSAGE, 503);
@@ -114,3 +119,5 @@ export async function POST(request: Request) {
     return parseError(error);
   }
 }
+
+
