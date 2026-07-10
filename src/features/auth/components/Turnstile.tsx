@@ -1,6 +1,7 @@
-﻿"use client";
+"use client";
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { usePublicEnv } from "@/features/auth/components/usePublicEnv";
 
 const TURNSTILE_SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
 const TURNSTILE_SCRIPT_ID = "geopilot-turnstile-script";
@@ -49,7 +50,7 @@ export const Turnstile = forwardRef<TurnstileHandle, { onVerify: (token: string)
   const widgetIdRef = useRef<string | null>(null);
   const renderedRef = useRef(false);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
-  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+  const siteKey = usePublicEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY") || process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
   const reset = useCallback(() => {
     onVerify("");
