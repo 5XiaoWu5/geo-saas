@@ -1,4 +1,4 @@
-﻿import { cookies } from "next/headers";
+import { cookies } from "next/headers";
 import { AUTH_COOKIE_NAME } from "@/features/auth/server/constants";
 import { createSession, sessionCookieOptions } from "@/features/auth/server/session";
 import { prisma } from "@/features/auth/server/prisma";
@@ -61,6 +61,10 @@ export async function POST(request: Request) {
     const turnstileValid = await verifyTurnstile(body.turnstileToken, ip);
     logLoginInfo("turnstile verification completed", { requestId, turnstileValid });
     if (!turnstileValid) return jsonError("人机验证失败，请重试", 403);
+    if (!process.env.DATABASE_URL) {
+      logLoginError("database url missing", new Error("DATABASE_URL is not configured"), requestId);
+      return jsonError("??????????? Cloudflare Pages ?? DATABASE_URL", 503);
+    }
 
     let user;
     try {

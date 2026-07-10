@@ -1,4 +1,4 @@
-﻿import { registerSchema } from "@/features/auth/server/schemas";
+import { registerSchema } from "@/features/auth/server/schemas";
 import { prisma } from "@/features/auth/server/prisma";
 import { hashPassword } from "@/features/auth/server/password";
 import { createNumericCode, sha256 } from "@/features/auth/server/tokens";
@@ -48,6 +48,10 @@ export async function POST(request: Request) {
     const turnstileValid = await verifyTurnstile(body.turnstileToken, ip);
     logRegisterInfo("turnstile verification completed", { requestId, turnstileValid });
     if (!turnstileValid) return jsonError("人机验证失败，请重试", 403);
+    if (!process.env.DATABASE_URL) {
+      logRegisterError("database url missing", new Error("DATABASE_URL is not configured"), requestId);
+      return jsonError("??????????? Cloudflare Pages ?? DATABASE_URL", 503);
+    }
 
     let existing;
     try {

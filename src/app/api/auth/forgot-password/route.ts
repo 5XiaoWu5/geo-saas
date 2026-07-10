@@ -34,6 +34,10 @@ export async function POST(request: Request) {
     const ip = getClientIp(request);
     const limited = rateLimit({ key: `forgot:${ip}:${body.email}`, limit: 5, windowMs: 60 * 60 * 1000 });
     if (!limited.success) return rateLimitResponse(limited.resetAt);
+    if (!process.env.DATABASE_URL) {
+      logForgotPasswordError("database url missing", new Error("DATABASE_URL is not configured"), requestId);
+      return Response.json({ error: "??????????? Cloudflare Pages ?? DATABASE_URL" }, { status: 503 });
+    }
 
     const user = await prisma.user.findUnique({ where: { email: body.email } });
     if (user) {
