@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaNeon } from "@prisma/adapter-neon";
+import { PrismaNeonHTTP } from "@prisma/adapter-neon";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 const fallbackDatabaseUrl = "postgresql://postgres:postgres@127.0.0.1:5432/geopilot_ai";
@@ -9,7 +9,7 @@ if (!process.env.DATABASE_URL) {
 }
 
 function createPrismaClient() {
-  const adapter = new PrismaNeon({ connectionString: process.env.DATABASE_URL ?? fallbackDatabaseUrl });
+  const adapter = new PrismaNeonHTTP(process.env.DATABASE_URL ?? fallbackDatabaseUrl, {});
   return new PrismaClient({ adapter });
 }
 
