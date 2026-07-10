@@ -78,7 +78,7 @@ export async function POST(request: Request) {
       });
     } catch (error) {
       logLoginError("prisma findUnique failed", error, requestId);
-      throw error;
+      return jsonError("认证数据库查询失败，请稍后重试", 503);
     }
 
     if (!user?.passwordHash) {
@@ -86,8 +86,14 @@ export async function POST(request: Request) {
       return jsonError("邮箱或密码错误", 401);
     }
 
-    const passwordValid = await verifyPassword(user.passwordHash, body.password);
-    logLoginInfo("password hash verification completed", { requestId, passwordValid });
+    let passwordValid = false;
+    try {
+      passwordValid = await verifyPassword(user.passwordHash, body.password);
+      logLoginInfo("password hash verification completed", { requestId, passwordValid });
+    } catch (error) {
+      logLoginError("password verification failed", error, requestId);
+      return jsonError("密码校验服务异常，请稍后重试", 503);
+    }
     if (!passwordValid) return jsonError("邮箱或密码错误", 401);
 
     if (!user.emailVerified) {
@@ -101,7 +107,7 @@ export async function POST(request: Request) {
       logLoginInfo("session creation completed", { requestId, userId: user.id, sessionCreated: Boolean(token) });
     } catch (error) {
       logLoginError("create session failed", error, requestId);
-      throw error;
+      return jsonError("登录会话创建失败，请稍后重试", 503);
     }
 
     const cookieStore = await cookies();

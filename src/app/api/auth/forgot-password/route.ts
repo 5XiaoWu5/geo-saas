@@ -1,4 +1,4 @@
-import { prisma } from "@/features/auth/server/prisma";
+﻿import { prisma } from "@/features/auth/server/prisma";
 import { createToken, sha256 } from "@/features/auth/server/tokens";
 import { PASSWORD_RESET_TTL_MINUTES } from "@/features/auth/server/constants";
 import { sendPasswordResetEmail } from "@/features/auth/server/email";
@@ -44,7 +44,11 @@ export async function POST(request: Request) {
       const token = createToken(36);
       await prisma.passwordReset.create({ data: { userId: user.id, token: sha256(token), expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MINUTES * 60 * 1000) } });
       const baseUrl = process.env.BETTER_AUTH_URL ?? new URL(request.url).origin;
-      await sendPasswordResetEmail(body.email, `${baseUrl}/reset-password?token=${token}`);
+      try {
+        await sendPasswordResetEmail(body.email, `${baseUrl}/reset-password?token=${token}`);
+      } catch (error) {
+        logForgotPasswordError("resend password reset email failed", error, requestId);
+      }
     }
 
     return Response.json({ ok: true });
@@ -53,3 +57,4 @@ export async function POST(request: Request) {
     return parseError(error);
   }
 }
+
