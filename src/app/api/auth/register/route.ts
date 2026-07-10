@@ -58,7 +58,7 @@ export async function POST(request: Request) {
       existing = await prisma.user.findUnique({ where: { email: body.email } });
     } catch (error) {
       logRegisterError("prisma findUnique failed", error, requestId);
-      throw error;
+      return jsonError("认证数据库查询失败，请稍后重试", 503);
     }
 
     if (existing) return jsonError("该邮箱已注册，请直接登录", 409);
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
       passwordHash = await hashPassword(body.password);
     } catch (error) {
       logRegisterError("password hash failed", error, requestId);
-      throw error;
+      return jsonError("密码加密服务异常，请稍后重试", 503);
     }
 
     let user;
@@ -83,7 +83,7 @@ export async function POST(request: Request) {
       });
     } catch (error) {
       logRegisterError("prisma createUser failed", error, requestId);
-      throw error;
+      return jsonError("账户创建失败，请稍后重试", 503);
     }
 
     const code = createNumericCode();
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
       });
     } catch (error) {
       logRegisterError("prisma verification create failed", error, requestId);
-      throw error;
+      return jsonError("邮箱验证码创建失败，请稍后重试", 503);
     }
 
     try {
