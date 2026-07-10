@@ -1,7 +1,16 @@
+import { cookies } from "next/headers";
+import { AUTH_COOKIE_NAME, SESSION_MAX_AGE_SECONDS } from "@/features/auth/server/constants";
 import { prisma } from "@/features/auth/server/prisma";
 import { createToken } from "@/features/auth/server/tokens";
-import { SESSION_MAX_AGE_SECONDS, AUTH_COOKIE_NAME } from "@/features/auth/server/constants";
-import { cookies } from "next/headers";
+
+export type AuthUser = {
+  id: string;
+  email: string;
+  name: string | null;
+  role: string;
+  emailVerified: boolean;
+  image: string | null;
+};
 
 export async function createSession(userId: string, request: Request): Promise<string> {
   const token = createToken(48);
@@ -30,7 +39,7 @@ export function sessionCookieOptions() {
   };
 }
 
-export async function getCurrentUser() {
+export async function getCurrentUser(): Promise<AuthUser | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
   if (!token) return null;
