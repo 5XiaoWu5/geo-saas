@@ -50,6 +50,11 @@ export async function POST(request: Request) {
     return Response.json({ ok: true });
   } catch (error) {
     logForgotPasswordError("request failed", error, requestId);
-    return parseError(error);
+    return Response.json({
+      error: "??????",
+      detail: error instanceof Error ? error.message : String(error),
+      name: error instanceof Error ? error.name : undefined,
+      databaseUrlPresent: Boolean(process.env.DATABASE_URL),
+    }, { status: 500 });
   }
 }
