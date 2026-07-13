@@ -31,7 +31,7 @@ Create `.env` from `.env.example`:
 ```bash
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/geopilot_ai?schema=public"
 BETTER_AUTH_SECRET="replace-with-a-strong-random-secret"
-BETTER_AUTH_URL="http://localhost:3000"
+BETTER_AUTH_URL="https://geopilotapp.com"
 RESEND_API_KEY="re_xxxxxxxxxxxxxxxxxxxxxxxxx"
 NEXT_PUBLIC_TURNSTILE_SITE_KEY="0x4AAAAAAxxxxxxxxxxxxxxx"
 TURNSTILE_SECRET_KEY="0x4AAAAAAxxxxxxxxxxxxxxxxxxxxxxxx"
@@ -40,7 +40,7 @@ TURNSTILE_SECRET_KEY="0x4AAAAAAxxxxxxxxxxxxxxxxxxxxxxxx"
 For production, set `BETTER_AUTH_URL` to the deployed domain, for example:
 
 ```bash
-BETTER_AUTH_URL="https://app.example.com"
+BETTER_AUTH_URL="https://geopilotapp.com"
 ```
 
 ## Prisma Migrate

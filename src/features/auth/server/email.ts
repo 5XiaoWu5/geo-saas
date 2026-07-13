@@ -16,7 +16,7 @@ function getResend(): Resend | null {
   const apiKey = process.env.RESEND_API_KEY;
   console.info("[auth:email] resend config", {
     resendApiKeyPresent: Boolean(apiKey),
-    fromEmail: process.env.RESEND_FROM_EMAIL ?? "GeoPilot AI <onboarding@resend.dev>",
+    fromEmail: process.env.RESEND_FROM_EMAIL ?? "GeoPilot AI <no-reply@geopilotapp.com>",
     runtime: process.env.NEXT_RUNTIME ?? "unknown",
     nodeEnv: process.env.NODE_ENV,
   });
@@ -24,7 +24,7 @@ function getResend(): Resend | null {
 }
 
 function getFromEmail(): string {
-  return process.env.RESEND_FROM_EMAIL ?? "GeoPilot AI <onboarding@resend.dev>";
+  return process.env.RESEND_FROM_EMAIL ?? "GeoPilot AI <no-reply@geopilotapp.com>";
 }
 
 function shell(title: string, body: string): string {
