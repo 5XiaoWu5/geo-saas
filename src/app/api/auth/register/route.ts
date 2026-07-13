@@ -1,4 +1,4 @@
-﻿import { registerSchema } from "@/features/auth/server/schemas";
+import { registerSchema } from "@/features/auth/server/schemas";
 import { prisma } from "@/features/auth/server/prisma";
 import { hashPassword } from "@/features/auth/server/password";
 import { createNumericCode, sha256 } from "@/features/auth/server/tokens";
@@ -18,6 +18,7 @@ function logRegisterError(event: string, error: unknown, requestId?: string) {
     databaseUrlPresent: Boolean(process.env.DATABASE_URL),
     betterAuthSecretPresent: Boolean(process.env.BETTER_AUTH_SECRET),
     resendApiKeyPresent: Boolean(process.env.RESEND_API_KEY),
+    fromEmail: process.env.RESEND_FROM_EMAIL ?? null,
     runtime: process.env.NEXT_RUNTIME ?? "unknown",
     nodeEnv: process.env.NODE_ENV,
   });
@@ -29,6 +30,7 @@ function logRegisterInfo(event: string, data: Record<string, unknown> = {}) {
     databaseUrlPresent: Boolean(process.env.DATABASE_URL),
     betterAuthSecretPresent: Boolean(process.env.BETTER_AUTH_SECRET),
     resendApiKeyPresent: Boolean(process.env.RESEND_API_KEY),
+    fromEmail: process.env.RESEND_FROM_EMAIL ?? null,
     runtime: process.env.NEXT_RUNTIME ?? "unknown",
     nodeEnv: process.env.NODE_ENV,
   });
@@ -53,6 +55,7 @@ export async function POST(request: Request) {
     } else {
       logRegisterInfo("turnstile verification skipped", { requestId });
     }
+
     if (!process.env.DATABASE_URL) {
       logRegisterError("database url missing", new Error("DATABASE_URL is not configured"), requestId);
       return jsonError(AUTH_DATABASE_ERROR_MESSAGE, 503);
@@ -94,7 +97,7 @@ export async function POST(request: Request) {
 
     const code = createNumericCode();
     try {
-      await prisma.verification.create({
+      const verification = await prisma.verification.create({
         data: {
           identifier: `email:${body.email}`,
           value: sha256(code),
@@ -102,24 +105,21 @@ export async function POST(request: Request) {
           userId: user.id,
         },
       });
+      logRegisterInfo("verification token created", { requestId, verificationId: verification.id, userId: user.id, identifier: `email:${body.email}` });
     } catch (error) {
       logRegisterError("prisma verification create failed", error, requestId);
       return jsonError("邮箱验证码创建失败，请稍后重试", 503);
     }
 
-    try {
-      await sendVerificationCodeEmail(body.email, code);
-    } catch (error) {
-      logRegisterError("resend verification email failed", error, requestId);
+    const emailResult = await sendVerificationCodeEmail(body.email, code);
+    if (!emailResult.sent) {
+      logRegisterError("resend verification email failed", new Error(emailResult.error ?? "Email send failed"), requestId);
     }
 
-    logRegisterInfo("request:success", { requestId, userId: user.id, email: body.email });
-    return Response.json({ ok: true, email: body.email });
+    logRegisterInfo("request:success", { requestId, userId: user.id, email: body.email, emailSent: emailResult.sent, messageId: emailResult.messageId });
+    return Response.json({ ok: true, email: body.email, emailDelivery: { sent: emailResult.sent, messageId: emailResult.messageId, error: emailResult.error, statusCode: emailResult.statusCode ?? null } });
   } catch (error) {
     logRegisterError("request failed", error, requestId);
     return parseError(error);
   }
 }
-
-
-

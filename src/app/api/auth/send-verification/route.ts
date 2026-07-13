@@ -1,4 +1,4 @@
-﻿import { prisma } from "@/features/auth/server/prisma";
+import { prisma } from "@/features/auth/server/prisma";
 import { createNumericCode, sha256 } from "@/features/auth/server/tokens";
 import { EMAIL_CODE_TTL_MINUTES } from "@/features/auth/server/constants";
 import { sendVerificationCodeEmail } from "@/features/auth/server/email";
@@ -8,7 +8,7 @@ import { jsonError, parseError } from "@/features/auth/server/responses";
 
 export async function POST(request: Request) {
   try {
-    const { email } = await request.json() as { email?: string };
+    const { email } = (await request.json()) as { email?: string };
     const parsedEmail = emailSchema.parse(email);
     const ip = getClientIp(request);
     const limited = rateLimit({ key: `verification:${ip}:${parsedEmail}`, limit: 1, windowMs: 60 * 1000 });
@@ -16,14 +16,25 @@ export async function POST(request: Request) {
 
     const user = await prisma.user.findUnique({ where: { email: parsedEmail } });
     if (!user) return jsonError("账号不存在", 404);
-    if (user.emailVerified) return Response.json({ ok: true });
+    if (user.emailVerified) return Response.json({ ok: true, email: { sent: false, messageId: null, error: "邮箱已验证", statusCode: null } });
 
     const code = createNumericCode();
-    await prisma.verification.create({ data: { identifier: `email:${parsedEmail}`, value: sha256(code), expiresAt: new Date(Date.now() + EMAIL_CODE_TTL_MINUTES * 60 * 1000), userId: user.id } });
-    await sendVerificationCodeEmail(parsedEmail, code);
-    return Response.json({ ok: true });
+    const verification = await prisma.verification.create({
+      data: {
+        identifier: `email:${parsedEmail}`,
+        value: sha256(code),
+        expiresAt: new Date(Date.now() + EMAIL_CODE_TTL_MINUTES * 60 * 1000),
+        userId: user.id,
+      },
+    });
+    console.info("[AUTH SEND_VERIFICATION] verification token created", { email: parsedEmail, verificationId: verification.id, userId: user.id });
+
+    const emailResult = await sendVerificationCodeEmail(parsedEmail, code);
+    if (!emailResult.sent) {
+      console.error("[AUTH SEND_VERIFICATION] email send failed", { email: parsedEmail, error: emailResult.error, statusCode: emailResult.statusCode ?? null });
+    }
+    return Response.json({ ok: true, email: { sent: emailResult.sent, messageId: emailResult.messageId, error: emailResult.error, statusCode: emailResult.statusCode ?? null } });
   } catch (error) {
     return parseError(error);
   }
 }
-

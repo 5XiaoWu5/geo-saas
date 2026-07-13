@@ -37,13 +37,13 @@ export function RegisterForm() {
           turnstileToken,
         }),
       });
-      const result = (await response.json()) as { error?: string };
+      const result = (await response.json()) as { error?: string; emailDelivery?: { sent: boolean; error?: string | null } };
       if (!response.ok) {
         setTurnstileToken("");
         setError(result.error ?? "创建账户失败，请稍后重试");
         return;
       }
-      router.replace(`/verify-email?email=${encodeURIComponent(email)}`);
+      router.replace(`/verify-email?email=${encodeURIComponent(email)}${result.emailDelivery?.sent === false ? "&emailStatus=failed" : ""}`);
     } catch {
       setTurnstileToken("");
       setError("网络连接异常，请稍后重试");

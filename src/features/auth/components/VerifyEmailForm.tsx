@@ -8,10 +8,12 @@ import { Button } from "@/components/ui/button";
 import { AuthAlert, AuthField, AuthSubmitButton } from "@/features/auth/components/AuthFormControls";
 
 export function VerifyEmailForm() {
-  const initialEmail = useSearchParams().get("email") ?? "";
+  const searchParams = useSearchParams();
+  const initialEmail = searchParams.get("email") ?? "";
+  const initialEmailStatus = searchParams.get("emailStatus") ?? "";
   const [message, setMessage] = useState("");
   const [verified, setVerified] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(initialEmailStatus === "failed" ? "账户已创建，但验证码邮件暂未发出。请检查 Resend 发信域名配置后，点击下方按钮重新发送验证码。" : "");
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
 

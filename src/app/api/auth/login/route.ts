@@ -1,4 +1,4 @@
-﻿import { cookies } from "next/headers";
+import { cookies } from "next/headers";
 import { AUTH_COOKIE_NAME } from "@/features/auth/server/constants";
 import { createSession, sessionCookieOptions } from "@/features/auth/server/session";
 import { prisma } from "@/features/auth/server/prisma";
@@ -8,6 +8,7 @@ import { getClientIp, rateLimit, rateLimitResponse } from "@/features/auth/serve
 import { verifyTurnstile } from "@/features/auth/server/turnstile";
 import { AUTH_TURNSTILE_ENABLED } from "@/features/auth/server/feature-flags";
 import { AUTH_DATABASE_ERROR_MESSAGE, jsonError, parseError } from "@/features/auth/server/responses";
+import { isEmailVerificationRequired } from "@/features/auth/server/env";
 
 function logLoginError(event: string, error: unknown, requestId?: string) {
   console.error(`[AUTH LOGIN] ${event}`, {
@@ -66,6 +67,7 @@ export async function POST(request: Request) {
     } else {
       logLoginInfo("turnstile verification skipped", { requestId });
     }
+
     if (!process.env.DATABASE_URL) {
       logLoginError("database url missing", new Error("DATABASE_URL is not configured"), requestId);
       return jsonError(AUTH_DATABASE_ERROR_MESSAGE, 503);
@@ -101,9 +103,13 @@ export async function POST(request: Request) {
     }
     if (!passwordValid) return jsonError("邮箱或密码错误", 401);
 
-    if (!user.emailVerified) {
+    if (isEmailVerificationRequired() && !user.emailVerified) {
       logLoginInfo("email verification required", { requestId, userId: user.id });
       return jsonError("请先完成邮箱验证", 403);
+    }
+
+    if (!isEmailVerificationRequired() && !user.emailVerified) {
+      logLoginInfo("email verification skipped by DEV_MODE", { requestId, userId: user.id });
     }
 
     let token;
@@ -125,5 +131,3 @@ export async function POST(request: Request) {
     return parseError(error);
   }
 }
-
-
