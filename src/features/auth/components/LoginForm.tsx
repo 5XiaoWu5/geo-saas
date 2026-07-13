@@ -7,6 +7,7 @@ import { Mail } from "lucide-react";
 import { AuthAlert, AuthField, AuthSubmitButton, PasswordField } from "@/features/auth/components/AuthFormControls";
 import { Turnstile } from "@/features/auth/components/Turnstile";
 import { AUTH_TURNSTILE_ENABLED } from "@/features/auth/components/feature-flags";
+import { parseAuthResponse } from "@/features/auth/components/parse-auth-response";
 
 export function LoginForm() {
   const router = useRouter();
@@ -35,7 +36,7 @@ export function LoginForm() {
           turnstileToken,
         }),
       });
-      const result = (await response.json()) as { error?: string };
+      const result = await parseAuthResponse(response);
       if (!response.ok) {
         setTurnstileToken("");
         setError(result.error ?? `登录失败（${response.status}）`);
