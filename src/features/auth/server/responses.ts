@@ -1,6 +1,6 @@
 import { ZodError } from "zod";
 
-export const AUTH_DATABASE_ERROR_MESSAGE = "????????????? Cloudflare Pages ? DATABASE_URL ??";
+export const AUTH_DATABASE_ERROR_MESSAGE = "认证数据库连接失败，请检查 Cloudflare Pages 的 DATABASE_URL 配置";
 
 export function jsonError(error: string, status = 400): Response {
   return Response.json({ error }, { status });
@@ -18,7 +18,7 @@ function isDatabaseConfigurationError(error: unknown): boolean {
 }
 
 export function parseError(error: unknown): Response {
-  if (error instanceof ZodError) return jsonError(error.issues[0]?.message ?? "??????", 400);
+  if (error instanceof ZodError) return jsonError(error.issues[0]?.message ?? "请求参数无效", 400);
   console.error("[AUTH ERROR] unhandled", {
     message: getErrorMessage(error),
     name: error instanceof Error ? error.name : undefined,
@@ -27,7 +27,6 @@ export function parseError(error: unknown): Response {
   if (isDatabaseConfigurationError(error)) {
     return jsonError(AUTH_DATABASE_ERROR_MESSAGE, 503);
   }
-  const debugEnabled = process.env.AUTH_DEBUG_ERRORS === "true";
-  const message = process.env.NODE_ENV === "production" && !debugEnabled ? "??????????????" : getErrorMessage(error);
+  const message = process.env.NODE_ENV === "production" ? "服务器暂时不可用，请稍后重试" : getErrorMessage(error);
   return jsonError(message, 500);
 }
