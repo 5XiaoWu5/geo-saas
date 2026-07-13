@@ -23,6 +23,7 @@ model User {
   accounts       Account[]
   verifications  Verification[]
   passwordResets PasswordReset[]
+  projects       Project[]
 }
 
 model Session {
@@ -90,11 +91,25 @@ model PasswordReset {
 }
 
 model Project {
-  id         String   @id @default(cuid())
-  name       String
-  domain     String
-  status     String   @default("draft")
-  visibility Int      @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id              String    @id @default(cuid())
+  userId          String?
+  name            String
+  domain          String
+  language        String    @default("English")
+  country         String    @default("United States")
+  industry        String    @default("SaaS")
+  description     String    @default("")
+  status          String    @default("Active")
+  reportsCount    Int       @default(0)
+  geoScore        Int       @default(0)
+  visibilityScore Int       @default(0)
+  visibility      Int       @default(0)
+  lastAnalysisAt  DateTime?
+  lastScan        DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

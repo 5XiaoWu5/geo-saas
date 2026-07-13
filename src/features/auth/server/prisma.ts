@@ -22,6 +22,25 @@ type AuthRow = Record<string, unknown> & {
   user: AuthRow;
 };
 
+type ProjectRow = Record<string, unknown> & {
+  id: string;
+  userId: string | null;
+  name: string;
+  domain: string;
+  language: string;
+  country: string;
+  industry: string;
+  description: string;
+  status: string;
+  reportsCount: number;
+  geoScore: number;
+  visibilityScore: number;
+  lastAnalysisAt: Date | null;
+  lastScan: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 const fallbackDatabaseUrl = "postgresql://postgres:postgres@127.0.0.1:5432/geopilot_ai";
 
 if (!process.env.DATABASE_URL) {
@@ -37,6 +56,11 @@ async function query(sqlText: string, params: unknown[] = []): Promise<AuthRow[]
   return (await sql.query(sqlText, params)) as AuthRow[];
 }
 
+async function projectQuery(sqlText: string, params: unknown[] = []): Promise<ProjectRow[]> {
+  const sql = getSql();
+  return (await sql.query(sqlText, params)) as ProjectRow[];
+}
+
 function createId() {
   return crypto.randomUUID();
 }
@@ -47,6 +71,32 @@ function normalizeRow<T extends AuthRow | null>(row: T): T {
     if (row[key] && !(row[key] instanceof Date)) row[key] = new Date(row[key] as string);
   }
   return row;
+}
+
+function normalizeProjectRow<T extends ProjectRow | null>(row: T): T {
+  if (!row) return row;
+  for (const key of ["createdAt", "updatedAt", "lastAnalysisAt", "lastScan"]) {
+    if (row[key] && !(row[key] instanceof Date)) row[key] = new Date(row[key] as string);
+  }
+  return row;
+}
+
+let projectSchemaReady = false;
+
+async function ensureProjectSchema() {
+  if (projectSchemaReady) return;
+  await projectQuery('ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "userId" TEXT');
+  await projectQuery('ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "language" TEXT NOT NULL DEFAULT \'English\'');
+  await projectQuery('ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "country" TEXT NOT NULL DEFAULT \'United States\'');
+  await projectQuery('ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "industry" TEXT NOT NULL DEFAULT \'SaaS\'');
+  await projectQuery('ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "description" TEXT NOT NULL DEFAULT \'\'');
+  await projectQuery('ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "reportsCount" INTEGER NOT NULL DEFAULT 0');
+  await projectQuery('ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "geoScore" INTEGER NOT NULL DEFAULT 0');
+  await projectQuery('ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "visibilityScore" INTEGER NOT NULL DEFAULT 0');
+  await projectQuery('ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "lastAnalysisAt" TIMESTAMP(3)');
+  await projectQuery('ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "lastScan" TIMESTAMP(3)');
+  await projectQuery('CREATE INDEX IF NOT EXISTS "Project_userId_idx" ON "Project"("userId")');
+  projectSchemaReady = true;
 }
 
 function assignments(data: Data, start = 1) {
@@ -118,6 +168,48 @@ export const prisma = {
     async update({ where, data }: { where: Where; data: Data }) {
       const set = assignments(data);
       return normalizeRow((await query(`UPDATE "PasswordReset" SET ${set.sql} WHERE "id" = $${set.values.length + 1} RETURNING *`, [...set.values, where.id]))[0] ?? null);
+    },
+  },
+  project: {
+    async findMany({ where }: { where: { userId: string } }) {
+      await ensureProjectSchema();
+      return (await projectQuery('SELECT * FROM "Project" WHERE "userId" = $1 ORDER BY "createdAt" DESC', [where.userId])).map((row) => normalizeProjectRow(row));
+    },
+    async findFirst({ where }: { where: { id: string; userId: string } }) {
+      await ensureProjectSchema();
+      return normalizeProjectRow((await projectQuery('SELECT * FROM "Project" WHERE "id" = $1 AND "userId" = $2 LIMIT 1', [where.id, where.userId]))[0] ?? null);
+    },
+    async create({ data }: { data: Data }) {
+      await ensureProjectSchema();
+      const now = new Date();
+      return normalizeProjectRow((await projectQuery('INSERT INTO "Project" ("id", "userId", "name", "domain", "language", "country", "industry", "description", "status", "visibility", "reportsCount", "geoScore", "visibilityScore", "lastAnalysisAt", "lastScan", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING *', [
+        data.id ?? createId(),
+        data.userId,
+        data.name,
+        data.domain,
+        data.language ?? "English",
+        data.country ?? "United States",
+        data.industry ?? "SaaS",
+        data.description ?? "",
+        data.status ?? "Active",
+        data.visibility ?? data.visibilityScore ?? 0,
+        data.reportsCount ?? 0,
+        data.geoScore ?? 0,
+        data.visibilityScore ?? 0,
+        data.lastAnalysisAt ?? null,
+        data.lastScan ?? null,
+        now,
+        now,
+      ]))[0]);
+    },
+    async update({ where, data }: { where: { id: string; userId: string }; data: Data }) {
+      await ensureProjectSchema();
+      const set = assignments({ ...data, updatedAt: new Date() });
+      return normalizeProjectRow((await projectQuery(`UPDATE "Project" SET ${set.sql} WHERE "id" = $${set.values.length + 1} AND "userId" = $${set.values.length + 2} RETURNING *`, [...set.values, where.id, where.userId]))[0] ?? null);
+    },
+    async delete({ where }: { where: { id: string; userId: string } }) {
+      await ensureProjectSchema();
+      return normalizeProjectRow((await projectQuery('DELETE FROM "Project" WHERE "id" = $1 AND "userId" = $2 RETURNING *', [where.id, where.userId]))[0] ?? null);
     },
   },
   async $transaction(operations: Array<Promise<unknown>>) {

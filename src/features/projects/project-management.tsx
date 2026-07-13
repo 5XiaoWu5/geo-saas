@@ -1,9 +1,8 @@
 ﻿"use client";
 
-import { useMemo, useState } from "react";
-import { Plus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Loader2, Plus } from "lucide-react";
 import type { Project, ProjectFormValues, ProjectViewMode } from "@/types/project";
-import { createMockProject, mockProjects } from "@/data/projects";
 import { useI18n } from "@/i18n/provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,13 +20,40 @@ const defaultFilters: ProjectFilters = {
   sort: "createdAt",
 };
 
+async function readProjectResponse<T>(response: Response): Promise<T> {
+  const text = await response.text();
+  const data = text ? JSON.parse(text) as T & { error?: string } : {} as T & { error?: string };
+  if (!response.ok) throw new Error(data.error ?? "项目数据请求失败");
+  return data;
+}
+
 export function ProjectManagement() {
   const { t } = useI18n();
-  const [projects, setProjects] = useState<Project[]>(mockProjects);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [filters, setFilters] = useState<ProjectFilters>(defaultFilters);
   const [viewMode, setViewMode] = useState<ProjectViewMode>("card");
   const [activeProject, setActiveProject] = useState<Project | undefined>();
   const [panelMode, setPanelMode] = useState<"closed" | "create" | "edit">("closed");
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function loadProjects() {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await readProjectResponse<{ projects: Project[] }>(await fetch("/api/projects", { cache: "no-store" }));
+      setProjects(data.projects);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "项目数据加载失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadProjects();
+  }, []);
 
   const filteredProjects = useMemo(() => {
     return projects
@@ -52,9 +78,18 @@ export function ProjectManagement() {
     setActiveProject(undefined);
   }
 
-  function handleCreate(values: ProjectFormValues) {
-    setProjects((currentProjects) => [createMockProject(values), ...currentProjects]);
-    closePanel();
+  async function handleCreate(values: ProjectFormValues) {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const data = await readProjectResponse<{ project: Project }>(await fetch("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(values) }));
+      setProjects((currentProjects) => [data.project, ...currentProjects]);
+      closePanel();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "项目创建失败");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function handleEdit(project: Project) {
@@ -62,14 +97,29 @@ export function ProjectManagement() {
     setPanelMode("edit");
   }
 
-  function handleUpdate(values: ProjectFormValues) {
+  async function handleUpdate(values: ProjectFormValues) {
     if (!activeProject) return;
-    setProjects((currentProjects) => currentProjects.map((project) => (project.id === activeProject.id ? { ...project, ...values } : project)));
-    closePanel();
+    setSubmitting(true);
+    setError(null);
+    try {
+      const data = await readProjectResponse<{ project: Project }>(await fetch(`/api/projects/${activeProject.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(values) }));
+      setProjects((currentProjects) => currentProjects.map((project) => (project.id === activeProject.id ? data.project : project)));
+      closePanel();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "项目更新失败");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
-  function handleDelete(projectToDelete: Project) {
-    setProjects((currentProjects) => currentProjects.filter((project) => project.id !== projectToDelete.id));
+  async function handleDelete(projectToDelete: Project) {
+    setError(null);
+    try {
+      await readProjectResponse<{ deleted: boolean }>(await fetch(`/api/projects/${projectToDelete.id}`, { method: "DELETE" }));
+      setProjects((currentProjects) => currentProjects.filter((project) => project.id !== projectToDelete.id));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "项目删除失败");
+    }
   }
 
   return (
@@ -80,7 +130,15 @@ export function ProjectManagement() {
         action={<Button onClick={() => setPanelMode("create")}><Plus className="h-4 w-4" /> {t("projects.newProject")}</Button>}
       />
 
-      <ProjectStats projects={projects} labels={{ totalProjects: t("projects.totalProjects"), totalReports: t("projects.totalReports"), lastAnalysis: t("projects.lastAnalysis"), averageGeoScore: t("projects.averageGeoScore"), mockData: t("common.mockData"), allProjects: t("dashboard.allProjects"), latest: t("common.latest"), fakeScore: t("dashboard.fakeScore") }} />
+      {error ? <div className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div> : null}
+
+      {loading ? (
+        <Card className="glass-panel border-white/10">
+          <CardContent className="flex items-center gap-3 p-6 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> 正在加载当前账号的项目数据...</CardContent>
+        </Card>
+      ) : null}
+
+      {!loading ? <ProjectStats projects={projects} labels={{ totalProjects: t("projects.totalProjects"), totalReports: t("projects.totalReports"), lastAnalysis: t("projects.lastAnalysis"), averageGeoScore: t("projects.averageGeoScore"), mockData: "当前账号", allProjects: t("dashboard.allProjects"), latest: t("common.latest"), fakeScore: "实时统计" }} /> : null}
 
       {panelMode !== "closed" ? (
         <Card className="glass-panel border-primary/20">
@@ -88,14 +146,14 @@ export function ProjectManagement() {
             <CardTitle>{panelMode === "create" ? t("projects.createProject") : t("projects.editProject", { name: activeProject?.name ?? "" })}</CardTitle>
           </CardHeader>
           <CardContent>
-            <ProjectForm project={activeProject} onSubmit={panelMode === "create" ? handleCreate : handleUpdate} onCancel={closePanel} />
+            <ProjectForm project={activeProject} onSubmit={panelMode === "create" ? handleCreate : handleUpdate} onCancel={closePanel} submitting={submitting} />
           </CardContent>
         </Card>
       ) : null}
 
-      <ProjectToolbar filters={filters} viewMode={viewMode} onFiltersChange={setFilters} onViewModeChange={setViewMode} />
+      {!loading ? <ProjectToolbar filters={filters} viewMode={viewMode} onFiltersChange={setFilters} onViewModeChange={setViewMode} /> : null}
 
-      {filteredProjects.length === 0 ? <ProjectEmptyResults title={t("projects.noResults")} description={t("projects.noResultsDescription")} /> : null}
+      {!loading && filteredProjects.length === 0 ? <ProjectEmptyResults title={t("projects.noResults")} description={t("projects.noResultsDescription")} /> : null}
 
       {filteredProjects.length > 0 && viewMode === "card" ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

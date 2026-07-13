@@ -3,8 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowUpRight } from "lucide-react";
 import { crawlDashboardStats } from "@/data/crawl";
-import { getProjectsByWorkspace } from "@/features/project-center/services/project.service";
-import { useWorkspace } from "@/features/workspace";
 import type { Project } from "@/types/project";
 import { useI18n } from "@/i18n/provider";
 import { Button } from "@/components/ui/button";
@@ -14,14 +12,20 @@ import { formatDate, formatDateTime, getHostname } from "@/lib/format";
 
 const visibilitySeries = [72, 74, 70, 76, 81, 78, 84, 88, 86, 91, 89, 94];
 
+async function loadCurrentUserProjects() {
+  const response = await fetch("/api/projects", { cache: "no-store" });
+  const data = await response.json() as { projects?: Project[] };
+  if (!response.ok) return [];
+  return data.projects ?? [];
+}
+
 export default function DashboardPage() {
   const { t } = useI18n();
-  const { workspace } = useWorkspace();
   const [projects, setProjects] = useState<Project[]>([]);
 
   useEffect(() => {
-    void getProjectsByWorkspace(workspace.id).then(setProjects);
-  }, [workspace.id]);
+    void loadCurrentUserProjects().then(setProjects);
+  }, []);
 
   const stats = useMemo(() => {
     const totalReports = projects.reduce((total, project) => total + project.reportsCount, 0);
@@ -34,10 +38,10 @@ export default function DashboardPage() {
     <div>
       <PageHeader title={t("dashboard.title")} description={t("dashboard.description")} action={<Button>{t("dashboard.newProject")}</Button>} />
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label={t("dashboard.totalProjects")} value={String(projects.length)} delta={t("common.mockData")} />
+        <MetricCard label={t("dashboard.totalProjects")} value={String(projects.length)} delta="当前账号" />
         <MetricCard label={t("dashboard.totalReports")} value={String(stats.totalReports)} delta={t("dashboard.allProjects")} />
         <MetricCard label={t("dashboard.lastAnalysis")} value={formatDate(stats.lastAnalysis)} delta={t("common.latest")} />
-        <MetricCard label={t("dashboard.averageGeoScore")} value={`${stats.averageGeoScore}%`} delta={t("dashboard.fakeScore")} />
+        <MetricCard label={t("dashboard.averageGeoScore")} value={`${stats.averageGeoScore}%`} delta="实时统计" />
       </section>
       <section className="mt-4 grid gap-4 md:grid-cols-3">
         <MetricCard label={t("dashboard.totalCrawledPages")} value={String(crawlDashboardStats.totalCrawledPages)} delta={t("dashboard.latestCrawl")} />
@@ -59,6 +63,7 @@ export default function DashboardPage() {
         <Card className="glass-panel border-white/10">
           <CardHeader><CardTitle>{t("dashboard.recentProjects")}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
+            {projects.length === 0 ? <p className="text-sm text-muted-foreground">当前账号暂无项目。</p> : null}
             {projects.slice(0, 4).map((project) => <div key={project.name} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div><p className="font-medium">{project.name}</p><p className="text-xs text-muted-foreground">{getHostname(project.url)}</p></div><span className="text-sm font-semibold text-primary">{project.geoScore}%</span></div>)}
           </CardContent>
         </Card>
@@ -66,4 +71,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-

@@ -19,7 +19,7 @@ const emptyProject: ProjectFormValues = {
   description: "",
 };
 
-export function ProjectForm({ project, onSubmit, onCancel }: { project?: Project; onSubmit: (values: ProjectFormValues) => void; onCancel: () => void }) {
+export function ProjectForm({ project, onSubmit, onCancel, submitting = false }: { project?: Project; onSubmit: (values: ProjectFormValues) => void | Promise<void>; onCancel: () => void; submitting?: boolean }) {
   const { t } = useI18n();
   const initialValues = project ?? emptyProject;
 
@@ -66,9 +66,10 @@ export function ProjectForm({ project, onSubmit, onCancel }: { project?: Project
         <Textarea id="description" name="description" defaultValue={initialValues.description} required placeholder="Describe the project scope and market context." />
       </div>
       <div className="flex justify-end gap-3 border-t border-white/10 pt-5">
-        <Button type="button" variant="outline" onClick={onCancel}>{t("common.cancel")}</Button>
-        <Button type="submit">{project ? t("common.saveChanges") : t("projects.createProject")}</Button>
+        <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>{t("common.cancel")}</Button>
+        <Button type="submit" disabled={submitting}>{submitting ? "正在保存..." : project ? t("common.saveChanges") : t("projects.createProject")}</Button>
       </div>
     </form>
   );
 }
+
