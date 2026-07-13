@@ -100,7 +100,7 @@ export async function POST(request: Request) {
       const verification = await prisma.verification.create({
         data: {
           identifier: `email:${body.email}`,
-          value: sha256(code),
+          value: await sha256(code),
           expiresAt: new Date(Date.now() + EMAIL_CODE_TTL_MINUTES * 60 * 1000),
           userId: user.id,
         },

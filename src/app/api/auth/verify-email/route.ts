@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     const verification = await prisma.verification.findFirst({
       where: {
         identifier: `email:${body.email}`,
-        value: sha256(body.code),
+        value: await sha256(body.code),
         expiresAt: { gt: new Date() },
       },
       orderBy: { createdAt: "desc" },

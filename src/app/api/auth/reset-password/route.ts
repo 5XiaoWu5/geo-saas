@@ -7,7 +7,7 @@ import { jsonError, parseError } from "@/features/auth/server/responses";
 export async function POST(request: Request) {
   try {
     const body = resetPasswordSchema.parse(await request.json());
-    const reset = await prisma.passwordReset.findUnique({ where: { token: sha256(body.token) } });
+    const reset = await prisma.passwordReset.findUnique({ where: { token: await sha256(body.token) } });
     if (!reset || reset.usedAt || !reset.expiresAt || reset.expiresAt <= new Date() || !reset.userId) return jsonError("重置链接无效或已过期", 400);
 
     await prisma.$transaction([

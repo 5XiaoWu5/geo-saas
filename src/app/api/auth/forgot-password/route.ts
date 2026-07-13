@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     const user = await prisma.user.findUnique({ where: { email: body.email } });
     if (user) {
       const token = createToken(36);
-      await prisma.passwordReset.create({ data: { userId: user.id, token: sha256(token), expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MINUTES * 60 * 1000) } });
+      await prisma.passwordReset.create({ data: { userId: user.id, token: await sha256(token), expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MINUTES * 60 * 1000) } });
       const baseUrl = process.env.BETTER_AUTH_URL ?? new URL(request.url).origin;
       try {
         await sendPasswordResetEmail(body.email, `${baseUrl}/reset-password?token=${token}`);
