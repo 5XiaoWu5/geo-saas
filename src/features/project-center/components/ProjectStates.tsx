@@ -1,36 +1,27 @@
-﻿import { Card, CardContent } from "@/components/ui/card";
+﻿import { AlertCircle } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 export function ProjectLoadingSkeleton({ className }: { className?: string }) {
   return (
-    <div className={cn("grid gap-4", className)}>
-      <div className="grid gap-4 md:grid-cols-3">
-        {[0, 1, 2].map((item) => <div key={item} className="glass-panel h-28 animate-pulse rounded-2xl" />)}
-      </div>
-      <div className="glass-panel h-80 animate-pulse rounded-3xl" />
+    <div className={cn("grid gap-4 md:grid-cols-3", className)}>
+      {[0, 1, 2].map((item) => <div key={item} className="h-36 animate-pulse rounded-2xl border border-white/10 bg-white/[0.04]" />)}
     </div>
   );
 }
 
-export function ProjectEmptyState({ title = "No project data", description = "There is no data available for this project yet." }: { title?: string; description?: string }) {
+export function ProjectEmptyState({ title = "暂无项目数据", description = "当前项目还没有可展示的数据。" }: { title?: string; description?: string }) {
   return (
     <Card className="glass-panel border-white/10">
-      <CardContent className="flex min-h-[260px] flex-col items-center justify-center p-8 text-center">
-        <div className="mb-4 h-12 w-12 rounded-2xl border border-dashed border-primary/40 bg-primary/10" />
-        <h3 className="text-lg font-semibold">{title}</h3>
-        <p className="mt-2 max-w-md text-sm text-muted-foreground">{description}</p>
-      </CardContent>
+      <CardContent className="p-8 text-center"><h3 className="font-semibold">{title}</h3><p className="mt-2 text-sm text-muted-foreground">{description}</p></CardContent>
     </Card>
   );
 }
 
-export function ProjectErrorState({ message = "Unable to load project data." }: { message?: string }) {
+export function ProjectErrorState({ message = "项目数据加载失败。" }: { message?: string }) {
   return (
-    <Card className="glass-panel border-destructive/30">
-      <CardContent className="p-6">
-        <h3 className="font-semibold text-destructive">Project data error</h3>
-        <p className="mt-2 text-sm text-muted-foreground">{message}</p>
-      </CardContent>
+    <Card className="border-destructive/30 bg-destructive/10">
+      <CardContent className="flex gap-3 p-5 text-sm text-destructive"><AlertCircle className="h-5 w-5" /><div><h3 className="font-semibold">项目数据异常</h3><p>{message}</p></div></CardContent>
     </Card>
   );
 }

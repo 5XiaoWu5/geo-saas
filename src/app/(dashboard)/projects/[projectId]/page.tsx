@@ -1,6 +1,5 @@
-﻿import { redirect } from "next/navigation";
+﻿import { ProjectOverviewTab } from "@/features/project-center/tabs/overview/ProjectOverviewTab";
 
-export default async function ProjectCenterIndexPage({ params }: { params: Promise<{ projectId: string }> }) {
-  const { projectId } = await params;
-  redirect(`/projects/${projectId}/overview`);
+export default function ProjectCenterIndexPage() {
+  return <ProjectOverviewTab />;
 }

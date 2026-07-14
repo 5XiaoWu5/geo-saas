@@ -6,11 +6,11 @@ import { useProject } from "@/features/project-center/context/ProjectContext";
 import { cn } from "@/lib/utils";
 
 const tabs = [
-  { label: "Overview", segment: "overview" },
-  { label: "GEO Analyzer", segment: "analyzer" },
-  { label: "Visibility Monitor", segment: "visibility" },
-  { label: "Optimization Center", segment: "optimization" },
-  { label: "Monitoring", segment: "monitoring" },
+  { label: "概览", segment: "overview" },
+  { label: "GEO 分析", segment: "analyzer" },
+  { label: "可见性监控", segment: "visibility" },
+  { label: "优化中心", segment: "optimization" },
+  { label: "趋势监控", segment: "monitoring" },
 ];
 
 export function ProjectTabs() {
@@ -18,20 +18,18 @@ export function ProjectTabs() {
   const { project } = useProject();
 
   return (
-    <div className="overflow-x-auto border-b border-white/10">
-      <nav className="flex min-w-max gap-2">
+    <div className="overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.03] p-1">
+      <div className="flex min-w-max gap-1">
         {tabs.map((tab) => {
           const href = `/projects/${project.id}/${tab.segment}`;
           const active = pathname === href || (tab.segment === "overview" && pathname === `/projects/${project.id}`);
-
           return (
-            <Link key={tab.segment} href={href} className={cn("rounded-t-xl px-4 py-3 text-sm font-medium text-muted-foreground transition hover:bg-white/[0.04] hover:text-foreground", active && "bg-white/[0.06] text-primary ring-1 ring-white/10")}>
+            <Link key={tab.segment} href={href} className={cn("rounded-xl px-4 py-2 text-sm text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground", active && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground")}>
               {tab.label}
             </Link>
           );
         })}
-      </nav>
+      </div>
     </div>
   );
 }
-

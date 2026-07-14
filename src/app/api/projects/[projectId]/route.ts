@@ -1,8 +1,8 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/features/auth/server/session";
 import { prisma } from "@/features/auth/server/prisma";
-import type { Project } from "@/types/project";
+import { toProject } from "@/features/projects/project-mapper";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,36 +16,20 @@ const projectSchema = z.object({
   description: z.string().trim().min(1, "项目描述不能为空"),
 });
 
-function toProject(row: Record<string, unknown>): Project {
-  const createdAt = row.createdAt instanceof Date ? row.createdAt : new Date(String(row.createdAt));
-  const lastAnalysisAt = row.lastAnalysisAt ? (row.lastAnalysisAt instanceof Date ? row.lastAnalysisAt : new Date(String(row.lastAnalysisAt))) : null;
-  const lastScan = row.lastScan ? (row.lastScan instanceof Date ? row.lastScan : new Date(String(row.lastScan))) : null;
-  const websiteUrl = String(row.domain);
-
-  return {
-    id: String(row.id),
-    workspaceId: String(row.userId ?? "user-workspace"),
-    name: String(row.name),
-    websiteUrl,
-    url: websiteUrl,
-    language: String(row.language ?? "English") as Project["language"],
-    country: String(row.country ?? "United States") as Project["country"],
-    industry: String(row.industry ?? "SaaS") as Project["industry"],
-    description: String(row.description ?? ""),
-    createdAt: createdAt.toISOString(),
-    lastAnalysisAt: lastAnalysisAt?.toISOString() ?? null,
-    lastScan: lastScan?.toISOString() ?? null,
-    reportsCount: Number(row.reportsCount ?? 0),
-    geoScore: Number(row.geoScore ?? 0),
-    visibilityScore: Number(row.visibilityScore ?? row.visibility ?? 0),
-    status: String(row.status ?? "Active") as Project["status"],
-  };
-}
-
 async function requireUser() {
   const user = await getCurrentUser();
   if (!user) return { user: null, response: NextResponse.json({ error: "请先登录" }, { status: 401 }) };
   return { user, response: null };
+}
+
+export async function GET(_request: Request, { params }: { params: Promise<{ projectId: string }> }) {
+  const { user, response } = await requireUser();
+  if (response) return response;
+
+  const { projectId } = await params;
+  const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id } });
+  if (!project) return NextResponse.json({ error: "项目不存在或无权访问" }, { status: 404 });
+  return NextResponse.json({ project: toProject(project) });
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ projectId: string }> }) {
