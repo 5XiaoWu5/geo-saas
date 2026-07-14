@@ -11,6 +11,10 @@ if (process.env.OPENNEXT_INNER_NEXT_BUILD === "1") {
   process.exit(result.status ?? 1);
 }
 
+for (const directory of [".next", ".open-next"]) {
+  if (existsSync(directory)) rmSync(directory, { recursive: true, force: true });
+}
+
 const result = spawnSync("opennextjs-cloudflare", ["build"], {
   stdio: "inherit",
   shell: true,
