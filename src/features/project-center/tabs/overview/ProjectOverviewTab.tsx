@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import {
@@ -16,6 +17,7 @@ import {
   Radar,
   ScanSearch,
   ShieldCheck,
+  Sparkles,
   Target,
 } from "lucide-react";
 import { useProject } from "@/features/project-center/context/ProjectContext";
@@ -157,17 +159,24 @@ export function ProjectOverviewTab() {
             </CardTitle>
             <p className="mt-2 text-sm text-muted-foreground">真实请求项目网站，解析标题、描述、标题结构、链接和 JSON-LD Schema。</p>
           </div>
-          <Button onClick={() => void startScan()} disabled={scanning}>
-            {scanning ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" /> 正在分析...
-              </>
-            ) : (
-              <>
-                <ScanSearch className="h-4 w-4" /> 开始分析
-              </>
-            )}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={() => void startScan()} disabled={scanning}>
+              {scanning ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> 正在分析...
+                </>
+              ) : (
+                <>
+                  <ScanSearch className="h-4 w-4" /> 开始分析
+                </>
+              )}
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/analyzer">
+                <Sparkles className="h-4 w-4" /> 进入 GEO 分析
+              </Link>
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {scanning ? (

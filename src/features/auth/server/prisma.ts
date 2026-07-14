@@ -353,6 +353,10 @@ export const prisma = {
       await ensureGeoAnalysisSchema();
       return normalizeGeoAnalysisRow((await geoAnalysisQuery('SELECT * FROM "GeoAnalysis" WHERE "scanId" = $1 LIMIT 1', [where.scanId]))[0] ?? null);
     },
+    async findLatestForUser({ where }: { where: { userId: string } }) {
+      await ensureGeoAnalysisSchema();
+      return (await geoAnalysisQuery('SELECT DISTINCT ON (ga."projectId") ga.* FROM "GeoAnalysis" ga INNER JOIN "Project" p ON p."id" = ga."projectId" WHERE p."userId" = $1 ORDER BY ga."projectId", ga."createdAt" DESC', [where.userId])).map((row) => normalizeGeoAnalysisRow(row));
+    },
     async create({ data }: { data: Data }) {
       await ensureGeoAnalysisSchema();
       const issues = JSON.stringify(data.issues ?? []);
