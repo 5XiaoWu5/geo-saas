@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { CheckCircle2, Clock3, Loader2, XCircle } from "lucide-react";
 import type { CrawlJob, CrawlStatus } from "@/types/crawl";
@@ -7,6 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { formatDateTime, getHostname } from "@/lib/format";
+
+function getCrawlStatusLabel(status: CrawlStatus) {
+  const labels: Record<CrawlStatus, string> = { Waiting: "等待中", Running: "运行中", Completed: "已完成", Failed: "失败" };
+  return labels[status];
+}
 
 const statusMeta: Record<CrawlStatus, { icon: typeof Clock3; variant: "success" | "warning" | "muted" | "outline" }> = {
   Waiting: { icon: Clock3, variant: "muted" },
@@ -36,7 +41,7 @@ export function CrawlQueue({ jobs, selectedJobId, onSelectJob }: { jobs: CrawlJo
                   <p className="truncate font-medium">{getHostname(job.websiteUrl)}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{t("crawl.started")} {formatDateTime(job.startedAt)}</p>
                 </div>
-                <Badge variant={meta.variant}><Icon className="mr-1 h-3 w-3" />{job.status}</Badge>
+                <Badge variant={meta.variant}><Icon className="mr-1 h-3 w-3" />{getCrawlStatusLabel(job.status)}</Badge>
               </div>
               <div className="mt-4 flex items-center gap-3">
                 <Progress value={job.progress} />

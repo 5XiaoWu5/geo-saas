@@ -1,9 +1,9 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { CalendarClock, Edit3, ExternalLink, Globe2, Trash2 } from "lucide-react";
 import type { Project } from "@/types/project";
-import { getProjectStatusLabel } from "@/features/projects/project-mapper";
+import { getProjectCountryLabel, getProjectIndustryLabel, getProjectLanguageLabel, getProjectStatusLabel } from "@/features/projects/project-mapper";
 import { useI18n } from "@/i18n/provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,9 +39,9 @@ export function ProjectCard({ project, onEdit, onDelete }: { project: Project; o
         </div>
         <p className="mt-4 line-clamp-2 min-h-10 text-sm text-muted-foreground">{project.description}</p>
         <div className="mt-5 flex flex-wrap gap-2">
-          <Badge variant="outline">{project.language}</Badge>
-          <Badge variant="outline">{project.country}</Badge>
-          <Badge variant="outline">{project.industry}</Badge>
+          <Badge variant="outline">{getProjectLanguageLabel(project.language)}</Badge>
+          <Badge variant="outline">{getProjectCountryLabel(project.country)}</Badge>
+          <Badge variant="outline">{getProjectIndustryLabel(project.industry)}</Badge>
         </div>
         <div className="mt-5 grid grid-cols-3 gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm">
           <div><p className="text-xs text-muted-foreground">{t("projects.geoScore")}</p><p className="font-semibold text-primary">{project.geoScore}%</p></div>
@@ -71,7 +71,7 @@ export function ProjectList({ projects, onEdit, onDelete }: { projects: Project[
               <div className="flex items-center gap-2"><Link href={`/projects/${project.id}`} className="truncate font-medium hover:text-primary">{project.name}</Link><Badge variant={statusVariant(project.status)}>{getProjectStatusLabel(project.status)}</Badge></div>
               <p className="truncate text-xs text-muted-foreground">{getHostname(project.websiteUrl)}</p>
             </div>
-            <div className="col-span-2 hidden text-muted-foreground md:block">{project.language} · {project.country}</div>
+            <div className="col-span-2 hidden text-muted-foreground md:block">{getProjectLanguageLabel(project.language)} ? {getProjectCountryLabel(project.country)}</div>
             <div className="col-span-2 hidden text-muted-foreground lg:block">{formatDate(project.lastAnalysisAt)}</div>
             <div className="col-span-2"><span className="font-semibold text-primary">{project.geoScore}%</span><div className="mt-1 h-1.5 rounded-full bg-white/10"><div className="h-1.5 rounded-full bg-primary" style={{ width: `${project.geoScore}%` }} /></div></div>
             <div className="col-span-2 flex justify-end gap-1">

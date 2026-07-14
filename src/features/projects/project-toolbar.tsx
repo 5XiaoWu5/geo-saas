@@ -1,8 +1,9 @@
-﻿"use client";
+"use client";
 
 import { Grid2X2, List, Search } from "lucide-react";
 import type { ProjectSortKey, ProjectViewMode } from "@/types/project";
 import { projectCountries, projectIndustries, projectLanguages } from "@/data/projects";
+import { getProjectCountryLabel, getProjectIndustryLabel, getProjectLanguageLabel } from "@/features/projects/project-mapper";
 import { useI18n } from "@/i18n/provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,13 +29,13 @@ export function ProjectToolbar({ filters, viewMode, onFiltersChange, onViewModeC
           <Input value={filters.query} onChange={(event) => onFiltersChange({ ...filters, query: event.target.value })} className="pl-9" placeholder={t("projects.searchPlaceholder")} />
         </div>
         <Select value={filters.language} onChange={(event) => onFiltersChange({ ...filters, language: event.target.value })}>
-          <option value="all">{t("projects.allLanguages")}</option>{projectLanguages.map((item) => <option key={item}>{item}</option>)}
+          <option value="all">{t("projects.allLanguages")}</option>{projectLanguages.map((item) => <option key={item} value={item}>{getProjectLanguageLabel(item)}</option>)}
         </Select>
         <Select value={filters.country} onChange={(event) => onFiltersChange({ ...filters, country: event.target.value })}>
-          <option value="all">{t("projects.allCountries")}</option>{projectCountries.map((item) => <option key={item}>{item}</option>)}
+          <option value="all">{t("projects.allCountries")}</option>{projectCountries.map((item) => <option key={item} value={item}>{getProjectCountryLabel(item)}</option>)}
         </Select>
         <Select value={filters.industry} onChange={(event) => onFiltersChange({ ...filters, industry: event.target.value })}>
-          <option value="all">{t("projects.allIndustries")}</option>{projectIndustries.map((item) => <option key={item}>{item}</option>)}
+          <option value="all">{t("projects.allIndustries")}</option>{projectIndustries.map((item) => <option key={item} value={item}>{getProjectIndustryLabel(item)}</option>)}
         </Select>
         <Select value={filters.sort} onChange={(event) => onFiltersChange({ ...filters, sort: event.target.value as ProjectSortKey })}>
           <option value="createdAt">{t("projects.createTime")}</option><option value="lastAnalysisAt">{t("projects.lastAnalysis")}</option><option value="name">{t("projects.name")}</option>

@@ -1,8 +1,9 @@
-﻿"use client";
+"use client";
 
 import type { FormEvent } from "react";
 import type { Project, ProjectFormValues } from "@/types/project";
 import { projectCountries, projectIndustries, projectLanguages } from "@/data/projects";
+import { getProjectCountryLabel, getProjectIndustryLabel, getProjectLanguageLabel } from "@/features/projects/project-mapper";
 import { useI18n } from "@/i18n/provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,7 +42,7 @@ export function ProjectForm({ project, onSubmit, onCancel, submitting = false }:
     <form onSubmit={handleSubmit} className="grid gap-5">
       <div className="grid gap-2">
         <Label htmlFor="project-name">{t("projects.projectName")}</Label>
-        <Input id="project-name" name="name" defaultValue={initialValues.name} required placeholder="Acme Cloud" />
+        <Input id="project-name" name="name" defaultValue={initialValues.name} required placeholder="??????????" />
       </div>
       <div className="grid gap-2">
         <Label htmlFor="website-url">{t("projects.websiteUrl")}</Label>
@@ -50,20 +51,20 @@ export function ProjectForm({ project, onSubmit, onCancel, submitting = false }:
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="grid gap-2">
           <Label htmlFor="language">{t("common.language")}</Label>
-          <Select id="language" name="language" defaultValue={initialValues.language}>{projectLanguages.map((item) => <option key={item}>{item}</option>)}</Select>
+          <Select id="language" name="language" defaultValue={initialValues.language}>{projectLanguages.map((item) => <option key={item} value={item}>{getProjectLanguageLabel(item)}</option>)}</Select>
         </div>
         <div className="grid gap-2">
           <Label htmlFor="country">{t("common.country")}</Label>
-          <Select id="country" name="country" defaultValue={initialValues.country}>{projectCountries.map((item) => <option key={item}>{item}</option>)}</Select>
+          <Select id="country" name="country" defaultValue={initialValues.country}>{projectCountries.map((item) => <option key={item} value={item}>{getProjectCountryLabel(item)}</option>)}</Select>
         </div>
         <div className="grid gap-2">
           <Label htmlFor="industry">{t("common.industry")}</Label>
-          <Select id="industry" name="industry" defaultValue={initialValues.industry}>{projectIndustries.map((item) => <option key={item}>{item}</option>)}</Select>
+          <Select id="industry" name="industry" defaultValue={initialValues.industry}>{projectIndustries.map((item) => <option key={item} value={item}>{getProjectIndustryLabel(item)}</option>)}</Select>
         </div>
       </div>
       <div className="grid gap-2">
         <Label htmlFor="description">{t("projects.projectDescription")}</Label>
-        <Textarea id="description" name="description" defaultValue={initialValues.description} required placeholder="Describe the project scope and market context." />
+        <Textarea id="description" name="description" defaultValue={initialValues.description} required placeholder="??????????????????" />
       </div>
       <div className="flex justify-end gap-3 border-t border-white/10 pt-5">
         <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>{t("common.cancel")}</Button>

@@ -1,4 +1,4 @@
-﻿import type { Project } from "@/types/project";
+import type { Project } from "@/types/project";
 
 export function toProject(row: Record<string, unknown>): Project {
   const createdAt = row.createdAt instanceof Date ? row.createdAt : new Date(String(row.createdAt));
@@ -35,4 +35,43 @@ export function getProjectStatusLabel(status: Project["status"] | string) {
   };
 
   return labels[status] ?? String(status);
+}
+
+
+export function getProjectLanguageLabel(language: Project["language"] | string) {
+  const labels: Record<string, string> = {
+    English: "英文",
+    Chinese: "中文",
+    Spanish: "西班牙语",
+    German: "德语",
+    Japanese: "日语",
+  };
+
+  return labels[language] ?? String(language);
+}
+
+export function getProjectCountryLabel(country: Project["country"] | string) {
+  const labels: Record<string, string> = {
+    "United States": "美国",
+    China: "中国",
+    "United Kingdom": "英国",
+    Germany: "德国",
+    Japan: "日本",
+    Singapore: "新加坡",
+  };
+
+  return labels[country] ?? String(country);
+}
+
+export function getProjectIndustryLabel(industry: Project["industry"] | string) {
+  const labels: Record<string, string> = {
+    SaaS: "软件服务",
+    Fintech: "金融科技",
+    Healthcare: "医疗健康",
+    "E-commerce": "电子商务",
+    Education: "教育培训",
+    Manufacturing: "制造业",
+  };
+
+  return labels[industry] ?? String(industry);
 }

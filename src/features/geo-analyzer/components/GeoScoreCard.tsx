@@ -1,10 +1,20 @@
-﻿"use client";
+"use client";
 
 import type { GeoScoreAnalysis } from "@/features/geo-analyzer/types";
 import { useI18n } from "@/i18n/provider";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+
+function getLevelLabel(level: GeoScoreAnalysis["level"]) {
+  const labels: Record<GeoScoreAnalysis["level"], string> = {
+    Excellent: "优秀",
+    Good: "良好",
+    "Need Improvement": "需要改进",
+  };
+
+  return labels[level];
+}
 
 const factorKeys = {
   entityCompleteness: "analyzer.entityCompleteness",
@@ -24,7 +34,7 @@ export function GeoScoreCard({ analysis }: { analysis: GeoScoreAnalysis }) {
           <CardTitle>{t("analyzer.scoreTitle")}</CardTitle>
           <p className="mt-2 text-sm text-muted-foreground">{t("analyzer.sourceInventory")}</p>
         </div>
-        <Badge variant={analysis.level === "Excellent" ? "success" : analysis.level === "Good" ? "warning" : "outline"}>{analysis.level}</Badge>
+        <Badge variant={analysis.level === "Excellent" ? "success" : analysis.level === "Good" ? "warning" : "outline"}>{getLevelLabel(analysis.level)}</Badge>
       </CardHeader>
       <CardContent>
         <div className="grid gap-6 xl:grid-cols-[260px_1fr]">

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { FileCode2, FileText, FileVideo, Image, Layers3, SearchCode, Waypoints } from "lucide-react";
 import type { InventoryAsset, StructuredDataInventory } from "@/types/inventory";
@@ -8,6 +8,16 @@ import { MetricCard } from "@/components/shared/page";
 import { Progress } from "@/components/ui/progress";
 
 const assetIcons = { Images: Image, Videos: FileVideo, PDF: FileText, JS: FileCode2, CSS: FileCode2, Icons: Layers3, Fonts: SearchCode };
+
+function getAssetTypeLabel(type: InventoryAsset["type"]) {
+  const labels: Record<InventoryAsset["type"], string> = { Images: "图片", Videos: "视频", PDF: "PDF 文档", JS: "JavaScript 文件", CSS: "CSS 样式", Icons: "图标", Fonts: "字体" };
+  return labels[type];
+}
+
+function getStructuredDataLabel(type: StructuredDataInventory["type"]) {
+  const labels: Record<string, string> = { FAQ: "FAQ", Article: "文章", Organization: "组织", Breadcrumb: "面包屑", Product: "产品", LocalBusiness: "本地商家" };
+  return labels[type] ?? type;
+}
 
 export function InventoryDashboard({ stats }: { stats: { totalPages: number; indexedPages: number; assets: number; images: number; documents: number; videos: number; structuredData: number } }) {
   const { t } = useI18n();
@@ -40,7 +50,7 @@ export function AssetsOverview({ assets }: { assets: InventoryAsset[] }) {
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="rounded-xl bg-primary/10 p-2"><Icon className="h-4 w-4 text-primary" /></div>
-                  <div><p className="font-medium">{asset.type}</p><p className="text-xs text-muted-foreground">{asset.sizeMb.toFixed(1)} MB · {asset.issues} {t("inventory.issues")}</p></div>
+                  <div><p className="font-medium">{getAssetTypeLabel(asset.type)}</p><p className="text-xs text-muted-foreground">{asset.sizeMb.toFixed(1)} MB · {asset.issues} {t("inventory.issues")}</p></div>
                 </div>
                 <span className="font-semibold">{asset.count}</span>
               </div>
@@ -67,7 +77,7 @@ export function StructuredDataOverview({ items }: { items: StructuredDataInvento
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="rounded-xl bg-primary/10 p-2"><Waypoints className="h-4 w-4 text-primary" /></div>
-                  <div><p className="font-medium">{item.type}</p><p className="text-xs text-muted-foreground">{item.valid} {t("inventory.valid")} · {item.warnings} {t("inventory.warnings")}</p></div>
+                  <div><p className="font-medium">{getStructuredDataLabel(item.type)}</p><p className="text-xs text-muted-foreground">{item.valid} {t("inventory.valid")} · {item.warnings} {t("inventory.warnings")}</p></div>
                 </div>
                 <span className="font-semibold">{item.detected}</span>
               </div>
