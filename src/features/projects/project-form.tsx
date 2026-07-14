@@ -42,7 +42,7 @@ export function ProjectForm({ project, onSubmit, onCancel, submitting = false }:
     <form onSubmit={handleSubmit} className="grid gap-5">
       <div className="grid gap-2">
         <Label htmlFor="project-name">{t("projects.projectName")}</Label>
-        <Input id="project-name" name="name" defaultValue={initialValues.name} required placeholder="??????????" />
+        <Input id="project-name" name="name" defaultValue={initialValues.name} required placeholder="请输入项目名称" />
       </div>
       <div className="grid gap-2">
         <Label htmlFor="website-url">{t("projects.websiteUrl")}</Label>
@@ -64,7 +64,7 @@ export function ProjectForm({ project, onSubmit, onCancel, submitting = false }:
       </div>
       <div className="grid gap-2">
         <Label htmlFor="description">{t("projects.projectDescription")}</Label>
-        <Textarea id="description" name="description" defaultValue={initialValues.description} required placeholder="??????????????????" />
+        <Textarea id="description" name="description" defaultValue={initialValues.description} required placeholder="请输入项目简介" />
       </div>
       <div className="flex justify-end gap-3 border-t border-white/10 pt-5">
         <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>{t("common.cancel")}</Button>
@@ -73,4 +73,3 @@ export function ProjectForm({ project, onSubmit, onCancel, submitting = false }:
     </form>
   );
 }
-

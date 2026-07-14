@@ -37,7 +37,6 @@ export function getProjectStatusLabel(status: Project["status"] | string) {
   return labels[status] ?? String(status);
 }
 
-
 export function getProjectLanguageLabel(language: Project["language"] | string) {
   const labels: Record<string, string> = {
     English: "英文",

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarClock, Edit3, ExternalLink, Globe2, Trash2 } from "lucide-react";
+import { ArrowRight, CalendarClock, Edit3, ExternalLink, Globe2, Trash2 } from "lucide-react";
 import type { Project } from "@/types/project";
 import { getProjectCountryLabel, getProjectIndustryLabel, getProjectLanguageLabel, getProjectStatusLabel } from "@/features/projects/project-mapper";
 import { useI18n } from "@/i18n/provider";
@@ -51,6 +51,11 @@ export function ProjectCard({ project, onEdit, onDelete }: { project: Project; o
         <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
           <CalendarClock className="h-3.5 w-3.5" /> {t("projects.lastAnalysisLabel")}: {formatDate(project.lastAnalysisAt)}
         </div>
+        <Button asChild variant="outline" className="mt-5 w-full">
+          <Link href={`/projects/${project.id}`}>
+            查看详情 <ArrowRight className="h-4 w-4" />
+          </Link>
+        </Button>
       </CardContent>
     </Card>
   );
@@ -71,10 +76,11 @@ export function ProjectList({ projects, onEdit, onDelete }: { projects: Project[
               <div className="flex items-center gap-2"><Link href={`/projects/${project.id}`} className="truncate font-medium hover:text-primary">{project.name}</Link><Badge variant={statusVariant(project.status)}>{getProjectStatusLabel(project.status)}</Badge></div>
               <p className="truncate text-xs text-muted-foreground">{getHostname(project.websiteUrl)}</p>
             </div>
-            <div className="col-span-2 hidden text-muted-foreground md:block">{getProjectLanguageLabel(project.language)} ? {getProjectCountryLabel(project.country)}</div>
+            <div className="col-span-2 hidden text-muted-foreground md:block">{getProjectLanguageLabel(project.language)} · {getProjectCountryLabel(project.country)}</div>
             <div className="col-span-2 hidden text-muted-foreground lg:block">{formatDate(project.lastAnalysisAt)}</div>
             <div className="col-span-2"><span className="font-semibold text-primary">{project.geoScore}%</span><div className="mt-1 h-1.5 rounded-full bg-white/10"><div className="h-1.5 rounded-full bg-primary" style={{ width: `${project.geoScore}%` }} /></div></div>
             <div className="col-span-2 flex justify-end gap-1">
+              <Button asChild size="icon" variant="ghost" aria-label={`查看 ${project.name} 详情`}><Link href={`/projects/${project.id}`}><ArrowRight className="h-4 w-4" /></Link></Button>
               <Button size="icon" variant="ghost" onClick={() => onEdit(project)} aria-label={`${t("common.edit")} ${project.name}`}><Edit3 className="h-4 w-4" /></Button>
               <Button size="icon" variant="ghost" onClick={() => onDelete(project)} aria-label={`${t("common.delete")} ${project.name}`}><Trash2 className="h-4 w-4 text-destructive" /></Button>
             </div>

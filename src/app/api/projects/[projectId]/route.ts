@@ -29,6 +29,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pro
   const { projectId } = await params;
   const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id } });
   if (!project) return NextResponse.json({ error: "项目不存在或无权访问" }, { status: 404 });
+
   return NextResponse.json({ project: toProject(project) });
 }
 
@@ -63,5 +64,6 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const { projectId } = await params;
   const project = await prisma.project.delete({ where: { id: projectId, userId: user.id } });
   if (!project) return NextResponse.json({ error: "项目不存在或无权访问" }, { status: 404 });
+
   return NextResponse.json({ deleted: true, project: toProject(project) });
 }

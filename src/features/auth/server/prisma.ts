@@ -338,6 +338,11 @@ export const prisma = {
         now,
       ]))[0]);
     },
+    async update({ where, data }: { where: { id: string; projectId: string }; data: Data }) {
+      await ensureWebsiteScanSchema();
+      const set = assignments({ ...data, updatedAt: new Date() });
+      return normalizeWebsiteScanRow((await websiteScanQuery(`UPDATE "WebsiteScan" SET ${set.sql} WHERE "id" = $${set.values.length + 1} AND "projectId" = $${set.values.length + 2} RETURNING *`, [...set.values, where.id, where.projectId]))[0] ?? null);
+    },
   },
   geoAnalysis: {
     async findLatest({ where }: { where: { projectId: string } }) {

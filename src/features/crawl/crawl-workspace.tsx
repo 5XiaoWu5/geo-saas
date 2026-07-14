@@ -14,19 +14,22 @@ import { CrawlResultsTable } from "@/features/crawl/crawl-results-table";
 import { CrawlStartForm } from "@/features/crawl/crawl-start-form";
 
 function toCrawlJob(scan: WebsiteScan): CrawlJob {
+  const isRunning = scan.status === "running";
+  const isCompleted = scan.status === "completed";
+
   return {
     id: scan.id,
     websiteUrl: scan.url,
-    status: scan.status === "completed" ? "Completed" : "Failed",
-    progress: 100,
+    status: isRunning ? "Running" : isCompleted ? "Completed" : "Failed",
+    progress: isRunning ? 55 : 100,
     currentPage: scan.url,
-    pagesFound: scan.status === "completed" ? 1 : 0,
+    pagesFound: isCompleted ? 1 : 0,
     assetsFound: scan.schemaCount,
     images: 0,
     internalLinks: scan.internalLinkCount,
     externalLinks: scan.externalLinkCount,
     startedAt: scan.createdAt,
-    completedAt: scan.updatedAt,
+    completedAt: isRunning ? null : scan.updatedAt,
   };
 }
 

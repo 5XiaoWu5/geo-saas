@@ -3,7 +3,24 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { Activity, AlertCircle, ArrowRight, BarChart3, CheckCircle2, FileJson2, Globe2, Heading1, Heading2, Link2, Loader2, Radar, ScanSearch, ShieldCheck, Sparkles, Target } from "lucide-react";
+import {
+  Activity,
+  AlertCircle,
+  ArrowRight,
+  BarChart3,
+  CheckCircle2,
+  FileJson2,
+  Globe2,
+  Heading1,
+  Heading2,
+  Link2,
+  Loader2,
+  Radar,
+  ScanSearch,
+  ShieldCheck,
+  Sparkles,
+  Target,
+} from "lucide-react";
 import { useProject } from "@/features/project-center/context/ProjectContext";
 import { getProjectStatusLabel } from "@/features/projects/project-mapper";
 import type { GeoAnalysis, GeoIssue } from "@/features/geo-analysis/types";
@@ -14,11 +31,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { formatDate, formatDateTime, getHostname } from "@/lib/format";
 
-type ScanResponse = { scan: WebsiteScan | null; analysis: GeoAnalysis | null; geoScore?: number; error?: string };
+type ScanResponse = {
+  scan: WebsiteScan | null;
+  analysis: GeoAnalysis | null;
+  geoScore?: number;
+  error?: string;
+};
 
 async function parseScanResponse(response: Response): Promise<ScanResponse> {
   const text = await response.text();
-  const data = text ? JSON.parse(text) as ScanResponse : { scan: null, analysis: null };
+  const data = text ? (JSON.parse(text) as ScanResponse) : { scan: null, analysis: null };
   if (!response.ok) throw new Error(data.error ?? "网站扫描失败");
   return data;
 }
@@ -29,7 +51,9 @@ export function ProjectOverviewTab() {
   const [analysis, setAnalysis] = useState<GeoAnalysis | null>(null);
   const [loadingScan, setLoadingScan] = useState(true);
   const [scanning, setScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState(0);
   const [scanError, setScanError] = useState("");
+
   const hasScan = Boolean(scan ?? project.lastScan);
   const score = analysis?.totalScore ?? project.geoScore ?? 0;
   const visibilityScore = project.visibilityScore ?? 0;
@@ -37,13 +61,15 @@ export function ProjectOverviewTab() {
   useEffect(() => {
     let mounted = true;
     setLoadingScan(true);
+    setScanError("");
+
     fetch(`/api/projects/${project.id}/scan`, { cache: "no-store" })
       .then(parseScanResponse)
       .then((data) => {
-        if (mounted) {
-          setScan(data.scan);
-          setAnalysis(data.analysis);
-        }
+        if (!mounted) return;
+        setScan(data.scan);
+        setAnalysis(data.analysis);
+        setScanProgress(data.scan ? 100 : 0);
       })
       .catch((error) => {
         if (mounted) setScanError(error instanceof Error ? error.message : "扫描结果加载失败");
@@ -51,6 +77,7 @@ export function ProjectOverviewTab() {
       .finally(() => {
         if (mounted) setLoadingScan(false);
       });
+
     return () => {
       mounted = false;
     };
@@ -59,13 +86,20 @@ export function ProjectOverviewTab() {
   async function startScan() {
     setScanning(true);
     setScanError("");
+    setScanProgress(25);
+
     try {
+      setScanProgress(55);
       const data = await parseScanResponse(await fetch(`/api/projects/${project.id}/scan`, { method: "POST" }));
+      setScanProgress(90);
       setScan(data.scan);
       setAnalysis(data.analysis);
       await refreshProject();
+      setScanProgress(100);
     } catch (error) {
+      setScanProgress(100);
       setScanError(error instanceof Error ? error.message : "网站扫描失败");
+      await refreshProject();
     } finally {
       setScanning(false);
     }
@@ -81,20 +115,22 @@ export function ProjectOverviewTab() {
                 <CardTitle className="flex items-center gap-2 text-xl">
                   <ShieldCheck className="h-5 w-5 text-primary" /> 项目健康概览
                 </CardTitle>
-                <p className="mt-2 text-sm text-muted-foreground">基于真实扫描结果展示当前项目 GEO 工作台状态。</p>
+                <p className="mt-2 text-sm text-muted-foreground">基于真实网站扫描结果展示当前项目的 GEO 工作状态。</p>
               </div>
               <Badge variant={project.status === "Active" ? "success" : project.status === "Monitoring" ? "warning" : "muted"}>{getProjectStatusLabel(project.status)}</Badge>
             </div>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
-            <ScorePanel label="GEO 评分" value={score} description={hasScan ? "最近一次扫描评分" : "等待首次扫描"} />
+            <ScorePanel label="GEO 评分" value={score} description={hasScan ? "来自最近一次网站扫描" : "等待首次扫描"} />
             <ScorePanel label="AI 可见性" value={visibilityScore} description={hasScan ? "基于网站结构信号估算" : "扫描后生成可见性数据"} />
           </CardContent>
         </Card>
 
         <Card className="glass-panel border-white/10">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-xl"><Globe2 className="h-5 w-5 text-primary" /> 网站信息</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <Globe2 className="h-5 w-5 text-primary" /> 网站信息
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <InfoRow label="网站域名" value={getHostname(project.websiteUrl)} />
@@ -106,7 +142,12 @@ export function ProjectOverviewTab() {
       </section>
 
       <section className="grid gap-4 md:grid-cols-3">
-        <StatusCard icon={<ScanSearch className="h-5 w-5" />} title="最近扫描状态" value={scan ? formatDateTime(scan.createdAt) : project.lastScan ? formatDateTime(project.lastScan) : "尚未扫描"} description={scan?.status === "completed" ? "扫描完成，已保存真实网站解析结果。" : scan?.status === "failed" ? "最近扫描失败，请检查网站是否可访问。" : "点击开始分析后将真实抓取网站首页。"} />
+        <StatusCard
+          icon={<ScanSearch className="h-5 w-5" />}
+          title="最近扫描状态"
+          value={scan ? formatDateTime(scan.createdAt) : project.lastScan ? formatDateTime(project.lastScan) : "尚未扫描"}
+          description={scan?.status === "completed" ? "扫描完成，已保存真实网站解析结果。" : scan?.status === "failed" ? "最近扫描失败，请检查网站是否可访问。" : "点击开始分析后将真实抓取网站首页。"}
+        />
         <StatusCard icon={<BarChart3 className="h-5 w-5" />} title="报告数量" value={`${project.reportsCount} 份`} description="后续报告会关联到当前项目，不与其他账号共享。" />
         <StatusCard icon={<Activity className="h-5 w-5" />} title="分析记录" value={project.lastAnalysisAt ? formatDateTime(project.lastAnalysisAt) : "暂无分析"} description="完成扫描后这里会展示最近一次分析时间。" />
       </section>
@@ -114,27 +155,65 @@ export function ProjectOverviewTab() {
       <Card className="glass-panel border-white/10">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <CardTitle className="flex items-center gap-2 text-xl"><ScanSearch className="h-5 w-5 text-primary" /> 网站扫描</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <ScanSearch className="h-5 w-5 text-primary" /> 网站扫描
+            </CardTitle>
             <p className="mt-2 text-sm text-muted-foreground">真实请求项目网站，解析标题、描述、标题结构、链接和 JSON-LD Schema。</p>
           </div>
           <Button onClick={() => void startScan()} disabled={scanning}>
-            {scanning ? <><Loader2 className="h-4 w-4 animate-spin" /> 正在分析...</> : <><ScanSearch className="h-4 w-4" /> 开始分析</>}
+            {scanning ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" /> 正在分析...
+              </>
+            ) : (
+              <>
+                <ScanSearch className="h-4 w-4" /> 开始分析
+              </>
+            )}
           </Button>
         </CardHeader>
         <CardContent>
-          {scanError ? <div className="mb-4 flex gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive"><AlertCircle className="h-4 w-4 shrink-0" /> {scanError}</div> : null}
-          {loadingScan ? <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> 正在加载扫描结果...</div> : <div className="space-y-5"><GeoAnalysisPanel analysis={analysis} /><ScanResult scan={scan} /></div>}
+          {scanning ? (
+            <div className="mb-4 rounded-2xl border border-primary/20 bg-primary/10 p-4">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="font-medium text-primary">正在扫描网站并生成 GEO 评分</span>
+                <span className="text-primary">{scanProgress}%</span>
+              </div>
+              <Progress value={scanProgress} className="mt-3" />
+            </div>
+          ) : null}
+
+          {scanError ? (
+            <div className="mb-4 flex gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+              <AlertCircle className="h-4 w-4 shrink-0" /> {scanError}
+            </div>
+          ) : null}
+
+          {loadingScan ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> 正在加载扫描结果...
+            </div>
+          ) : (
+            <div className="space-y-5">
+              <GeoAnalysisPanel analysis={analysis} />
+              <ScanResult scan={scan} />
+            </div>
+          )}
         </CardContent>
       </Card>
 
       <Card className="glass-panel border-white/10">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <CardTitle className="flex items-center gap-2 text-xl"><Sparkles className="h-5 w-5 text-primary" /> 后续分析入口</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <Sparkles className="h-5 w-5 text-primary" /> 后续分析入口
+            </CardTitle>
             <p className="mt-2 text-sm text-muted-foreground">从项目详情中心进入分析、可见性监控与优化闭环。</p>
           </div>
           <Button asChild>
-            <Link href={`/projects/${project.id}/analyzer`}>进入 GEO 分析 <ArrowRight className="h-4 w-4" /></Link>
+            <Link href={`/projects/${project.id}/analyzer`}>
+              进入 GEO 分析 <ArrowRight className="h-4 w-4" />
+            </Link>
           </Button>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -149,7 +228,9 @@ export function ProjectOverviewTab() {
 }
 
 function GeoAnalysisPanel({ analysis }: { analysis: GeoAnalysis | null }) {
-  if (!analysis) return <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-muted-foreground">暂无 GEO 评分。完成网站扫描后，系统会自动生成真实分析结果。</div>;
+  if (!analysis) {
+    return <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-muted-foreground">暂无 GEO 评分。完成网站扫描后，系统会自动生成真实分析结果。</div>;
+  }
 
   const scoreItems = [
     { label: "实体智能", value: analysis.entityScore, max: 30 },
@@ -162,7 +243,9 @@ function GeoAnalysisPanel({ analysis }: { analysis: GeoAnalysis | null }) {
     <div className="space-y-4 rounded-3xl border border-primary/20 bg-primary/[0.04] p-4 sm:p-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-sm font-medium text-primary"><Target className="h-4 w-4" /> GEO 分析引擎 v1</div>
+          <div className="flex items-center gap-2 text-sm font-medium text-primary">
+            <Target className="h-4 w-4" /> GEO 分析引擎 v1
+          </div>
           <h3 className="mt-2 text-2xl font-semibold tracking-tight text-foreground">GEO 总分 {analysis.totalScore}</h3>
           <p className="mt-2 text-sm text-muted-foreground">基于本次 WebsiteScan 的实体、Schema、技术和内容结构信号自动计算。</p>
         </div>
@@ -216,7 +299,9 @@ function GeoIssueRow({ issue }: { issue: GeoIssue }) {
 }
 
 function ScanResult({ scan }: { scan: WebsiteScan | null }) {
-  if (!scan) return <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-muted-foreground">暂无扫描结果。点击“开始分析”后，系统会保存真实抓取结果。</div>;
+  if (!scan) {
+    return <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-muted-foreground">暂无扫描结果。点击“开始分析”后，系统会保存真实抓取结果。</div>;
+  }
 
   return (
     <div className="space-y-4">
@@ -245,7 +330,12 @@ function ScanResult({ scan }: { scan: WebsiteScan | null }) {
 }
 
 function ScanMetric({ icon, label, value }: { icon: ReactNode; label: string; value: ReactNode }) {
-  return <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div className="flex items-center gap-2 text-xs text-muted-foreground">{icon}{label}</div><p className="mt-2 break-words text-lg font-semibold text-foreground">{value}</p></div>;
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">{icon}{label}</div>
+      <p className="mt-2 break-words text-lg font-semibold text-foreground">{value}</p>
+    </div>
+  );
 }
 
 function ScorePanel({ label, value, description }: { label: string; value: number; description: string }) {
@@ -299,4 +389,3 @@ function NextStep({ href, title, description }: { href: string; title: string; d
     </Link>
   );
 }
-

@@ -11,6 +11,7 @@ import { formatDate, formatDateTime, getHostname } from "@/lib/format";
 
 export function ProjectHeader() {
   const { project } = useProject();
+  const hasScan = Boolean(project.lastScan);
   return (
     <Card className="glass-panel overflow-hidden border-white/10">
       <CardContent className="p-4 sm:p-5">
@@ -30,8 +31,8 @@ export function ProjectHeader() {
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-3 xl:w-[560px]">
-            <HeaderMetric icon={<BarChart3 className="h-4 w-4" />} label="GEO 评分" value={`${project.geoScore}`} progress={project.geoScore} />
-            <HeaderMetric icon={<Activity className="h-4 w-4" />} label="AI 可见性" value={`${project.visibilityScore}`} progress={project.visibilityScore} />
+            <HeaderMetric icon={<BarChart3 className="h-4 w-4" />} label="GEO 评分" value={hasScan ? `${project.geoScore}` : "待扫描"} progress={hasScan ? project.geoScore : undefined} />
+            <HeaderMetric icon={<Activity className="h-4 w-4" />} label="AI 可见性" value={hasScan ? `${project.visibilityScore}` : "待扫描"} progress={hasScan ? project.visibilityScore : undefined} />
             <HeaderMetric icon={<CheckCircle2 className="h-4 w-4" />} label="最近扫描" value={project.lastScan ? formatDateTime(project.lastScan) : "尚未扫描"} />
           </div>
         </div>

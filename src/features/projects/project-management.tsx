@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Loader2, Plus } from "lucide-react";
 import type { Project, ProjectFormValues, ProjectViewMode } from "@/types/project";
 import { useI18n } from "@/i18n/provider";
@@ -29,6 +30,7 @@ async function readProjectResponse<T>(response: Response): Promise<T> {
 
 export function ProjectManagement() {
   const { t } = useI18n();
+  const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [filters, setFilters] = useState<ProjectFilters>(defaultFilters);
   const [viewMode, setViewMode] = useState<ProjectViewMode>("card");
@@ -85,6 +87,7 @@ export function ProjectManagement() {
       const data = await readProjectResponse<{ project: Project }>(await fetch("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(values) }));
       setProjects((currentProjects) => [data.project, ...currentProjects]);
       closePanel();
+      router.push(`/projects/${data.project.id}`);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "项目创建失败");
     } finally {

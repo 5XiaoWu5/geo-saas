@@ -1,4 +1,4 @@
-﻿export type WebsiteScanStatus = "completed" | "failed";
+export type WebsiteScanStatus = "running" | "completed" | "failed";
 
 export type WebsiteScan = {
   id: string;

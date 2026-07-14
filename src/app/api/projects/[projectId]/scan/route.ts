@@ -26,7 +26,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pro
 
   const scan = await prisma.websiteScan.findLatest({ where: { projectId: project.id } });
   const analysis = await prisma.geoAnalysis.findLatest({ where: { projectId: project.id } });
-  return NextResponse.json({ scan: scan ? toWebsiteScan(scan) : null, analysis: analysis ? toGeoAnalysis(analysis) : null });
+
+  return NextResponse.json({
+    scan: scan ? toWebsiteScan(scan) : null,
+    analysis: analysis ? toGeoAnalysis(analysis) : null,
+  });
 }
 
 export async function POST(_request: Request, { params }: { params: Promise<{ projectId: string }> }) {
@@ -34,23 +38,68 @@ export async function POST(_request: Request, { params }: { params: Promise<{ pr
   const { project, response } = await requireOwnedProject(projectId);
   if (response) return response;
 
+  const startedScan = await prisma.websiteScan.create({
+    data: {
+      projectId: project.id,
+      url: project.domain,
+      status: "running",
+      title: null,
+      description: "正在扫描网站",
+      h1Count: 0,
+      h2Count: 0,
+      internalLinkCount: 0,
+      externalLinkCount: 0,
+      schemaCount: 0,
+      schemaTypes: [],
+      robotsExists: false,
+      sitemapExists: false,
+    },
+  });
+
   try {
-    const result = await crawlWebsite(project.domain);
-    const scan = await prisma.websiteScan.create({ data: { projectId: project.id, ...result } });
-    const normalizedScan = toWebsiteScan(scan);
+    const crawlResult = await crawlWebsite(project.domain);
+    const completedScan = await prisma.websiteScan.update({
+      where: { id: startedScan.id, projectId: project.id },
+      data: { ...crawlResult, status: "completed" },
+    });
+
+    if (!completedScan) throw new Error("扫描记录更新失败");
+
+    const normalizedScan = toWebsiteScan(completedScan);
     const analysisResult = analyzeWebsiteScan(normalizedScan);
-    const analysis = await prisma.geoAnalysis.create({ data: { projectId: project.id, scanId: scan.id, ...analysisResult } });
-    await prisma.project.update({ where: { id: project.id, userId: project.userId ?? "" }, data: { geoScore: analysisResult.totalScore, visibilityScore: Math.round(analysisResult.totalScore * 0.72), lastScan: new Date(), lastAnalysisAt: new Date(), status: "Monitoring" } });
-    return NextResponse.json({ scan: normalizedScan, analysis: toGeoAnalysis(analysis), geoScore: analysisResult.totalScore });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "网站扫描失败";
-    const scan = await prisma.websiteScan.create({
+    const analysis = await prisma.geoAnalysis.create({
       data: {
         projectId: project.id,
-        url: project.domain,
+        scanId: completedScan.id,
+        ...analysisResult,
+      },
+    });
+
+    await prisma.project.update({
+      where: { id: project.id, userId: project.userId ?? "" },
+      data: {
+        geoScore: analysisResult.totalScore,
+        visibilityScore: Math.round(analysisResult.totalScore * 0.72),
+        visibility: Math.round(analysisResult.totalScore * 0.72),
+        lastScan: new Date(),
+        lastAnalysisAt: new Date(),
+        status: "Monitoring",
+      },
+    });
+
+    return NextResponse.json({
+      scan: normalizedScan,
+      analysis: toGeoAnalysis(analysis),
+      geoScore: analysisResult.totalScore,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "网站扫描失败";
+    const failedScan = await prisma.websiteScan.update({
+      where: { id: startedScan.id, projectId: project.id },
+      data: {
         status: "failed",
-        title: null,
         description: message,
+        title: null,
         h1Count: 0,
         h2Count: 0,
         internalLinkCount: 0,
@@ -61,6 +110,19 @@ export async function POST(_request: Request, { params }: { params: Promise<{ pr
         sitemapExists: false,
       },
     });
-    return NextResponse.json({ error: message, scan: toWebsiteScan(scan) }, { status: 502 });
+
+    await prisma.project.update({
+      where: { id: project.id, userId: project.userId ?? "" },
+      data: {
+        lastScan: new Date(),
+        status: "Active",
+      },
+    });
+
+    return NextResponse.json({
+      error: message,
+      scan: failedScan ? toWebsiteScan(failedScan) : toWebsiteScan(startedScan),
+      analysis: null,
+    }, { status: 502 });
   }
 }
