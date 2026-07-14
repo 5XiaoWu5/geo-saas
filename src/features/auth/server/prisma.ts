@@ -41,6 +41,25 @@ type ProjectRow = Record<string, unknown> & {
   updatedAt: Date;
 };
 
+type WebsiteScanRow = Record<string, unknown> & {
+  id: string;
+  projectId: string;
+  url: string;
+  status: string;
+  title: string | null;
+  description: string | null;
+  h1Count: number;
+  h2Count: number;
+  internalLinkCount: number;
+  externalLinkCount: number;
+  schemaCount: number;
+  schemaTypes: string[];
+  robotsExists: boolean;
+  sitemapExists: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 const fallbackDatabaseUrl = "postgresql://postgres:postgres@127.0.0.1:5432/geopilot_ai";
 
 if (!process.env.DATABASE_URL) {
@@ -59,6 +78,11 @@ async function query(sqlText: string, params: unknown[] = []): Promise<AuthRow[]
 async function projectQuery(sqlText: string, params: unknown[] = []): Promise<ProjectRow[]> {
   const sql = getSql();
   return (await sql.query(sqlText, params)) as ProjectRow[];
+}
+
+async function websiteScanQuery(sqlText: string, params: unknown[] = []): Promise<WebsiteScanRow[]> {
+  const sql = getSql();
+  return (await sql.query(sqlText, params)) as WebsiteScanRow[];
 }
 
 function createId() {
@@ -81,7 +105,17 @@ function normalizeProjectRow<T extends ProjectRow | null>(row: T): T {
   return row;
 }
 
+function normalizeWebsiteScanRow<T extends WebsiteScanRow | null>(row: T): T {
+  if (!row) return row;
+  for (const key of ["createdAt", "updatedAt"]) {
+    if (row[key] && !(row[key] instanceof Date)) row[key] = new Date(row[key] as string);
+  }
+  if (!Array.isArray(row.schemaTypes)) row.schemaTypes = [];
+  return row;
+}
+
 let projectSchemaReady = false;
+let websiteScanSchemaReady = false;
 
 async function ensureProjectSchema() {
   if (projectSchemaReady) return;
@@ -97,6 +131,15 @@ async function ensureProjectSchema() {
   await projectQuery('ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "lastScan" TIMESTAMP(3)');
   await projectQuery('CREATE INDEX IF NOT EXISTS "Project_userId_idx" ON "Project"("userId")');
   projectSchemaReady = true;
+}
+
+async function ensureWebsiteScanSchema() {
+  if (websiteScanSchemaReady) return;
+  await ensureProjectSchema();
+  await websiteScanQuery('CREATE TABLE IF NOT EXISTS "WebsiteScan" ("id" TEXT PRIMARY KEY, "projectId" TEXT NOT NULL, "url" TEXT NOT NULL, "status" TEXT NOT NULL, "title" TEXT, "description" TEXT, "h1Count" INTEGER NOT NULL DEFAULT 0, "h2Count" INTEGER NOT NULL DEFAULT 0, "internalLinkCount" INTEGER NOT NULL DEFAULT 0, "externalLinkCount" INTEGER NOT NULL DEFAULT 0, "schemaCount" INTEGER NOT NULL DEFAULT 0, "schemaTypes" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[], "robotsExists" BOOLEAN NOT NULL DEFAULT false, "sitemapExists" BOOLEAN NOT NULL DEFAULT false, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
+  await websiteScanQuery('ALTER TABLE "WebsiteScan" ADD COLUMN IF NOT EXISTS "schemaTypes" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]');
+  await websiteScanQuery('CREATE INDEX IF NOT EXISTS "WebsiteScan_projectId_idx" ON "WebsiteScan"("projectId")');
+  websiteScanSchemaReady = true;
 }
 
 function assignments(data: Data, start = 1) {
@@ -210,6 +253,34 @@ export const prisma = {
     async delete({ where }: { where: { id: string; userId: string } }) {
       await ensureProjectSchema();
       return normalizeProjectRow((await projectQuery('DELETE FROM "Project" WHERE "id" = $1 AND "userId" = $2 RETURNING *', [where.id, where.userId]))[0] ?? null);
+    },
+  },
+  websiteScan: {
+    async findLatest({ where }: { where: { projectId: string } }) {
+      await ensureWebsiteScanSchema();
+      return normalizeWebsiteScanRow((await websiteScanQuery('SELECT * FROM "WebsiteScan" WHERE "projectId" = $1 ORDER BY "createdAt" DESC LIMIT 1', [where.projectId]))[0] ?? null);
+    },
+    async create({ data }: { data: Data }) {
+      await ensureWebsiteScanSchema();
+      const now = new Date();
+      return normalizeWebsiteScanRow((await websiteScanQuery('INSERT INTO "WebsiteScan" ("id", "projectId", "url", "status", "title", "description", "h1Count", "h2Count", "internalLinkCount", "externalLinkCount", "schemaCount", "schemaTypes", "robotsExists", "sitemapExists", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING *', [
+        data.id ?? createId(),
+        data.projectId,
+        data.url,
+        data.status,
+        data.title ?? null,
+        data.description ?? null,
+        data.h1Count ?? 0,
+        data.h2Count ?? 0,
+        data.internalLinkCount ?? 0,
+        data.externalLinkCount ?? 0,
+        data.schemaCount ?? 0,
+        data.schemaTypes ?? [],
+        data.robotsExists ?? false,
+        data.sitemapExists ?? false,
+        now,
+        now,
+      ]))[0]);
     },
   },
   async $transaction(operations: Array<Promise<unknown>>) {

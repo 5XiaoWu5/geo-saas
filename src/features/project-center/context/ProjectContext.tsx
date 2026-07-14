@@ -18,9 +18,14 @@ export function ProjectProvider({ project, children }: { project: Project; child
 
   const refreshProject = useCallback(async () => {
     setLoading(true);
-    setCurrentProject(project);
-    setLoading(false);
-  }, [project]);
+    try {
+      const response = await fetch(`/api/projects/${currentProject.id}`, { cache: "no-store" });
+      const data = await response.json() as { project?: Project };
+      if (response.ok && data.project) setCurrentProject(data.project);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentProject.id]);
 
   const value = useMemo<ProjectContextValue>(() => ({ project: currentProject, projectId: currentProject.id, loading, refreshProject }), [currentProject, loading, refreshProject]);
 
