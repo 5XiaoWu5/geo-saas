@@ -60,6 +60,19 @@ type WebsiteScanRow = Record<string, unknown> & {
   updatedAt: Date;
 };
 
+type GeoAnalysisRow = Record<string, unknown> & {
+  id: string;
+  projectId: string;
+  scanId: string;
+  totalScore: number;
+  entityScore: number;
+  schemaScore: number;
+  technicalScore: number;
+  contentScore: number;
+  issues: unknown;
+  createdAt: Date;
+};
+
 const fallbackDatabaseUrl = "postgresql://postgres:postgres@127.0.0.1:5432/geopilot_ai";
 
 if (!process.env.DATABASE_URL) {
@@ -83,6 +96,11 @@ async function projectQuery(sqlText: string, params: unknown[] = []): Promise<Pr
 async function websiteScanQuery(sqlText: string, params: unknown[] = []): Promise<WebsiteScanRow[]> {
   const sql = getSql();
   return (await sql.query(sqlText, params)) as WebsiteScanRow[];
+}
+
+async function geoAnalysisQuery(sqlText: string, params: unknown[] = []): Promise<GeoAnalysisRow[]> {
+  const sql = getSql();
+  return (await sql.query(sqlText, params)) as GeoAnalysisRow[];
 }
 
 function createId() {
@@ -114,8 +132,23 @@ function normalizeWebsiteScanRow<T extends WebsiteScanRow | null>(row: T): T {
   return row;
 }
 
+function normalizeGeoAnalysisRow<T extends GeoAnalysisRow | null>(row: T): T {
+  if (!row) return row;
+  if (row.createdAt && !(row.createdAt instanceof Date)) row.createdAt = new Date(row.createdAt as string);
+  if (typeof row.issues === "string") {
+    try {
+      row.issues = JSON.parse(row.issues);
+    } catch {
+      row.issues = [];
+    }
+  }
+  if (!Array.isArray(row.issues)) row.issues = [];
+  return row;
+}
+
 let projectSchemaReady = false;
 let websiteScanSchemaReady = false;
+let geoAnalysisSchemaReady = false;
 
 async function ensureProjectSchema() {
   if (projectSchemaReady) return;
@@ -140,6 +173,15 @@ async function ensureWebsiteScanSchema() {
   await websiteScanQuery('ALTER TABLE "WebsiteScan" ADD COLUMN IF NOT EXISTS "schemaTypes" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]');
   await websiteScanQuery('CREATE INDEX IF NOT EXISTS "WebsiteScan_projectId_idx" ON "WebsiteScan"("projectId")');
   websiteScanSchemaReady = true;
+}
+
+async function ensureGeoAnalysisSchema() {
+  if (geoAnalysisSchemaReady) return;
+  await ensureWebsiteScanSchema();
+  await geoAnalysisQuery(`CREATE TABLE IF NOT EXISTS "GeoAnalysis" ("id" TEXT PRIMARY KEY, "projectId" TEXT NOT NULL, "scanId" TEXT NOT NULL UNIQUE, "totalScore" INTEGER NOT NULL, "entityScore" INTEGER NOT NULL, "schemaScore" INTEGER NOT NULL, "technicalScore" INTEGER NOT NULL, "contentScore" INTEGER NOT NULL, "issues" JSONB NOT NULL DEFAULT '[]'::jsonb, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())`);
+  await geoAnalysisQuery('CREATE INDEX IF NOT EXISTS "GeoAnalysis_projectId_idx" ON "GeoAnalysis"("projectId")');
+  await geoAnalysisQuery('CREATE INDEX IF NOT EXISTS "GeoAnalysis_scanId_idx" ON "GeoAnalysis"("scanId")');
+  geoAnalysisSchemaReady = true;
 }
 
 function assignments(data: Data, start = 1) {
@@ -280,6 +322,31 @@ export const prisma = {
         data.sitemapExists ?? false,
         now,
         now,
+      ]))[0]);
+    },
+  },
+  geoAnalysis: {
+    async findLatest({ where }: { where: { projectId: string } }) {
+      await ensureGeoAnalysisSchema();
+      return normalizeGeoAnalysisRow((await geoAnalysisQuery('SELECT * FROM "GeoAnalysis" WHERE "projectId" = $1 ORDER BY "createdAt" DESC LIMIT 1', [where.projectId]))[0] ?? null);
+    },
+    async findByScanId({ where }: { where: { scanId: string } }) {
+      await ensureGeoAnalysisSchema();
+      return normalizeGeoAnalysisRow((await geoAnalysisQuery('SELECT * FROM "GeoAnalysis" WHERE "scanId" = $1 LIMIT 1', [where.scanId]))[0] ?? null);
+    },
+    async create({ data }: { data: Data }) {
+      await ensureGeoAnalysisSchema();
+      const issues = JSON.stringify(data.issues ?? []);
+      return normalizeGeoAnalysisRow((await geoAnalysisQuery('INSERT INTO "GeoAnalysis" ("id", "projectId", "scanId", "totalScore", "entityScore", "schemaScore", "technicalScore", "contentScore", "issues") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb) ON CONFLICT ("scanId") DO UPDATE SET "totalScore" = EXCLUDED."totalScore", "entityScore" = EXCLUDED."entityScore", "schemaScore" = EXCLUDED."schemaScore", "technicalScore" = EXCLUDED."technicalScore", "contentScore" = EXCLUDED."contentScore", "issues" = EXCLUDED."issues" RETURNING *', [
+        data.id ?? createId(),
+        data.projectId,
+        data.scanId,
+        data.totalScore ?? 0,
+        data.entityScore ?? 0,
+        data.schemaScore ?? 0,
+        data.technicalScore ?? 0,
+        data.contentScore ?? 0,
+        issues,
       ]))[0]);
     },
   },

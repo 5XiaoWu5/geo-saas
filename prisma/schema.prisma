@@ -111,6 +111,7 @@ model Project {
 
   user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
   websiteScans WebsiteScan[]
+  geoAnalyses  GeoAnalysis[]
 
   @@index([userId])
 }
@@ -134,6 +135,26 @@ model WebsiteScan {
   updatedAt         DateTime @updatedAt
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  geoAnalysis GeoAnalysis?
 
   @@index([projectId])
+}
+
+model GeoAnalysis {
+  id             String   @id @default(cuid())
+  projectId      String
+  scanId         String   @unique
+  totalScore     Int
+  entityScore    Int
+  schemaScore    Int
+  technicalScore Int
+  contentScore   Int
+  issues         Json
+  createdAt      DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scan    WebsiteScan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([scanId])
 }
