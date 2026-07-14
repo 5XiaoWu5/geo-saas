@@ -1,5 +1,6 @@
-﻿import { ProjectMonitoringTab } from "@/features/project-center";
+import { redirect } from "next/navigation";
 
-export default function ProjectMonitoringPage() {
-  return <ProjectMonitoringTab />;
+export default async function ProjectMonitoringPage({ params }: { params: Promise<{ projectId: string }> }) {
+  const { projectId } = await params;
+  redirect(`/projects/${projectId}`);
 }

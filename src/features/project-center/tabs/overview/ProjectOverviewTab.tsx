@@ -1,12 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import {
   Activity,
   AlertCircle,
-  ArrowRight,
   BarChart3,
   CheckCircle2,
   FileJson2,
@@ -18,7 +16,6 @@ import {
   Radar,
   ScanSearch,
   ShieldCheck,
-  Sparkles,
   Target,
 } from "lucide-react";
 import { useProject } from "@/features/project-center/context/ProjectContext";
@@ -202,27 +199,6 @@ export function ProjectOverviewTab() {
         </CardContent>
       </Card>
 
-      <Card className="glass-panel border-white/10">
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <Sparkles className="h-5 w-5 text-primary" /> 后续分析入口
-            </CardTitle>
-            <p className="mt-2 text-sm text-muted-foreground">从项目详情中心进入分析、可见性监控与优化闭环。</p>
-          </div>
-          <Button asChild>
-            <Link href={`/projects/${project.id}/analyzer`}>
-              进入 GEO 分析 <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <NextStep href={`/projects/${project.id}/analyzer`} title="GEO 分析" description="查看网站 GEO 基础评分、实体与结构信号。" />
-          <NextStep href={`/projects/${project.id}/visibility`} title="可见性监控" description="跟踪 AI 搜索中的品牌出现与推荐位置。" />
-          <NextStep href={`/projects/${project.id}/optimization`} title="优化中心" description="管理优化任务与内容改进建议。" />
-          <NextStep href={`/projects/${project.id}/monitoring`} title="趋势监控" description="查看长期趋势与问题生命周期。" />
-        </CardContent>
-      </Card>
     </div>
   );
 }
@@ -375,17 +351,5 @@ function StatusCard({ icon, title, value, description }: { icon: ReactNode; titl
         <p className="mt-3 text-sm text-muted-foreground">{description}</p>
       </CardContent>
     </Card>
-  );
-}
-
-function NextStep({ href, title, description }: { href: string; title: string; description: string }) {
-  return (
-    <Link href={href} className="group rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-primary/30 hover:bg-primary/10">
-      <div className="flex items-center justify-between gap-3">
-        <p className="font-medium text-foreground">{title}</p>
-        <ArrowRight className="h-4 w-4 text-muted-foreground transition group-hover:translate-x-1 group-hover:text-primary" />
-      </div>
-      <p className="mt-3 text-sm text-muted-foreground">{description}</p>
-    </Link>
   );
 }

@@ -1,5 +1,6 @@
-﻿import { ProjectOptimizationTab } from "@/features/project-center";
+import { redirect } from "next/navigation";
 
-export default function ProjectOptimizationPage() {
-  return <ProjectOptimizationTab />;
+export default async function ProjectOptimizationPage({ params }: { params: Promise<{ projectId: string }> }) {
+  const { projectId } = await params;
+  redirect(`/projects/${projectId}`);
 }

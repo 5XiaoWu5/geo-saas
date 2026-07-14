@@ -1,5 +1,5 @@
-﻿import { MonitoringDashboard } from "@/features/monitoring";
+import { redirect } from "next/navigation";
 
 export default function MonitoringPage() {
-  return <MonitoringDashboard />;
+  redirect("/dashboard");
 }

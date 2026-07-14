@@ -1,5 +1,5 @@
-﻿import { InventoryWorkspace } from "@/features/inventory/inventory-workspace";
+import { redirect } from "next/navigation";
 
 export default function InventoryPage() {
-  return <InventoryWorkspace />;
+  redirect("/dashboard");
 }

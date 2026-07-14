@@ -1,5 +1,6 @@
-﻿import { ProjectVisibilityTab } from "@/features/project-center";
+import { redirect } from "next/navigation";
 
-export default function ProjectVisibilityPage() {
-  return <ProjectVisibilityTab />;
+export default async function ProjectVisibilityPage({ params }: { params: Promise<{ projectId: string }> }) {
+  const { projectId } = await params;
+  redirect(`/projects/${projectId}`);
 }

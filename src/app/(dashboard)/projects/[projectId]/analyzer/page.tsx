@@ -1,5 +1,6 @@
-﻿import { ProjectAnalyzerTab } from "@/features/project-center";
+import { redirect } from "next/navigation";
 
-export default function ProjectAnalyzerPage() {
-  return <ProjectAnalyzerTab />;
+export default async function ProjectAnalyzerPage({ params }: { params: Promise<{ projectId: string }> }) {
+  const { projectId } = await params;
+  redirect(`/projects/${projectId}`);
 }

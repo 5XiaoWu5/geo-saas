@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Menu, Sparkles, X } from "lucide-react";
 import { accountNavItems, appConfig, mainNavItems } from "@/config/app";
 import { useI18n } from "@/i18n/provider";
 import { cn } from "@/lib/utils";
@@ -78,10 +79,23 @@ export function Sidebar() {
 
 export function MobileNav() {
   const { t } = useI18n();
+  const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    document.body.style.overflow = open ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [open]);
 
   return (
     <div className="flex items-center gap-3 lg:hidden">
-      <Button variant="outline" size="icon" aria-label="Open navigation">
+      <Button variant="outline" size="icon" aria-label="打开导航菜单" onClick={() => setOpen(true)}>
         <Menu className="h-4 w-4" />
       </Button>
       <div className="flex items-center gap-2">
@@ -90,6 +104,35 @@ export function MobileNav() {
         </div>
         <span className="font-semibold">{t(appConfig.nameKey)}</span>
       </div>
+
+      {open ? (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setOpen(false)} aria-hidden />
+          <div className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col border-r border-white/10 bg-background p-4">
+            <div className="mb-6 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <span className="font-semibold">{t(appConfig.nameKey)}</span>
+              </div>
+              <Button variant="ghost" size="icon" aria-label="关闭导航菜单" onClick={() => setOpen(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="space-y-6 overflow-y-auto">
+              <div>
+                <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">{t("nav.workspace")}</p>
+                <NavGroup items={mainNavItems} />
+              </div>
+              <div>
+                <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">{t("nav.account")}</p>
+                <NavGroup items={accountNavItems} />
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
