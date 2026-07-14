@@ -71,7 +71,7 @@ export function ProjectOverviewTab() {
           <NextStep href={`/projects/${project.id}/analyzer`} title="GEO 分析" description="查看网站 GEO 基础评分、实体与结构信号。" />
           <NextStep href={`/projects/${project.id}/visibility`} title="可见性监控" description="跟踪 AI 搜索中的品牌出现与推荐位置。" />
           <NextStep href={`/projects/${project.id}/optimization`} title="优化中心" description="管理优化任务与内容改进建议。" />
-          <NextStep href={`/projects/${project.id}/趋势监控`} title="趋势监控" description="查看长期趋势与问题生命周期。" />
+          <NextStep href={`/projects/${project.id}/monitoring`} title="趋势监控" description="查看长期趋势与问题生命周期。" />
         </CardContent>
       </Card>
     </div>
@@ -129,6 +129,7 @@ function NextStep({ href, title, description }: { href: string; title: string; d
     </Link>
   );
 }
+
 
 
 
