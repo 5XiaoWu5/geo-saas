@@ -18,7 +18,7 @@ function toCrawlJob(scan: WebsiteScan): CrawlJob {
     id: scan.id,
     websiteUrl: scan.url,
     status: scan.status === "completed" ? "Completed" : "Failed",
-    progress: scan.status === "completed" ? 100 : 100,
+    progress: 100,
     currentPage: scan.url,
     pagesFound: scan.status === "completed" ? 1 : 0,
     assetsFound: scan.schemaCount,
@@ -34,9 +34,9 @@ function toCrawlResult(scan: WebsiteScan): CrawlPageResult {
   return {
     id: scan.id,
     url: scan.url,
-    title: scan.title ?? "???????",
-    metaDescription: scan.description ?? "???????",
-    h1: `H1 ???${scan.h1Count}`,
+    title: scan.title ?? "未发现页面标题",
+    metaDescription: scan.description ?? "未发现页面描述",
+    h1: `H1 数量：${scan.h1Count}`,
     language: "zh",
     statusCode: scan.status === "completed" ? 200 : 500,
     wordCount: 0,
@@ -49,7 +49,7 @@ function toCrawlResult(scan: WebsiteScan): CrawlPageResult {
 async function readJson<T>(response: Response): Promise<T> {
   const text = await response.text();
   const data = text ? JSON.parse(text) as T & { error?: string } : {} as T & { error?: string };
-  if (!response.ok) throw new Error(data.error ?? "????");
+  if (!response.ok) throw new Error(data.error ?? "请求失败");
   return data;
 }
 
@@ -74,7 +74,7 @@ export function CrawlWorkspace() {
       setScans(data.scans);
       setSelectedJobId((current) => current && data.scans.some((scan) => scan.id === current) ? current : data.scans[0]?.id ?? "");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "????????");
+      setError(requestError instanceof Error ? requestError.message : "扫描记录加载失败");
     } finally {
       setLoading(false);
     }
@@ -86,7 +86,7 @@ export function CrawlWorkspace() {
 
   function handleStart(websiteUrl: string) {
     void websiteUrl;
-    setNotice("??????????????????????????????????");
+    setNotice("请进入对应项目详情页点击“开始分析”，系统会生成真实数据库扫描记录。");
   }
 
   async function handleCleanTestScans() {
@@ -95,10 +95,10 @@ export function CrawlWorkspace() {
     setError("");
     try {
       const data = await readJson<{ deleted: number }>(await fetch("/api/crawl", { method: "DELETE" }));
-      setNotice(`??? ${data.deleted} ????????`);
+      setNotice(`已清理 ${data.deleted} 条测试扫描记录。`);
       await loadScans();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "??????????");
+      setError(requestError instanceof Error ? requestError.message : "测试扫描记录清理失败");
     } finally {
       setCleaning(false);
     }
@@ -106,12 +106,12 @@ export function CrawlWorkspace() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t("crawl.title")} description="???????????????????????????????????" action={<Button variant="outline" onClick={() => void handleCleanTestScans()} disabled={cleaning}><Trash2 className="h-4 w-4" /> {cleaning ? "????..." : "????????"}</Button>} />
+      <PageHeader title={t("crawl.title")} description="展示当前账号真实项目扫描记录；开发测试域名数据已从页面默认数据中移除。" action={<Button variant="outline" onClick={() => void handleCleanTestScans()} disabled={cleaning}><Trash2 className="h-4 w-4" /> {cleaning ? "正在清理..." : "清理测试扫描记录"}</Button>} />
       <CrawlStartForm onStart={handleStart} />
       {notice ? <div className="rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-primary">{notice}</div> : null}
       {error ? <div className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div> : null}
-      {loading ? <Card className="glass-panel border-white/10"><CardContent className="flex items-center gap-2 p-6 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> ??????????...</CardContent></Card> : null}
-      {!loading && !selectedJob ? <Card className="glass-panel border-white/10"><CardContent className="p-6 text-sm text-muted-foreground">????????????????????????????</CardContent></Card> : null}
+      {loading ? <Card className="glass-panel border-white/10"><CardContent className="flex items-center gap-2 p-6 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> 正在加载真实扫描记录...</CardContent></Card> : null}
+      {!loading && !selectedJob ? <Card className="glass-panel border-white/10"><CardContent className="p-6 text-sm text-muted-foreground">暂无真实扫描记录。请先在项目详情页运行一次“开始分析”。</CardContent></Card> : null}
       {!loading && selectedJob ? (
         <section className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
           <CrawlQueue jobs={jobs} selectedJobId={selectedJob.id} onSelectJob={(job) => setSelectedJobId(job.id)} />
