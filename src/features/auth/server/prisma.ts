@@ -302,6 +302,20 @@ export const prisma = {
       await ensureWebsiteScanSchema();
       return normalizeWebsiteScanRow((await websiteScanQuery('SELECT * FROM "WebsiteScan" WHERE "projectId" = $1 ORDER BY "createdAt" DESC LIMIT 1', [where.projectId]))[0] ?? null);
     },
+    async findManyForUser({ where }: { where: { userId: string } }) {
+      await ensureWebsiteScanSchema();
+      return (await websiteScanQuery('SELECT ws.* FROM "WebsiteScan" ws INNER JOIN "Project" p ON p."id" = ws."projectId" WHERE p."userId" = $1 ORDER BY ws."createdAt" DESC', [where.userId])).map((row) => normalizeWebsiteScanRow(row));
+    },
+    async deleteTestScansForUser({ where }: { where: { userId: string; urls: string[] } }) {
+      await ensureGeoAnalysisSchema();
+      const patterns = where.urls.map((url) => `${url}%`);
+      const scans = await websiteScanQuery('SELECT ws."id" FROM "WebsiteScan" ws INNER JOIN "Project" p ON p."id" = ws."projectId" WHERE p."userId" = $1 AND ws."url" LIKE ANY($2::text[])', [where.userId, patterns]);
+      const ids = scans.map((scan) => scan.id);
+      if (!ids.length) return { count: 0 };
+      await geoAnalysisQuery('DELETE FROM "GeoAnalysis" WHERE "scanId" = ANY($1::text[])', [ids]);
+      const deleted = await websiteScanQuery('DELETE FROM "WebsiteScan" WHERE "id" = ANY($1::text[]) RETURNING *', [ids]);
+      return { count: deleted.length };
+    },
     async create({ data }: { data: Data }) {
       await ensureWebsiteScanSchema();
       const now = new Date();

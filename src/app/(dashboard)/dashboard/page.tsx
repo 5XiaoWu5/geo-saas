@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -46,8 +46,8 @@ export default function DashboardPage() {
       </section>
       <section className="mt-4 grid gap-4 md:grid-cols-3">
         <MetricCard label={t("dashboard.totalCrawledPages")} value={String(crawlDashboardStats.totalCrawledPages)} delta={t("dashboard.latestCrawl")} />
-        <MetricCard label={t("dashboard.lastCrawlTime")} value={formatDateTime(crawlDashboardStats.lastCrawlTime)} delta={t("dashboard.mockCrawl")} />
-        <MetricCard label={t("dashboard.pagesIndexed")} value={String(crawlDashboardStats.pagesIndexed)} delta={t("dashboard.fakeIndex")} />
+        <MetricCard label={t("dashboard.lastCrawlTime")} value={crawlDashboardStats.lastCrawlTime ? formatDateTime(crawlDashboardStats.lastCrawlTime) : "????"} delta="????" />
+        <MetricCard label={t("dashboard.pagesIndexed")} value={String(crawlDashboardStats.pagesIndexed)} delta="????" />
       </section>
       <section className="mt-6 grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
         <Card className="glass-panel border-white/10">
