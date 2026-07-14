@@ -2,7 +2,7 @@
 import { AUTH_COOKIE_NAME } from "@/features/auth/server/constants";
 
 const authPages = ["/login", "/register", "/forgot-password", "/reset-password", "/verify-email"];
-const publicPrefixes = ["/api/auth", "/api/projects", "/_next", "/favicon.ico"];
+const publicPrefixes = ["/api/auth", "/api/projects", "/api/internal", "/_next", "/favicon.ico"];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -31,6 +31,7 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: ["/((?!.*\\..*).*)"],
 };
+
 
 
 
