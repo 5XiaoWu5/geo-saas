@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowUpRight } from "lucide-react";
 import { crawlDashboardStats } from "@/data/crawl";
@@ -36,7 +37,7 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <PageHeader title={t("dashboard.title")} description={t("dashboard.description")} action={<Button>{t("dashboard.newProject")}</Button>} />
+      <PageHeader title={t("dashboard.title")} description={t("dashboard.description")} action={<Button asChild><Link href="/projects">{t("dashboard.newProject")}</Link></Button>} />
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label={t("dashboard.totalProjects")} value={String(projects.length)} delta="当前账号" />
         <MetricCard label={t("dashboard.totalReports")} value={String(stats.totalReports)} delta={t("dashboard.allProjects")} />
@@ -52,7 +53,7 @@ export default function DashboardPage() {
         <Card className="glass-panel border-white/10">
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle>{t("dashboard.trendTitle")}</CardTitle>
-            <Button variant="ghost" size="sm">{t("dashboard.viewProjects")} <ArrowUpRight className="h-4 w-4" /></Button>
+            <Button asChild variant="ghost" size="sm"><Link href="/projects">{t("dashboard.viewProjects")} <ArrowUpRight className="h-4 w-4" /></Link></Button>
           </CardHeader>
           <CardContent>
             <div className="flex h-64 items-end gap-3 rounded-2xl bg-white/[0.03] p-4">
@@ -64,7 +65,7 @@ export default function DashboardPage() {
           <CardHeader><CardTitle>{t("dashboard.recentProjects")}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             {projects.length === 0 ? <p className="text-sm text-muted-foreground">当前账号暂无项目。</p> : null}
-            {projects.slice(0, 4).map((project) => <div key={project.name} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] p-4"><div><p className="font-medium">{project.name}</p><p className="text-xs text-muted-foreground">{getHostname(project.url)}</p></div><span className="text-sm font-semibold text-primary">{project.geoScore}%</span></div>)}
+            {projects.slice(0, 4).map((project) => <Link href={`/projects/${project.id}`} key={project.name} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-primary/30 hover:bg-white/[0.06]"><div><p className="font-medium">{project.name}</p><p className="text-xs text-muted-foreground">{getHostname(project.url)}</p></div><span className="text-sm font-semibold text-primary">{project.geoScore}%</span></Link>)}
           </CardContent>
         </Card>
       </section>
