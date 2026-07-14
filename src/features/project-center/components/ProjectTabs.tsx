@@ -18,8 +18,8 @@ export function ProjectTabs() {
   const { project } = useProject();
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.03] p-1">
-      <div className="flex min-w-max gap-1">
+    <div className="max-w-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-1">
+      <div className="flex flex-wrap gap-1">
         {tabs.map((tab) => {
           const href = `/projects/${project.id}/${tab.segment}`;
           const active = pathname === href || (tab.segment === "overview" && pathname === `/projects/${project.id}`);
@@ -33,3 +33,4 @@ export function ProjectTabs() {
     </div>
   );
 }
+

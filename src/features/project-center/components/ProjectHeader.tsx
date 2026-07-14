@@ -26,7 +26,7 @@ export function ProjectHeader() {
             <p className="mt-3 max-w-3xl text-sm text-muted-foreground">{project.description || "该项目暂无描述，可在项目列表中编辑补充。"}</p>
             <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
               <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">创建于 {formatDate(project.createdAt)}</span>
-              <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">项目 ID {project.id}</span>
+              <span className="max-w-full break-all rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-1">项目 ID {project.id}</span>
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-3 xl:w-[560px]">
@@ -49,4 +49,5 @@ function HeaderMetric({ icon, label, value, progress }: { icon: ReactNode; label
     </div>
   );
 }
+
 
