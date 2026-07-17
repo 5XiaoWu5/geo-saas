@@ -185,7 +185,7 @@ export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: s
   if (error && !data) {
     return (
       <div>
-        <PageHeader title="AI 可见性监控" description="记录关键词在不同 AI 回答中的品牌出现、位置和可见性评分。" />
+        <PageHeader title="AI 可见性监控" description="用人工检测流程跟踪关键词、Prompt、AI 回答和品牌曝光，不调用外部 AI API。" />
         <div className="flex gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
           <AlertCircle className="h-4 w-4 shrink-0" /> {error}
         </div>
