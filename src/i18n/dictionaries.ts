@@ -43,6 +43,7 @@ export const zh = {
     websiteCrawl: "网站抓取",
     siteInventory: "网站资产库",
     analyzer: "GEO 分析器",
+    entity: "Entity Center",
     queryGenerator: "AI 问题生成器",
     optimization: "优化中心",
     visibility: "AI 可见性",

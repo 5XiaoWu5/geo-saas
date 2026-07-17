@@ -98,6 +98,29 @@ type QueryTemplateRow = Record<string, unknown> & {
   updatedAt: Date;
 };
 
+type EntityProfileRow = Record<string, unknown> & {
+  id: string;
+  projectId: string;
+  brandName: string;
+  industry: string;
+  region: string;
+  description: string;
+  services: string[];
+  products: string[];
+  advantages: string[];
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type EntityAttributeRow = Record<string, unknown> & {
+  id: string;
+  entityId: string;
+  key: string;
+  value: string;
+  source: string;
+  createdAt: Date;
+};
+
 type VisibilityCampaignRow = Record<string, unknown> & {
   id: string;
   projectId: string;
@@ -165,6 +188,16 @@ async function optimizationTaskQuery(sqlText: string, params: unknown[] = []): P
 async function queryTemplateQuery(sqlText: string, params: unknown[] = []): Promise<QueryTemplateRow[]> {
   const sql = getSql();
   return (await sql.query(sqlText, params)) as QueryTemplateRow[];
+}
+
+async function entityProfileQuery(sqlText: string, params: unknown[] = []): Promise<EntityProfileRow[]> {
+  const sql = getSql();
+  return (await sql.query(sqlText, params)) as EntityProfileRow[];
+}
+
+async function entityAttributeQuery(sqlText: string, params: unknown[] = []): Promise<EntityAttributeRow[]> {
+  const sql = getSql();
+  return (await sql.query(sqlText, params)) as EntityAttributeRow[];
 }
 
 async function visibilityCampaignQuery(sqlText: string, params: unknown[] = []): Promise<VisibilityCampaignRow[]> {
@@ -241,6 +274,23 @@ function normalizeQueryTemplateRow<T extends QueryTemplateRow | null>(row: T): T
   return row;
 }
 
+function normalizeEntityProfileRow<T extends EntityProfileRow | null>(row: T): T {
+  if (!row) return row;
+  for (const key of ["createdAt", "updatedAt"]) {
+    if (row[key] && !(row[key] instanceof Date)) row[key] = new Date(row[key] as string);
+  }
+  if (!Array.isArray(row.services)) row.services = [];
+  if (!Array.isArray(row.products)) row.products = [];
+  if (!Array.isArray(row.advantages)) row.advantages = [];
+  return row;
+}
+
+function normalizeEntityAttributeRow<T extends EntityAttributeRow | null>(row: T): T {
+  if (!row) return row;
+  if (row.createdAt && !(row.createdAt instanceof Date)) row.createdAt = new Date(row.createdAt as string);
+  return row;
+}
+
 function normalizeVisibilityCampaignRow<T extends VisibilityCampaignRow | null>(row: T): T {
   if (!row) return row;
   if (row.createdAt && !(row.createdAt instanceof Date)) row.createdAt = new Date(row.createdAt as string);
@@ -265,6 +315,7 @@ let websiteScanSchemaReady = false;
 let geoAnalysisSchemaReady = false;
 let optimizationTaskSchemaReady = false;
 let queryTemplateSchemaReady = false;
+let entitySchemaReady = false;
 let visibilitySchemaReady = false;
 
 async function ensureProjectSchema() {
@@ -316,6 +367,16 @@ async function ensureQueryTemplateSchema() {
   await queryTemplateQuery('CREATE TABLE IF NOT EXISTS "QueryTemplate" ("id" TEXT PRIMARY KEY, "projectId" TEXT NOT NULL, "content" TEXT NOT NULL, "category" TEXT NOT NULL, "intent" TEXT NOT NULL, "priority" TEXT NOT NULL DEFAULT \'medium\', "status" TEXT NOT NULL DEFAULT \'GENERATED\', "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
   await queryTemplateQuery('CREATE INDEX IF NOT EXISTS "QueryTemplate_projectId_idx" ON "QueryTemplate"("projectId")');
   queryTemplateSchemaReady = true;
+}
+
+async function ensureEntitySchema() {
+  if (entitySchemaReady) return;
+  await ensureProjectSchema();
+  await entityProfileQuery('CREATE TABLE IF NOT EXISTS "EntityProfile" ("id" TEXT PRIMARY KEY, "projectId" TEXT NOT NULL, "brandName" TEXT NOT NULL, "industry" TEXT NOT NULL, "region" TEXT NOT NULL, "description" TEXT NOT NULL, "services" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[], "products" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[], "advantages" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[], "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
+  await entityProfileQuery('CREATE INDEX IF NOT EXISTS "EntityProfile_projectId_idx" ON "EntityProfile"("projectId")');
+  await entityAttributeQuery('CREATE TABLE IF NOT EXISTS "EntityAttribute" ("id" TEXT PRIMARY KEY, "entityId" TEXT NOT NULL, "key" TEXT NOT NULL, "value" TEXT NOT NULL, "source" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
+  await entityAttributeQuery('CREATE INDEX IF NOT EXISTS "EntityAttribute_entityId_idx" ON "EntityAttribute"("entityId")');
+  entitySchemaReady = true;
 }
 
 async function ensureVisibilitySchema() {
@@ -604,6 +665,86 @@ export const prisma = {
     async updateStatus({ where, data }: { where: { id: string; userId: string }; data: { status: string } }) {
       await ensureQueryTemplateSchema();
       return normalizeQueryTemplateRow((await queryTemplateQuery('UPDATE "QueryTemplate" qt SET "status" = $1, "updatedAt" = $2 FROM "Project" p WHERE qt."id" = $3 AND qt."projectId" = p."id" AND p."userId" = $4 RETURNING qt.*', [data.status, new Date(), where.id, where.userId]))[0] ?? null);
+    },
+  },
+  entityProfile: {
+    async findManyForUser({ where }: { where: { userId: string; projectId?: string } }) {
+      await ensureEntitySchema();
+      const rows = where.projectId
+        ? await entityProfileQuery('SELECT ep.* FROM "EntityProfile" ep INNER JOIN "Project" p ON p."id" = ep."projectId" WHERE p."userId" = $1 AND ep."projectId" = $2 ORDER BY ep."updatedAt" DESC', [where.userId, where.projectId])
+        : await entityProfileQuery('SELECT ep.* FROM "EntityProfile" ep INNER JOIN "Project" p ON p."id" = ep."projectId" WHERE p."userId" = $1 ORDER BY ep."updatedAt" DESC', [where.userId]);
+      return rows.map((row) => normalizeEntityProfileRow(row));
+    },
+    async findFirstForProject({ where }: { where: { projectId: string; userId: string } }) {
+      await ensureEntitySchema();
+      return normalizeEntityProfileRow((await entityProfileQuery('SELECT ep.* FROM "EntityProfile" ep INNER JOIN "Project" p ON p."id" = ep."projectId" WHERE ep."projectId" = $1 AND p."userId" = $2 ORDER BY ep."updatedAt" DESC LIMIT 1', [where.projectId, where.userId]))[0] ?? null);
+    },
+    async upsertForProject({ where, data }: { where: { projectId: string; userId: string }; data: Data }) {
+      await ensureEntitySchema();
+      const ownedProject = (await projectQuery('SELECT "id" FROM "Project" WHERE "id" = $1 AND "userId" = $2 LIMIT 1', [where.projectId, where.userId]))[0] ?? null;
+      if (!ownedProject) return null;
+
+      const existing = await prisma.entityProfile.findFirstForProject({ where });
+      const now = new Date();
+      if (existing) {
+        return normalizeEntityProfileRow((await entityProfileQuery('UPDATE "EntityProfile" SET "brandName" = $1, "industry" = $2, "region" = $3, "description" = $4, "services" = $5::text[], "products" = $6::text[], "advantages" = $7::text[], "updatedAt" = $8 WHERE "id" = $9 RETURNING *', [
+          data.brandName ?? "",
+          data.industry ?? "",
+          data.region ?? "",
+          data.description ?? "",
+          data.services ?? [],
+          data.products ?? [],
+          data.advantages ?? [],
+          now,
+          existing.id,
+        ]))[0] ?? null);
+      }
+
+      return normalizeEntityProfileRow((await entityProfileQuery('INSERT INTO "EntityProfile" ("id", "projectId", "brandName", "industry", "region", "description", "services", "products", "advantages", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7::text[], $8::text[], $9::text[], $10, $11) RETURNING *', [
+        data.id ?? createId(),
+        where.projectId,
+        data.brandName ?? "",
+        data.industry ?? "",
+        data.region ?? "",
+        data.description ?? "",
+        data.services ?? [],
+        data.products ?? [],
+        data.advantages ?? [],
+        now,
+        now,
+      ]))[0]);
+    },
+  },
+  entityAttribute: {
+    async findManyForUser({ where }: { where: { userId: string; entityIds?: string[]; projectId?: string } }) {
+      await ensureEntitySchema();
+      if (where.entityIds && where.entityIds.length === 0) return [];
+      const rows = where.entityIds
+        ? await entityAttributeQuery('SELECT ea.* FROM "EntityAttribute" ea INNER JOIN "EntityProfile" ep ON ep."id" = ea."entityId" INNER JOIN "Project" p ON p."id" = ep."projectId" WHERE p."userId" = $1 AND ea."entityId" = ANY($2::text[]) ORDER BY ea."createdAt" DESC', [where.userId, where.entityIds])
+        : where.projectId
+          ? await entityAttributeQuery('SELECT ea.* FROM "EntityAttribute" ea INNER JOIN "EntityProfile" ep ON ep."id" = ea."entityId" INNER JOIN "Project" p ON p."id" = ep."projectId" WHERE p."userId" = $1 AND ep."projectId" = $2 ORDER BY ea."createdAt" DESC', [where.userId, where.projectId])
+          : await entityAttributeQuery('SELECT ea.* FROM "EntityAttribute" ea INNER JOIN "EntityProfile" ep ON ep."id" = ea."entityId" INNER JOIN "Project" p ON p."id" = ep."projectId" WHERE p."userId" = $1 ORDER BY ea."createdAt" DESC', [where.userId]);
+      return rows.map((row) => normalizeEntityAttributeRow(row));
+    },
+    async replaceForEntity({ where, data }: { where: { entityId: string; userId: string }; data: Data[] }) {
+      await ensureEntitySchema();
+      const ownedEntity = (await entityProfileQuery('SELECT ep."id" FROM "EntityProfile" ep INNER JOIN "Project" p ON p."id" = ep."projectId" WHERE ep."id" = $1 AND p."userId" = $2 LIMIT 1', [where.entityId, where.userId]))[0] ?? null;
+      if (!ownedEntity) return [];
+
+      await entityAttributeQuery('DELETE FROM "EntityAttribute" WHERE "entityId" = $1', [where.entityId]);
+      const rows: EntityAttributeRow[] = [];
+      for (const item of data) {
+        const row = await entityAttributeQuery('INSERT INTO "EntityAttribute" ("id", "entityId", "key", "value", "source", "createdAt") VALUES ($1, $2, $3, $4, $5, $6) RETURNING *', [
+          item.id ?? createId(),
+          where.entityId,
+          item.key,
+          item.value,
+          item.source ?? "user",
+          new Date(),
+        ]);
+        rows.push(normalizeEntityAttributeRow(row[0]));
+      }
+      return rows;
     },
   },
   visibilityCampaign: {

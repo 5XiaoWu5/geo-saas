@@ -115,6 +115,7 @@ model Project {
   optimizationTasks OptimizationTask[]
   visibilityCampaigns VisibilityCampaign[]
   queryTemplates QueryTemplate[]
+  entityProfiles EntityProfile[]
 
   @@index([userId])
 }
@@ -195,6 +196,38 @@ model QueryTemplate {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
+}
+
+model EntityProfile {
+  id          String   @id @default(cuid())
+  projectId   String
+  brandName   String
+  industry    String
+  region      String
+  description String
+  services    String[] @default([])
+  products    String[] @default([])
+  advantages  String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  attributes EntityAttribute[]
+
+  @@index([projectId])
+}
+
+model EntityAttribute {
+  id        String   @id @default(cuid())
+  entityId  String
+  key       String
+  value     String
+  source    String
+  createdAt DateTime @default(now())
+
+  entity EntityProfile @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@index([entityId])
 }
 
 model VisibilityCampaign {
