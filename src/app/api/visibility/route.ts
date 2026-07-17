@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/features/auth/server/session";
 import { prisma } from "@/features/auth/server/prisma";
 import { toProject } from "@/features/projects/project-mapper";
+import { buildVisibilityAnalytics, emptyVisibilityAnalytics } from "@/features/visibility/analytics";
 import { toVisibilityCampaign, toVisibilityCheck, toVisibilityPrompt } from "@/features/visibility/mapper";
 
 export const runtime = "nodejs";
@@ -55,6 +56,7 @@ export async function GET(request: Request) {
       selectedProjectId: null,
       campaigns: [],
       summary: buildSummary([], 0, 0),
+      analytics: emptyVisibilityAnalytics(),
     });
   }
 
@@ -74,6 +76,8 @@ export async function GET(request: Request) {
     checksByCampaignId.set(check.campaignId, [...(checksByCampaignId.get(check.campaignId) ?? []), check]);
   }
 
+  const analytics = buildVisibilityAnalytics(campaigns, prompts, checks);
+
   return NextResponse.json({
     projects: projects.map((project) => ({ id: project.id, name: project.name, websiteUrl: project.websiteUrl })),
     selectedProjectId,
@@ -83,6 +87,7 @@ export async function GET(request: Request) {
       return { ...campaign, prompts: campaignPrompts, checks: campaignChecks, latestCheck: campaignChecks[0] ?? null };
     }),
     summary: buildSummary(checks, campaigns.length, prompts.length),
+    analytics,
   });
 }
 

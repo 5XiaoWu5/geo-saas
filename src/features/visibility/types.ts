@@ -34,6 +34,44 @@ export type VisibilityCampaignWithChecks = VisibilityCampaign & {
   latestCheck: VisibilityCheck | null;
 };
 
+export type VisibilityProviderAnalytics = {
+  provider: string;
+  totalChecks: number;
+  brandMentions: number;
+  brandMentionRate: number;
+  averageMentionPosition: number | null;
+  averageScore: number;
+};
+
+export type VisibilityTrendPoint = {
+  date: string;
+  totalChecks: number;
+  brandMentions: number;
+  brandMentionRate: number;
+};
+
+export type VisibilityPromptAnalytics = {
+  promptId: string | null;
+  campaignId: string;
+  campaignKeyword: string;
+  prompt: string;
+  totalChecks: number;
+  brandMentions: number;
+  brandMentionRate: number;
+  averageMentionPosition: number | null;
+};
+
+export type VisibilityAnalytics = {
+  totalChecks: number;
+  brandMentions: number;
+  brandMentionRate: number;
+  averageMentionPosition: number | null;
+  averageScore: number;
+  providerPerformance: VisibilityProviderAnalytics[];
+  trend: VisibilityTrendPoint[];
+  promptAnalytics: VisibilityPromptAnalytics[];
+};
+
 export type VisibilityWorkspaceProject = Pick<Project, "id" | "name" | "websiteUrl">;
 
 export type VisibilityResponse = {
@@ -49,5 +87,6 @@ export type VisibilityResponse = {
     averageMentionPosition: number | null;
     averageScore: number;
   };
+  analytics: VisibilityAnalytics;
   error?: string;
 };

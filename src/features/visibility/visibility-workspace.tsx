@@ -3,8 +3,15 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Bot, CheckCircle2, Eye, FileSearch, LinkIcon, Loader2, Plus, Radar, Target } from "lucide-react";
-import type { VisibilityCampaignWithChecks, VisibilityCheck, VisibilityPrompt, VisibilityResponse } from "@/features/visibility/types";
+import { AlertCircle, BarChart3, Bot, CheckCircle2, Eye, FileSearch, LineChart, LinkIcon, Loader2, Plus, Radar, Target } from "lucide-react";
+import type {
+  VisibilityAnalytics,
+  VisibilityCampaignWithChecks,
+  VisibilityCheck,
+  VisibilityPrompt,
+  VisibilityResponse,
+  VisibilityTrendPoint,
+} from "@/features/visibility/types";
 import { PageHeader } from "@/components/shared/page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -174,7 +181,7 @@ export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: s
   if (loading) {
     return (
       <div>
-        <PageHeader title="AI 可见性监控" description="正在加载真实关键词、Prompt 和检测记录。" />
+        <PageHeader title="AI 可见性分析" description="正在加载真实关键词、Prompt 和检测记录。" />
         <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> 正在加载真实监控数据...
         </div>
@@ -185,7 +192,7 @@ export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: s
   if (error && !data) {
     return (
       <div>
-        <PageHeader title="AI 可见性监控" description="用人工检测流程跟踪关键词、Prompt、AI 回答和品牌曝光，不调用外部 AI API。" />
+        <PageHeader title="AI 可见性分析" description="用人工检测流程统计关键词、Prompt、AI 回答和品牌曝光，不调用外部 AI API。" />
         <div className="flex gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
           <AlertCircle className="h-4 w-4 shrink-0" /> {error}
         </div>
@@ -195,11 +202,12 @@ export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: s
 
   const projects = data?.projects ?? [];
   const activeProject = projects.find((project) => project.id === projectId) ?? projects[0] ?? null;
+  const analytics = data?.analytics;
   const checks = data?.campaigns.flatMap((campaign) => campaign.checks) ?? [];
 
   return (
     <div className="space-y-6">
-      <PageHeader title="AI 可见性监控" description="用人工检测流程跟踪关键词在 ChatGPT、Claude、Gemini 等回答中的品牌曝光，不调用外部 AI API。" />
+      <PageHeader title="AI 可见性分析" description="基于真实人工检测记录分析 AI 曝光率、品牌出现次数、平均排名和各平台表现。" />
 
       {error ? (
         <div className="flex gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
@@ -219,10 +227,10 @@ export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: s
       ) : (
         <>
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <SummaryCard icon={<Eye className="h-5 w-5" />} label="AI 出现次数" value={`${data?.summary.aiAppearances ?? 0}`} description={`来自 ${data?.summary.totalChecks ?? 0} 条真实检测记录`} />
-            <SummaryCard icon={<Radar className="h-5 w-5" />} label="品牌出现率" value={`${data?.summary.brandMentionRate ?? 0}`} suffix="%" description="品牌出现次数 / 总检测次数" />
-            <SummaryCard icon={<Target className="h-5 w-5" />} label="平均排名" value={data?.summary.averageMentionPosition ? `${data.summary.averageMentionPosition}` : "-"} description="仅统计已出现品牌的检测记录" />
-            <SummaryCard icon={<FileSearch className="h-5 w-5" />} label="Prompt 数" value={`${data?.summary.totalPrompts ?? 0}`} description={`${data?.summary.totalCampaigns ?? 0} 个关键词监控`} />
+            <SummaryCard icon={<Radar className="h-5 w-5" />} label="AI 曝光率" value={`${analytics?.brandMentionRate ?? 0}`} suffix="%" description="品牌出现次数 / 总检测次数" />
+            <SummaryCard icon={<Eye className="h-5 w-5" />} label="品牌出现次数" value={`${analytics?.brandMentions ?? 0}`} description="所有 AI 平台检测中的品牌出现次数" />
+            <SummaryCard icon={<Target className="h-5 w-5" />} label="平均排名" value={analytics?.averageMentionPosition ? `${analytics.averageMentionPosition}` : "-"} description="仅统计品牌已出现的检测记录" />
+            <SummaryCard icon={<FileSearch className="h-5 w-5" />} label="检测次数" value={`${analytics?.totalChecks ?? 0}`} description={`${data?.summary.totalPrompts ?? 0} 个 Prompt`} />
           </section>
 
           <div className="flex flex-wrap gap-2">
@@ -248,6 +256,13 @@ export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: s
               </Button>
             </CardContent>
           </Card>
+
+          <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+            <TrendCard analytics={analytics} />
+            <ProviderCard analytics={analytics} />
+          </section>
+
+          <PromptAnalyticsCard analytics={analytics} />
 
           <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
             <Card className="glass-panel border-white/10">
@@ -407,6 +422,131 @@ function SummaryCard({ icon, label, value, suffix, description }: { icon: ReactN
         <p className="mt-2 text-xs text-muted-foreground">{description}</p>
       </CardContent>
     </Card>
+  );
+}
+
+function TrendCard({ analytics }: { analytics?: VisibilityAnalytics }) {
+  const trend = analytics?.trend ?? [];
+  return (
+    <Card className="glass-panel border-white/10">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <LineChart className="h-5 w-5 text-primary" /> 曝光率趋势
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {trend.length === 0 ? (
+          <p className="text-sm text-muted-foreground">暂无趋势数据。保存检测记录后会按日期统计曝光率变化。</p>
+        ) : (
+          <div className="space-y-4">
+            <TrendBars points={trend} />
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {trend.slice(-6).map((point) => (
+                <div key={point.date} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                  <p className="text-xs text-muted-foreground">{point.date}</p>
+                  <p className="mt-1 text-lg font-semibold text-foreground">{point.brandMentionRate}%</p>
+                  <p className="text-xs text-muted-foreground">{point.brandMentions}/{point.totalChecks} 次出现</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function TrendBars({ points }: { points: VisibilityTrendPoint[] }) {
+  const latest = points.slice(-12);
+  return (
+    <div className="flex h-44 items-end gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+      {latest.map((point) => (
+        <div key={point.date} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+          <div className="flex h-28 w-full items-end rounded-t-md bg-white/[0.04]">
+            <div className="w-full rounded-t-md bg-primary/70" style={{ height: `${Math.max(point.brandMentionRate, 3)}%` }} />
+          </div>
+          <span className="w-full truncate text-center text-[10px] text-muted-foreground">{point.date.slice(5)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ProviderCard({ analytics }: { analytics?: VisibilityAnalytics }) {
+  const providers = analytics?.providerPerformance ?? [];
+  return (
+    <Card className="glass-panel border-white/10">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <BarChart3 className="h-5 w-5 text-primary" /> 各 AI 平台表现
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {providers.length === 0 ? (
+          <p className="text-sm text-muted-foreground">暂无平台统计。保存检测记录后会展示 ChatGPT、Claude、Gemini 等平台表现。</p>
+        ) : (
+          providers.map((item) => (
+            <div key={item.provider} className="space-y-2 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-medium text-foreground">{item.provider}</p>
+                <Badge variant={item.brandMentionRate >= 50 ? "success" : "warning"}>{item.brandMentionRate}%</Badge>
+              </div>
+              <Progress value={item.brandMentionRate} />
+              <p className="text-xs text-muted-foreground">
+                {item.brandMentions}/{item.totalChecks} 次出现 · 平均排名 {item.averageMentionPosition ?? "-"} · 平均评分 {item.averageScore}
+              </p>
+            </div>
+          ))
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PromptAnalyticsCard({ analytics }: { analytics?: VisibilityAnalytics }) {
+  const prompts = analytics?.promptAnalytics ?? [];
+  return (
+    <Card className="glass-panel border-white/10">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <Bot className="h-5 w-5 text-primary" /> Prompt 分析
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {prompts.length === 0 ? (
+          <p className="text-sm text-muted-foreground">暂无 Prompt 统计。添加 Prompt 并保存检测后会展示检测次数、品牌出现次数和平均排名。</p>
+        ) : (
+          prompts.map((item) => (
+            <div key={item.promptId ?? `${item.campaignId}:${item.prompt}`} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0">
+                  <Badge variant="outline">{item.campaignKeyword}</Badge>
+                  <p className="mt-3 break-words text-sm font-medium text-foreground">{item.prompt}</p>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center sm:min-w-[320px]">
+                  <MiniMetric label="检测" value={`${item.totalChecks}`} />
+                  <MiniMetric label="出现" value={`${item.brandMentions}`} />
+                  <MiniMetric label="排名" value={item.averageMentionPosition ? `${item.averageMentionPosition}` : "-"} />
+                </div>
+              </div>
+              <div className="mt-4">
+                <Progress value={item.brandMentionRate} />
+                <p className="mt-2 text-xs text-muted-foreground">品牌出现率 {item.brandMentionRate}%</p>
+              </div>
+            </div>
+          ))
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function MiniMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-background/40 px-3 py-2">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-foreground">{value}</p>
+    </div>
   );
 }
 
