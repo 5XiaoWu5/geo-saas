@@ -49,6 +49,7 @@ export async function GET() {
     totalProjects: projectList.length,
     analyzedCount,
     summary,
+    latest: analyzedProjects[0] ?? null,
     projects: analyzedProjects,
   });
 }

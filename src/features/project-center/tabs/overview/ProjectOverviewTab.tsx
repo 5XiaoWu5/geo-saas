@@ -8,6 +8,7 @@ import {
   AlertCircle,
   BarChart3,
   CheckCircle2,
+  ClipboardList,
   FileJson2,
   Globe2,
   Heading1,
@@ -174,6 +175,11 @@ export function ProjectOverviewTab() {
             <Button asChild variant="outline">
               <Link href="/analyzer">
                 <Sparkles className="h-4 w-4" /> 进入 GEO 分析
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href={`/projects/${project.id}/optimization`}>
+                <ClipboardList className="h-4 w-4" /> 进入优化中心
               </Link>
             </Button>
           </div>

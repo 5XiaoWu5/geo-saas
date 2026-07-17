@@ -1,6 +1,6 @@
-import { redirect } from "next/navigation";
+import { OptimizationWorkspace } from "@/features/optimization/optimization-workspace";
 
 export default async function ProjectOptimizationPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
-  redirect(`/projects/${projectId}`);
+  return <OptimizationWorkspace initialProjectId={projectId} />;
 }

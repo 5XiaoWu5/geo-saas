@@ -1,10 +1,12 @@
 ﻿"use client";
 
+import Link from "next/link";
 import type { ReactNode } from "react";
-import { Activity, BarChart3, CalendarClock, CheckCircle2, Globe2 } from "lucide-react";
+import { Activity, BarChart3, CalendarClock, CheckCircle2, ClipboardList, Globe2 } from "lucide-react";
 import { useProject } from "@/features/project-center/context/ProjectContext";
 import { getProjectStatusLabel } from "@/features/projects/project-mapper";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { formatDate, formatDateTime, getHostname } from "@/lib/format";
@@ -28,6 +30,13 @@ export function ProjectHeader() {
             <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
               <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">创建于 {formatDate(project.createdAt)}</span>
               <span className="max-w-full break-all rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-1">项目 ID {project.id}</span>
+            </div>
+            <div className="mt-5">
+              <Button asChild>
+                <Link href={`/projects/${project.id}/optimization`}>
+                  <ClipboardList className="h-4 w-4" /> 进入优化中心
+                </Link>
+              </Button>
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-3 xl:w-[560px]">

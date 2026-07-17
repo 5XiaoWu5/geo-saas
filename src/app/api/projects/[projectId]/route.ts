@@ -62,6 +62,15 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (response) return response;
 
   const { projectId } = await params;
+
+  // 显式级联：自建 SQL 层未启用外键约束，需手动清理子表，避免留下孤儿数据。
+  // 顺序：先删依赖 scanId 的 GeoAnalysis，再删 OptimizationTask 与 WebsiteScan，最后删 Project。
+  const owned = await prisma.project.findFirst({ where: { id: projectId, userId: user.id } });
+  if (!owned) return NextResponse.json({ error: "项目不存在或无权访问" }, { status: 404 });
+
+  await prisma.geoAnalysis.deleteByProjectId({ where: { projectId } });
+  await prisma.optimizationTask.deleteByProjectId({ where: { projectId } });
+  await prisma.websiteScan.deleteByProjectId({ where: { projectId } });
   const project = await prisma.project.delete({ where: { id: projectId, userId: user.id } });
   if (!project) return NextResponse.json({ error: "项目不存在或无权访问" }, { status: 404 });
 

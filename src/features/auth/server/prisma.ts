@@ -73,6 +73,19 @@ type GeoAnalysisRow = Record<string, unknown> & {
   createdAt: Date;
 };
 
+type OptimizationTaskRow = Record<string, unknown> & {
+  id: string;
+  projectId: string;
+  issueId: string;
+  title: string;
+  description: string;
+  recommendation: string;
+  severity: string;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 const fallbackDatabaseUrl = "postgresql://postgres:postgres@127.0.0.1:5432/geopilot_ai";
 
 if (!process.env.DATABASE_URL) {
@@ -101,6 +114,11 @@ async function websiteScanQuery(sqlText: string, params: unknown[] = []): Promis
 async function geoAnalysisQuery(sqlText: string, params: unknown[] = []): Promise<GeoAnalysisRow[]> {
   const sql = getSql();
   return (await sql.query(sqlText, params)) as GeoAnalysisRow[];
+}
+
+async function optimizationTaskQuery(sqlText: string, params: unknown[] = []): Promise<OptimizationTaskRow[]> {
+  const sql = getSql();
+  return (await sql.query(sqlText, params)) as OptimizationTaskRow[];
 }
 
 function createId() {
@@ -146,9 +164,18 @@ function normalizeGeoAnalysisRow<T extends GeoAnalysisRow | null>(row: T): T {
   return row;
 }
 
+function normalizeOptimizationTaskRow<T extends OptimizationTaskRow | null>(row: T): T {
+  if (!row) return row;
+  for (const key of ["createdAt", "updatedAt"]) {
+    if (row[key] && !(row[key] instanceof Date)) row[key] = new Date(row[key] as string);
+  }
+  return row;
+}
+
 let projectSchemaReady = false;
 let websiteScanSchemaReady = false;
 let geoAnalysisSchemaReady = false;
+let optimizationTaskSchemaReady = false;
 
 async function ensureProjectSchema() {
   if (projectSchemaReady) return;
@@ -182,6 +209,15 @@ async function ensureGeoAnalysisSchema() {
   await geoAnalysisQuery('CREATE INDEX IF NOT EXISTS "GeoAnalysis_projectId_idx" ON "GeoAnalysis"("projectId")');
   await geoAnalysisQuery('CREATE INDEX IF NOT EXISTS "GeoAnalysis_scanId_idx" ON "GeoAnalysis"("scanId")');
   geoAnalysisSchemaReady = true;
+}
+
+async function ensureOptimizationTaskSchema() {
+  if (optimizationTaskSchemaReady) return;
+  await ensureProjectSchema();
+  await optimizationTaskQuery('CREATE TABLE IF NOT EXISTS "OptimizationTask" ("id" TEXT PRIMARY KEY, "projectId" TEXT NOT NULL, "issueId" TEXT NOT NULL, "title" TEXT NOT NULL, "description" TEXT NOT NULL DEFAULT \'\', "recommendation" TEXT NOT NULL DEFAULT \'\', "severity" TEXT NOT NULL DEFAULT \'Medium\', "category" TEXT NOT NULL DEFAULT \'\', "status" TEXT NOT NULL DEFAULT \'PENDING\', "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
+  await optimizationTaskQuery('CREATE INDEX IF NOT EXISTS "OptimizationTask_projectId_idx" ON "OptimizationTask"("projectId")');
+  await optimizationTaskQuery('CREATE UNIQUE INDEX IF NOT EXISTS "OptimizationTask_projectId_issueId_key" ON "OptimizationTask"("projectId", "issueId")');
+  optimizationTaskSchemaReady = true;
 }
 
 function assignments(data: Data, start = 1) {
@@ -343,6 +379,11 @@ export const prisma = {
       const set = assignments({ ...data, updatedAt: new Date() });
       return normalizeWebsiteScanRow((await websiteScanQuery(`UPDATE "WebsiteScan" SET ${set.sql} WHERE "id" = $${set.values.length + 1} AND "projectId" = $${set.values.length + 2} RETURNING *`, [...set.values, where.id, where.projectId]))[0] ?? null);
     },
+    async deleteByProjectId({ where }: { where: { projectId: string } }) {
+      await ensureWebsiteScanSchema();
+      const deleted = await websiteScanQuery('DELETE FROM "WebsiteScan" WHERE "projectId" = $1 RETURNING "id"', [where.projectId]);
+      return { count: deleted.length };
+    },
   },
   geoAnalysis: {
     async findLatest({ where }: { where: { projectId: string } }) {
@@ -352,6 +393,10 @@ export const prisma = {
     async findByScanId({ where }: { where: { scanId: string } }) {
       await ensureGeoAnalysisSchema();
       return normalizeGeoAnalysisRow((await geoAnalysisQuery('SELECT * FROM "GeoAnalysis" WHERE "scanId" = $1 LIMIT 1', [where.scanId]))[0] ?? null);
+    },
+    async deleteByProjectId({ where }: { where: { projectId: string } }) {
+      await ensureGeoAnalysisSchema();
+      return { count: (await geoAnalysisQuery('DELETE FROM "GeoAnalysis" WHERE "projectId" = $1 RETURNING "id"', [where.projectId])).length };
     },
     async findLatestForUser({ where }: { where: { userId: string } }) {
       await ensureGeoAnalysisSchema();
@@ -371,6 +416,45 @@ export const prisma = {
         data.contentScore ?? 0,
         issues,
       ]))[0]);
+    },
+  },
+  optimizationTask: {
+    async findManyForProject({ where }: { where: { projectId: string; userId: string } }) {
+      await ensureOptimizationTaskSchema();
+      return (await optimizationTaskQuery('SELECT ot.* FROM "OptimizationTask" ot INNER JOIN "Project" p ON p."id" = ot."projectId" WHERE ot."projectId" = $1 AND p."userId" = $2 ORDER BY ot."createdAt" DESC', [where.projectId, where.userId])).map((row) => normalizeOptimizationTaskRow(row));
+    },
+    async findById({ where }: { where: { id: string; userId: string } }) {
+      await ensureOptimizationTaskSchema();
+      return normalizeOptimizationTaskRow((await optimizationTaskQuery('SELECT ot.* FROM "OptimizationTask" ot INNER JOIN "Project" p ON p."id" = ot."projectId" WHERE ot."id" = $1 AND p."userId" = $2 LIMIT 1', [where.id, where.userId]))[0] ?? null);
+    },
+    async findByIssue({ where }: { where: { projectId: string; issueId: string } }) {
+      await ensureOptimizationTaskSchema();
+      return normalizeOptimizationTaskRow((await optimizationTaskQuery('SELECT * FROM "OptimizationTask" WHERE "projectId" = $1 AND "issueId" = $2 LIMIT 1', [where.projectId, where.issueId]))[0] ?? null);
+    },
+    async create({ data }: { data: Data }) {
+      await ensureOptimizationTaskSchema();
+      const now = new Date();
+      return normalizeOptimizationTaskRow((await optimizationTaskQuery('INSERT INTO "OptimizationTask" ("id", "projectId", "issueId", "title", "description", "recommendation", "severity", "category", "status", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *', [
+        data.id ?? createId(),
+        data.projectId,
+        data.issueId,
+        data.title,
+        data.description ?? "",
+        data.recommendation ?? "",
+        data.severity ?? "Medium",
+        data.category ?? "",
+        data.status ?? "PENDING",
+        now,
+        now,
+      ]))[0]);
+    },
+    async updateStatus({ where, data }: { where: { id: string; userId: string }; data: { status: string } }) {
+      await ensureOptimizationTaskSchema();
+      return normalizeOptimizationTaskRow((await optimizationTaskQuery('UPDATE "OptimizationTask" ot SET "status" = $1, "updatedAt" = $2 FROM "Project" p WHERE ot."id" = $3 AND ot."projectId" = p."id" AND p."userId" = $4 RETURNING ot.*', [data.status, new Date(), where.id, where.userId]))[0] ?? null);
+    },
+    async deleteByProjectId({ where }: { where: { projectId: string } }) {
+      await ensureOptimizationTaskSchema();
+      return { count: (await optimizationTaskQuery('DELETE FROM "OptimizationTask" WHERE "projectId" = $1 RETURNING "id"', [where.projectId])).length };
     },
   },
   async $transaction(operations: Array<Promise<unknown>>) {

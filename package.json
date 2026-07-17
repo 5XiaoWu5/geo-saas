@@ -9,7 +9,8 @@
     "build:cloudflare": "node scripts/cloudflare-build.mjs",
     "preview": "opennextjs-cloudflare preview",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "cleanup:test-project": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/cleanup-test-project.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.1.1",

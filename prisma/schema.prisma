@@ -112,6 +112,7 @@ model Project {
   user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
   websiteScans WebsiteScan[]
   geoAnalyses  GeoAnalysis[]
+  optimizationTasks OptimizationTask[]
 
   @@index([userId])
 }
@@ -157,4 +158,23 @@ model GeoAnalysis {
 
   @@index([projectId])
   @@index([scanId])
+}
+
+model OptimizationTask {
+  id             String   @id @default(cuid())
+  projectId      String
+  issueId        String
+  title          String
+  description    String   @default("")
+  recommendation String   @default("")
+  severity       String   @default("Medium")
+  category       String   @default("")
+  status         String   @default("PENDING")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@unique([projectId, issueId])
 }

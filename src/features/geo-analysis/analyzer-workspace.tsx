@@ -163,10 +163,13 @@ export function AnalyzerWorkspace() {
             <CardTitle className="flex items-center gap-2 text-lg"><Target className="h-5 w-5 text-primary" /> {activeProject.projectName}</CardTitle>
             <p className="mt-1 truncate text-sm text-muted-foreground">{getHostname(activeProject.websiteUrl)} · 分析于 {formatDateTime(activeProject.analysis.createdAt)}</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <span className="text-3xl font-semibold text-primary">{activeProject.analysis.totalScore}</span>
             <Button asChild variant="outline" size="sm">
               <Link href={`/projects/${activeProject.projectId}`}>项目详情 <ArrowRight className="h-4 w-4" /></Link>
+            </Button>
+            <Button asChild size="sm">
+              <Link href={`/optimization?projectId=${activeProject.projectId}`}>进入优化中心 <ClipboardList className="h-4 w-4" /></Link>
             </Button>
           </div>
         </CardHeader>
