@@ -1,5 +1,5 @@
-import { QueryGeneratorWorkspace } from "@/features/query-generator/query-generator-workspace";
+import { redirect } from "next/navigation";
 
 export default function QueryGeneratorPage() {
-  return <QueryGeneratorWorkspace />;
+  redirect("/campaigns");
 }

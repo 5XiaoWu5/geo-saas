@@ -136,6 +136,31 @@ type EntityAttributeRow = Record<string, unknown> & {
   createdAt: Date;
 };
 
+type GeoCampaignRow = Record<string, unknown> & {
+  id: string;
+  projectId: string;
+  name: string;
+  industry: string;
+  businessDescription: string;
+  goal: string;
+  platforms: unknown;
+  queryCount: number;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type GeoQueryRow = Record<string, unknown> & {
+  id: string;
+  campaignId: string;
+  query: string;
+  category: string;
+  intent: string;
+  priority: string;
+  status: string;
+  createdAt: Date;
+};
+
 type VisibilityCampaignRow = Record<string, unknown> & {
   id: string;
   projectId: string;
@@ -218,6 +243,16 @@ async function entityProfileQuery(sqlText: string, params: unknown[] = []): Prom
 async function entityAttributeQuery(sqlText: string, params: unknown[] = []): Promise<EntityAttributeRow[]> {
   const sql = getSql();
   return (await sql.query(sqlText, params)) as EntityAttributeRow[];
+}
+
+async function geoCampaignQuery(sqlText: string, params: unknown[] = []): Promise<GeoCampaignRow[]> {
+  const sql = getSql();
+  return (await sql.query(sqlText, params)) as GeoCampaignRow[];
+}
+
+async function geoQueryQuery(sqlText: string, params: unknown[] = []): Promise<GeoQueryRow[]> {
+  const sql = getSql();
+  return (await sql.query(sqlText, params)) as GeoQueryRow[];
 }
 
 async function visibilityCampaignQuery(sqlText: string, params: unknown[] = []): Promise<VisibilityCampaignRow[]> {
@@ -332,6 +367,21 @@ function normalizeEntityAttributeRow<T extends EntityAttributeRow | null>(row: T
   return row;
 }
 
+function normalizeGeoCampaignRow<T extends GeoCampaignRow | null>(row: T): T {
+  if (!row) return row;
+  for (const key of ["createdAt", "updatedAt"]) {
+    if (row[key] && !(row[key] instanceof Date)) row[key] = new Date(row[key] as string);
+  }
+  if (!Array.isArray(row.platforms)) row.platforms = [];
+  return row;
+}
+
+function normalizeGeoQueryRow<T extends GeoQueryRow | null>(row: T): T {
+  if (!row) return row;
+  if (row.createdAt && !(row.createdAt instanceof Date)) row.createdAt = new Date(row.createdAt as string);
+  return row;
+}
+
 function normalizeVisibilityCampaignRow<T extends VisibilityCampaignRow | null>(row: T): T {
   if (!row) return row;
   if (row.createdAt && !(row.createdAt instanceof Date)) row.createdAt = new Date(row.createdAt as string);
@@ -357,6 +407,7 @@ let geoAnalysisSchemaReady = false;
 let geoBrainAnalysisSchemaReady = false;
 let optimizationTaskSchemaReady = false;
 let queryTemplateSchemaReady = false;
+let geoCampaignSchemaReady = false;
 let entitySchemaReady = false;
 let visibilitySchemaReady = false;
 
@@ -420,6 +471,16 @@ async function ensureQueryTemplateSchema() {
   await queryTemplateQuery('CREATE TABLE IF NOT EXISTS "QueryTemplate" ("id" TEXT PRIMARY KEY, "projectId" TEXT NOT NULL, "content" TEXT NOT NULL, "category" TEXT NOT NULL, "intent" TEXT NOT NULL, "priority" TEXT NOT NULL DEFAULT \'medium\', "status" TEXT NOT NULL DEFAULT \'GENERATED\', "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
   await queryTemplateQuery('CREATE INDEX IF NOT EXISTS "QueryTemplate_projectId_idx" ON "QueryTemplate"("projectId")');
   queryTemplateSchemaReady = true;
+}
+
+async function ensureGeoCampaignSchema() {
+  if (geoCampaignSchemaReady) return;
+  await ensureProjectSchema();
+  await geoCampaignQuery('CREATE TABLE IF NOT EXISTS "GeoCampaign" ("id" TEXT PRIMARY KEY, "projectId" TEXT NOT NULL, "name" TEXT NOT NULL, "industry" TEXT NOT NULL, "businessDescription" TEXT NOT NULL DEFAULT \'\', "goal" TEXT NOT NULL DEFAULT \'\', "platforms" JSONB NOT NULL DEFAULT \'[]\'::jsonb, "queryCount" INTEGER NOT NULL DEFAULT 0, "status" TEXT NOT NULL DEFAULT \'ACTIVE\', "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
+  await geoCampaignQuery('CREATE INDEX IF NOT EXISTS "GeoCampaign_projectId_idx" ON "GeoCampaign"("projectId")');
+  await geoQueryQuery('CREATE TABLE IF NOT EXISTS "GeoQuery" ("id" TEXT PRIMARY KEY, "campaignId" TEXT NOT NULL, "query" TEXT NOT NULL, "category" TEXT NOT NULL, "intent" TEXT NOT NULL, "priority" TEXT NOT NULL, "status" TEXT NOT NULL DEFAULT \'MONITORING\', "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
+  await geoQueryQuery('CREATE INDEX IF NOT EXISTS "GeoQuery_campaignId_idx" ON "GeoQuery"("campaignId")');
+  geoCampaignSchemaReady = true;
 }
 
 async function ensureEntitySchema() {
@@ -712,6 +773,93 @@ export const prisma = {
     async deleteByProjectId({ where }: { where: { projectId: string } }) {
       await ensureOptimizationTaskSchema();
       return { count: (await optimizationTaskQuery('DELETE FROM "OptimizationTask" WHERE "projectId" = $1 RETURNING "id"', [where.projectId])).length };
+    },
+  },
+  geoCampaign: {
+    async findManyForUser({ where }: { where: { userId: string; projectId?: string } }) {
+      await ensureGeoCampaignSchema();
+      const rows = where.projectId
+        ? await geoCampaignQuery('SELECT gc.* FROM "GeoCampaign" gc INNER JOIN "Project" p ON p."id" = gc."projectId" WHERE p."userId" = $1 AND gc."projectId" = $2 ORDER BY gc."createdAt" DESC', [where.userId, where.projectId])
+        : await geoCampaignQuery('SELECT gc.* FROM "GeoCampaign" gc INNER JOIN "Project" p ON p."id" = gc."projectId" WHERE p."userId" = $1 ORDER BY gc."createdAt" DESC', [where.userId]);
+      return rows.map((row) => normalizeGeoCampaignRow(row));
+    },
+    async findFirstForUser({ where }: { where: { id: string; userId: string } }) {
+      await ensureGeoCampaignSchema();
+      return normalizeGeoCampaignRow((await geoCampaignQuery('SELECT gc.* FROM "GeoCampaign" gc INNER JOIN "Project" p ON p."id" = gc."projectId" WHERE gc."id" = $1 AND p."userId" = $2 LIMIT 1', [where.id, where.userId]))[0] ?? null);
+    },
+    async create({ data }: { data: Data }) {
+      await ensureGeoCampaignSchema();
+      const now = new Date();
+      return normalizeGeoCampaignRow((await geoCampaignQuery('INSERT INTO "GeoCampaign" ("id", "projectId", "name", "industry", "businessDescription", "goal", "platforms", "queryCount", "status", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11) RETURNING *', [
+        data.id ?? createId(),
+        data.projectId,
+        data.name,
+        data.industry,
+        data.businessDescription ?? "",
+        data.goal ?? "",
+        JSON.stringify(data.platforms ?? []),
+        data.queryCount ?? 0,
+        data.status ?? "ACTIVE",
+        now,
+        now,
+      ]))[0]);
+    },
+    async update({ where, data }: { where: { id: string; userId: string }; data: Data }) {
+      await ensureGeoCampaignSchema();
+      const { sql, values } = assignments(data, 1);
+      return normalizeGeoCampaignRow((await geoCampaignQuery(`UPDATE "GeoCampaign" gc SET ${sql}, "updatedAt" = $${values.length + 1} FROM "Project" p WHERE gc."id" = $${values.length + 2} AND gc."projectId" = p."id" AND p."userId" = $${values.length + 3} RETURNING gc.*`, [...values, new Date(), where.id, where.userId]))[0] ?? null);
+    },
+  },
+  geoQuery: {
+    async findManyForUser({ where }: { where: { userId: string; campaignIds?: string[]; campaignId?: string; projectId?: string } }) {
+      await ensureGeoCampaignSchema();
+      if (where.campaignIds && where.campaignIds.length === 0) return [];
+      const rows = where.campaignIds
+        ? await geoQueryQuery('SELECT gq.* FROM "GeoQuery" gq INNER JOIN "GeoCampaign" gc ON gc."id" = gq."campaignId" INNER JOIN "Project" p ON p."id" = gc."projectId" WHERE p."userId" = $1 AND gq."campaignId" = ANY($2::text[]) ORDER BY gq."createdAt" DESC', [where.userId, where.campaignIds])
+        : where.campaignId
+          ? await geoQueryQuery('SELECT gq.* FROM "GeoQuery" gq INNER JOIN "GeoCampaign" gc ON gc."id" = gq."campaignId" INNER JOIN "Project" p ON p."id" = gc."projectId" WHERE p."userId" = $1 AND gq."campaignId" = $2 ORDER BY gq."createdAt" DESC', [where.userId, where.campaignId])
+          : where.projectId
+            ? await geoQueryQuery('SELECT gq.* FROM "GeoQuery" gq INNER JOIN "GeoCampaign" gc ON gc."id" = gq."campaignId" INNER JOIN "Project" p ON p."id" = gc."projectId" WHERE p."userId" = $1 AND gc."projectId" = $2 ORDER BY gq."createdAt" DESC', [where.userId, where.projectId])
+            : await geoQueryQuery('SELECT gq.* FROM "GeoQuery" gq INNER JOIN "GeoCampaign" gc ON gc."id" = gq."campaignId" INNER JOIN "Project" p ON p."id" = gc."projectId" WHERE p."userId" = $1 ORDER BY gq."createdAt" DESC', [where.userId]);
+      return rows.map((row) => normalizeGeoQueryRow(row));
+    },
+    async findFirstForUser({ where }: { where: { id: string; userId: string; campaignId?: string } }) {
+      await ensureGeoCampaignSchema();
+      const rows = where.campaignId
+        ? await geoQueryQuery('SELECT gq.* FROM "GeoQuery" gq INNER JOIN "GeoCampaign" gc ON gc."id" = gq."campaignId" INNER JOIN "Project" p ON p."id" = gc."projectId" WHERE gq."id" = $1 AND gq."campaignId" = $2 AND p."userId" = $3 LIMIT 1', [where.id, where.campaignId, where.userId])
+        : await geoQueryQuery('SELECT gq.* FROM "GeoQuery" gq INNER JOIN "GeoCampaign" gc ON gc."id" = gq."campaignId" INNER JOIN "Project" p ON p."id" = gc."projectId" WHERE gq."id" = $1 AND p."userId" = $2 LIMIT 1', [where.id, where.userId]);
+      return normalizeGeoQueryRow(rows[0] ?? null);
+    },
+    async create({ data }: { data: Data }) {
+      await ensureGeoCampaignSchema();
+      return normalizeGeoQueryRow((await geoQueryQuery('INSERT INTO "GeoQuery" ("id", "campaignId", "query", "category", "intent", "priority", "status", "createdAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *', [
+        data.id ?? createId(),
+        data.campaignId,
+        data.query,
+        data.category,
+        data.intent,
+        data.priority ?? "medium",
+        data.status ?? "MONITORING",
+        new Date(),
+      ]))[0]);
+    },
+    async createMany({ data }: { data: Data[] }) {
+      await ensureGeoCampaignSchema();
+      const rows: GeoQueryRow[] = [];
+      for (const item of data) {
+        const row = await geoQueryQuery('INSERT INTO "GeoQuery" ("id", "campaignId", "query", "category", "intent", "priority", "status", "createdAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *', [
+          item.id ?? createId(),
+          item.campaignId,
+          item.query,
+          item.category,
+          item.intent,
+          item.priority ?? "medium",
+          item.status ?? "MONITORING",
+          new Date(),
+        ]);
+        rows.push(normalizeGeoQueryRow(row[0]));
+      }
+      return rows;
     },
   },
   queryTemplate: {

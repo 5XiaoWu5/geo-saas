@@ -20,7 +20,7 @@ export const mainNavItems: NavItem[] = [
   { titleKey: "nav.siteInventory", href: "/inventory", icon: Boxes },
   { titleKey: "nav.analyzer", href: "/analyzer", icon: Sparkles },
   { titleKey: "nav.entity", href: "/entity", icon: Building2 },
-  { titleKey: "nav.queryGenerator", href: "/query-generator", icon: MessagesSquare },
+  { titleKey: "nav.campaigns", href: "/campaigns", icon: MessagesSquare },
   { titleKey: "nav.optimization", href: "/optimization", icon: ClipboardList },
   { titleKey: "nav.visibility", href: "/visibility", icon: Eye },
   { titleKey: "nav.monitoring", href: "/monitoring", icon: Activity },

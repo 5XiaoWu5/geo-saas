@@ -117,6 +117,7 @@ model Project {
   queryTemplates QueryTemplate[]
   entityProfiles EntityProfile[]
   geoBrainAnalyses GeoBrainAnalysis[]
+  geoCampaigns GeoCampaign[]
 
   @@index([userId])
 }
@@ -248,6 +249,40 @@ model EntityAttribute {
   entity EntityProfile @relation(fields: [entityId], references: [id], onDelete: Cascade)
 
   @@index([entityId])
+}
+
+model GeoCampaign {
+  id                  String   @id @default(cuid())
+  projectId           String
+  name                String
+  industry            String
+  businessDescription String
+  goal                String
+  platforms           Json
+  queryCount          Int      @default(0)
+  status              String   @default("ACTIVE")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  queries GeoQuery[]
+
+  @@index([projectId])
+}
+
+model GeoQuery {
+  id        String   @id @default(cuid())
+  campaignId String
+  query     String
+  category  String
+  intent    String
+  priority  String
+  status    String   @default("MONITORING")
+  createdAt DateTime @default(now())
+
+  campaign GeoCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
 }
 
 model VisibilityCampaign {
