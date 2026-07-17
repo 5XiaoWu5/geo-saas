@@ -7,19 +7,29 @@ export type VisibilityCampaign = {
   createdAt: string;
 };
 
+export type VisibilityPrompt = {
+  id: string;
+  campaignId: string;
+  prompt: string;
+  createdAt: string;
+};
+
 export type VisibilityCheck = {
   id: string;
   campaignId: string;
+  promptId: string | null;
   provider: string;
   prompt: string;
   answer: string;
   brandMentioned: boolean;
-  position: number | null;
+  mentionPosition: number | null;
+  sourceUrls: string[];
   score: number;
   createdAt: string;
 };
 
 export type VisibilityCampaignWithChecks = VisibilityCampaign & {
+  prompts: VisibilityPrompt[];
   checks: VisibilityCheck[];
   latestCheck: VisibilityCheck | null;
 };
@@ -32,8 +42,11 @@ export type VisibilityResponse = {
   campaigns: VisibilityCampaignWithChecks[];
   summary: {
     totalCampaigns: number;
+    totalPrompts: number;
     totalChecks: number;
-    mentionedChecks: number;
+    aiAppearances: number;
+    brandMentionRate: number;
+    averageMentionPosition: number | null;
     averageScore: number;
   };
   error?: string;

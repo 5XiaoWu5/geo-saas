@@ -9,11 +9,14 @@ export const dynamic = "force-dynamic";
 
 const createCheckSchema = z.object({
   campaignId: z.string().min(1),
+  promptId: z.string().min(1).nullable().optional(),
+  prompt: z.string().trim().max(2000).optional(),
   provider: z.string().trim().min(1, "请选择目标 AI").max(80),
-  prompt: z.string().trim().min(1, "检测 Prompt 不能为空").max(2000),
   answer: z.string().trim().min(1, "检测答案不能为空").max(10000),
   brandMentioned: z.boolean(),
+  mentionPosition: z.number().int().min(1).max(100).nullable().optional(),
   position: z.number().int().min(1).max(100).nullable().optional(),
+  sourceUrls: z.array(z.string().trim().url("来源链接格式无效").max(500)).max(20).optional(),
   score: z.number().int().min(0).max(100),
 });
 
@@ -27,14 +30,27 @@ export async function POST(request: Request) {
   const campaign = await prisma.visibilityCampaign.findFirstForUser({ where: { id: parsed.data.campaignId, userId: user.id } });
   if (!campaign) return NextResponse.json({ error: "监控关键词不存在或无权访问" }, { status: 404 });
 
+  const prompt = parsed.data.promptId
+    ? await prisma.visibilityPrompt.findFirstForUser({ where: { id: parsed.data.promptId, campaignId: campaign.id, userId: user.id } })
+    : null;
+  if (parsed.data.promptId && !prompt) return NextResponse.json({ error: "Prompt 不存在或无权访问" }, { status: 404 });
+
+  const promptText = prompt?.prompt ?? parsed.data.prompt?.trim() ?? "";
+  if (!promptText) return NextResponse.json({ error: "Prompt 不能为空" }, { status: 400 });
+
+  const mentionPosition = parsed.data.brandMentioned ? parsed.data.mentionPosition ?? parsed.data.position ?? null : null;
+  const sourceUrls = parsed.data.sourceUrls?.map((url) => url.trim()).filter(Boolean) ?? [];
+
   const check = await prisma.visibilityCheck.create({
     data: {
       campaignId: campaign.id,
+      promptId: prompt?.id ?? null,
       provider: parsed.data.provider,
-      prompt: parsed.data.prompt,
+      prompt: promptText,
       answer: parsed.data.answer,
       brandMentioned: parsed.data.brandMentioned,
-      position: parsed.data.brandMentioned ? parsed.data.position ?? null : null,
+      mentionPosition,
+      sourceUrls,
       score: parsed.data.score,
     },
   });

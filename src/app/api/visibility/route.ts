@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/features/auth/server/session";
 import { prisma } from "@/features/auth/server/prisma";
 import { toProject } from "@/features/projects/project-mapper";
-import { toVisibilityCampaign, toVisibilityCheck } from "@/features/visibility/mapper";
+import { toVisibilityCampaign, toVisibilityCheck, toVisibilityPrompt } from "@/features/visibility/mapper";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,10 +19,24 @@ async function requireUser() {
   return { user, response: null };
 }
 
-function buildSummary(checks: ReturnType<typeof toVisibilityCheck>[], campaignCount: number) {
-  const mentionedChecks = checks.filter((check) => check.brandMentioned).length;
+function buildSummary(checks: ReturnType<typeof toVisibilityCheck>[], campaignCount: number, promptCount: number) {
+  const aiAppearances = checks.filter((check) => check.brandMentioned).length;
   const averageScore = checks.length ? Math.round(checks.reduce((total, check) => total + check.score, 0) / checks.length) : 0;
-  return { totalCampaigns: campaignCount, totalChecks: checks.length, mentionedChecks, averageScore };
+  const mentionPositions = checks
+    .map((check) => check.mentionPosition)
+    .filter((position): position is number => typeof position === "number" && Number.isFinite(position));
+  const averageMentionPosition = mentionPositions.length ? Math.round(mentionPositions.reduce((total, position) => total + position, 0) / mentionPositions.length) : null;
+  const brandMentionRate = checks.length ? Math.round((aiAppearances / checks.length) * 100) : 0;
+
+  return {
+    totalCampaigns: campaignCount,
+    totalPrompts: promptCount,
+    totalChecks: checks.length,
+    aiAppearances,
+    brandMentionRate,
+    averageMentionPosition,
+    averageScore,
+  };
 }
 
 export async function GET(request: Request) {
@@ -40,14 +54,21 @@ export async function GET(request: Request) {
       projects: [],
       selectedProjectId: null,
       campaigns: [],
-      summary: buildSummary([], 0),
+      summary: buildSummary([], 0, 0),
     });
   }
 
   const campaignRows = await prisma.visibilityCampaign.findManyForUser({ where: { userId: user.id, projectId: selectedProjectId } });
   const campaigns = campaignRows.map(toVisibilityCampaign);
-  const checks = (await prisma.visibilityCheck.findManyForUser({ where: { userId: user.id, campaignIds: campaigns.map((campaign) => campaign.id) } })).map(toVisibilityCheck);
+  const campaignIds = campaigns.map((campaign) => campaign.id);
+  const prompts = (await prisma.visibilityPrompt.findManyForUser({ where: { userId: user.id, campaignIds } })).map(toVisibilityPrompt);
+  const checks = (await prisma.visibilityCheck.findManyForUser({ where: { userId: user.id, campaignIds } })).map(toVisibilityCheck);
+  const promptsByCampaignId = new Map<string, typeof prompts>();
   const checksByCampaignId = new Map<string, typeof checks>();
+
+  for (const prompt of prompts) {
+    promptsByCampaignId.set(prompt.campaignId, [...(promptsByCampaignId.get(prompt.campaignId) ?? []), prompt]);
+  }
 
   for (const check of checks) {
     checksByCampaignId.set(check.campaignId, [...(checksByCampaignId.get(check.campaignId) ?? []), check]);
@@ -57,10 +78,11 @@ export async function GET(request: Request) {
     projects: projects.map((project) => ({ id: project.id, name: project.name, websiteUrl: project.websiteUrl })),
     selectedProjectId,
     campaigns: campaigns.map((campaign) => {
+      const campaignPrompts = promptsByCampaignId.get(campaign.id) ?? [];
       const campaignChecks = checksByCampaignId.get(campaign.id) ?? [];
-      return { ...campaign, checks: campaignChecks, latestCheck: campaignChecks[0] ?? null };
+      return { ...campaign, prompts: campaignPrompts, checks: campaignChecks, latestCheck: campaignChecks[0] ?? null };
     }),
-    summary: buildSummary(checks, campaigns.length),
+    summary: buildSummary(checks, campaigns.length, prompts.length),
   });
 }
 

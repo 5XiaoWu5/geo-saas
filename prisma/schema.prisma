@@ -113,6 +113,7 @@ model Project {
   websiteScans WebsiteScan[]
   geoAnalyses  GeoAnalysis[]
   optimizationTasks OptimizationTask[]
+  visibilityCampaigns VisibilityCampaign[]
 
   @@index([userId])
 }
@@ -186,23 +187,40 @@ model VisibilityCampaign {
   createdAt DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  prompts VisibilityPrompt[]
   checks  VisibilityCheck[]
 
   @@index([projectId])
 }
 
+model VisibilityPrompt {
+  id         String   @id @default(cuid())
+  campaignId String
+  prompt     String
+  createdAt  DateTime @default(now())
+
+  campaign VisibilityCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  checks   VisibilityCheck[]
+
+  @@index([campaignId])
+}
+
 model VisibilityCheck {
   id             String   @id @default(cuid())
   campaignId     String
+  promptId       String?
   provider       String
   prompt         String
   answer         String
   brandMentioned Boolean  @default(false)
-  position       Int?
+  mentionPosition Int?
+  sourceUrls     String[] @default([])
   score          Int      @default(0)
   createdAt      DateTime @default(now())
 
   campaign VisibilityCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  visibilityPrompt VisibilityPrompt? @relation(fields: [promptId], references: [id], onDelete: SetNull)
 
   @@index([campaignId])
+  @@index([promptId])
 }

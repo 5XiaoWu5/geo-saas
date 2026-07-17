@@ -93,14 +93,24 @@ type VisibilityCampaignRow = Record<string, unknown> & {
   createdAt: Date;
 };
 
+type VisibilityPromptRow = Record<string, unknown> & {
+  id: string;
+  campaignId: string;
+  prompt: string;
+  createdAt: Date;
+};
+
 type VisibilityCheckRow = Record<string, unknown> & {
   id: string;
   campaignId: string;
+  promptId: string | null;
   provider: string;
   prompt: string;
   answer: string;
   brandMentioned: boolean;
-  position: number | null;
+  mentionPosition: number | null;
+  position?: number | null;
+  sourceUrls: string[];
   score: number;
   createdAt: Date;
 };
@@ -143,6 +153,11 @@ async function optimizationTaskQuery(sqlText: string, params: unknown[] = []): P
 async function visibilityCampaignQuery(sqlText: string, params: unknown[] = []): Promise<VisibilityCampaignRow[]> {
   const sql = getSql();
   return (await sql.query(sqlText, params)) as VisibilityCampaignRow[];
+}
+
+async function visibilityPromptQuery(sqlText: string, params: unknown[] = []): Promise<VisibilityPromptRow[]> {
+  const sql = getSql();
+  return (await sql.query(sqlText, params)) as VisibilityPromptRow[];
 }
 
 async function visibilityCheckQuery(sqlText: string, params: unknown[] = []): Promise<VisibilityCheckRow[]> {
@@ -207,9 +222,16 @@ function normalizeVisibilityCampaignRow<T extends VisibilityCampaignRow | null>(
   return row;
 }
 
+function normalizeVisibilityPromptRow<T extends VisibilityPromptRow | null>(row: T): T {
+  if (!row) return row;
+  if (row.createdAt && !(row.createdAt instanceof Date)) row.createdAt = new Date(row.createdAt as string);
+  return row;
+}
+
 function normalizeVisibilityCheckRow<T extends VisibilityCheckRow | null>(row: T): T {
   if (!row) return row;
   if (row.createdAt && !(row.createdAt instanceof Date)) row.createdAt = new Date(row.createdAt as string);
+  if (!Array.isArray(row.sourceUrls)) row.sourceUrls = [];
   return row;
 }
 
@@ -267,8 +289,15 @@ async function ensureVisibilitySchema() {
   await ensureProjectSchema();
   await visibilityCampaignQuery('CREATE TABLE IF NOT EXISTS "VisibilityCampaign" ("id" TEXT PRIMARY KEY, "projectId" TEXT NOT NULL, "keyword" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
   await visibilityCampaignQuery('CREATE INDEX IF NOT EXISTS "VisibilityCampaign_projectId_idx" ON "VisibilityCampaign"("projectId")');
-  await visibilityCheckQuery('CREATE TABLE IF NOT EXISTS "VisibilityCheck" ("id" TEXT PRIMARY KEY, "campaignId" TEXT NOT NULL, "provider" TEXT NOT NULL, "prompt" TEXT NOT NULL, "answer" TEXT NOT NULL, "brandMentioned" BOOLEAN NOT NULL DEFAULT false, "position" INTEGER, "score" INTEGER NOT NULL DEFAULT 0, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
+  await visibilityPromptQuery('CREATE TABLE IF NOT EXISTS "VisibilityPrompt" ("id" TEXT PRIMARY KEY, "campaignId" TEXT NOT NULL, "prompt" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
+  await visibilityPromptQuery('CREATE INDEX IF NOT EXISTS "VisibilityPrompt_campaignId_idx" ON "VisibilityPrompt"("campaignId")');
+  await visibilityCheckQuery('CREATE TABLE IF NOT EXISTS "VisibilityCheck" ("id" TEXT PRIMARY KEY, "campaignId" TEXT NOT NULL, "promptId" TEXT, "provider" TEXT NOT NULL, "prompt" TEXT NOT NULL, "answer" TEXT NOT NULL, "brandMentioned" BOOLEAN NOT NULL DEFAULT false, "mentionPosition" INTEGER, "sourceUrls" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[], "score" INTEGER NOT NULL DEFAULT 0, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
+  await visibilityCheckQuery('ALTER TABLE "VisibilityCheck" ADD COLUMN IF NOT EXISTS "promptId" TEXT');
+  await visibilityCheckQuery('ALTER TABLE "VisibilityCheck" ADD COLUMN IF NOT EXISTS "mentionPosition" INTEGER');
+  await visibilityCheckQuery('ALTER TABLE "VisibilityCheck" ADD COLUMN IF NOT EXISTS "sourceUrls" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]');
+  await visibilityCheckQuery('DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = \'VisibilityCheck\' AND column_name = \'position\') THEN UPDATE "VisibilityCheck" SET "mentionPosition" = "position" WHERE "mentionPosition" IS NULL; END IF; END $$;');
   await visibilityCheckQuery('CREATE INDEX IF NOT EXISTS "VisibilityCheck_campaignId_idx" ON "VisibilityCheck"("campaignId")');
+  await visibilityCheckQuery('CREATE INDEX IF NOT EXISTS "VisibilityCheck_promptId_idx" ON "VisibilityCheck"("promptId")');
   visibilitySchemaReady = true;
 }
 
@@ -526,6 +555,29 @@ export const prisma = {
       return normalizeVisibilityCampaignRow((await visibilityCampaignQuery('SELECT vc.* FROM "VisibilityCampaign" vc INNER JOIN "Project" p ON p."id" = vc."projectId" WHERE vc."id" = $1 AND p."userId" = $2 LIMIT 1', [where.id, where.userId]))[0] ?? null);
     },
   },
+  visibilityPrompt: {
+    async findManyForUser({ where }: { where: { userId: string; campaignIds?: string[]; projectId?: string } }) {
+      await ensureVisibilitySchema();
+      if (where.campaignIds && where.campaignIds.length === 0) return [];
+      const rows = where.campaignIds
+        ? await visibilityPromptQuery('SELECT vp.* FROM "VisibilityPrompt" vp INNER JOIN "VisibilityCampaign" c ON c."id" = vp."campaignId" INNER JOIN "Project" p ON p."id" = c."projectId" WHERE p."userId" = $1 AND vp."campaignId" = ANY($2::text[]) ORDER BY vp."createdAt" DESC', [where.userId, where.campaignIds])
+        : where.projectId
+          ? await visibilityPromptQuery('SELECT vp.* FROM "VisibilityPrompt" vp INNER JOIN "VisibilityCampaign" c ON c."id" = vp."campaignId" INNER JOIN "Project" p ON p."id" = c."projectId" WHERE p."userId" = $1 AND c."projectId" = $2 ORDER BY vp."createdAt" DESC', [where.userId, where.projectId])
+          : await visibilityPromptQuery('SELECT vp.* FROM "VisibilityPrompt" vp INNER JOIN "VisibilityCampaign" c ON c."id" = vp."campaignId" INNER JOIN "Project" p ON p."id" = c."projectId" WHERE p."userId" = $1 ORDER BY vp."createdAt" DESC', [where.userId]);
+      return rows.map((row) => normalizeVisibilityPromptRow(row));
+    },
+    async findFirstForUser({ where }: { where: { id: string; userId: string; campaignId?: string } }) {
+      await ensureVisibilitySchema();
+      const rows = where.campaignId
+        ? await visibilityPromptQuery('SELECT vp.* FROM "VisibilityPrompt" vp INNER JOIN "VisibilityCampaign" c ON c."id" = vp."campaignId" INNER JOIN "Project" p ON p."id" = c."projectId" WHERE vp."id" = $1 AND vp."campaignId" = $2 AND p."userId" = $3 LIMIT 1', [where.id, where.campaignId, where.userId])
+        : await visibilityPromptQuery('SELECT vp.* FROM "VisibilityPrompt" vp INNER JOIN "VisibilityCampaign" c ON c."id" = vp."campaignId" INNER JOIN "Project" p ON p."id" = c."projectId" WHERE vp."id" = $1 AND p."userId" = $2 LIMIT 1', [where.id, where.userId]);
+      return normalizeVisibilityPromptRow(rows[0] ?? null);
+    },
+    async create({ data }: { data: Data }) {
+      await ensureVisibilitySchema();
+      return normalizeVisibilityPromptRow((await visibilityPromptQuery('INSERT INTO "VisibilityPrompt" ("id", "campaignId", "prompt", "createdAt") VALUES ($1, $2, $3, $4) RETURNING *', [data.id ?? createId(), data.campaignId, data.prompt, new Date()]))[0]);
+    },
+  },
   visibilityCheck: {
     async findManyForUser({ where }: { where: { userId: string; projectId?: string; campaignIds?: string[] } }) {
       await ensureVisibilitySchema();
@@ -539,14 +591,16 @@ export const prisma = {
     },
     async create({ data }: { data: Data }) {
       await ensureVisibilitySchema();
-      return normalizeVisibilityCheckRow((await visibilityCheckQuery('INSERT INTO "VisibilityCheck" ("id", "campaignId", "provider", "prompt", "answer", "brandMentioned", "position", "score", "createdAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *', [
+      return normalizeVisibilityCheckRow((await visibilityCheckQuery('INSERT INTO "VisibilityCheck" ("id", "campaignId", "promptId", "provider", "prompt", "answer", "brandMentioned", "mentionPosition", "sourceUrls", "score", "createdAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::text[], $10, $11) RETURNING *', [
         data.id ?? createId(),
         data.campaignId,
+        data.promptId ?? null,
         data.provider,
         data.prompt,
         data.answer,
         data.brandMentioned ?? false,
-        data.position ?? null,
+        data.mentionPosition ?? null,
+        data.sourceUrls ?? [],
         data.score ?? 0,
         new Date(),
       ]))[0]);

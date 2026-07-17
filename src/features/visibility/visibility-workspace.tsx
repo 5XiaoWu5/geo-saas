@@ -3,8 +3,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Bot, CheckCircle2, Eye, FileSearch, Loader2, Plus, Radar, Target } from "lucide-react";
-import type { VisibilityCampaignWithChecks, VisibilityCheck, VisibilityResponse } from "@/features/visibility/types";
+import { AlertCircle, Bot, CheckCircle2, Eye, FileSearch, LinkIcon, Loader2, Plus, Radar, Target } from "lucide-react";
+import type { VisibilityCampaignWithChecks, VisibilityCheck, VisibilityPrompt, VisibilityResponse } from "@/features/visibility/types";
 import { PageHeader } from "@/components/shared/page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDateTime, getHostname } from "@/lib/format";
 
-const AI_PROVIDERS = ["ChatGPT", "Gemini", "Claude", "Perplexity", "AI Overview"];
+const AI_PROVIDERS = ["ChatGPT", "Claude", "Gemini", "Perplexity", "AI Overview"];
 
 async function readJson<T>(response: Response): Promise<T> {
   const text = await response.text();
@@ -25,19 +25,29 @@ async function readJson<T>(response: Response): Promise<T> {
   return data;
 }
 
+function splitSourceUrls(value: string) {
+  return value
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: string }) {
   const [data, setData] = useState<VisibilityResponse | null>(null);
   const [projectId, setProjectId] = useState(initialProjectId ?? "");
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
+  const [selectedPromptId, setSelectedPromptId] = useState("");
   const [keyword, setKeyword] = useState("");
+  const [newPrompt, setNewPrompt] = useState("");
   const [provider, setProvider] = useState(AI_PROVIDERS[0]);
-  const [prompt, setPrompt] = useState("");
   const [answer, setAnswer] = useState("");
   const [brandMentioned, setBrandMentioned] = useState(false);
-  const [position, setPosition] = useState("");
+  const [mentionPosition, setMentionPosition] = useState("");
+  const [sourceUrlsText, setSourceUrlsText] = useState("");
   const [score, setScore] = useState("0");
   const [loading, setLoading] = useState(true);
   const [savingKeyword, setSavingKeyword] = useState(false);
+  const [savingPrompt, setSavingPrompt] = useState(false);
   const [savingCheck, setSavingCheck] = useState(false);
   const [error, setError] = useState("");
 
@@ -45,14 +55,22 @@ export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: s
     setError("");
     const suffix = id ? `?projectId=${encodeURIComponent(id)}` : "";
     const result = await readJson<VisibilityResponse>(await fetch(`/api/visibility${suffix}`, { cache: "no-store" }));
+    const nextProjectId = result.selectedProjectId ?? "";
+    const nextCampaignId = result.campaigns[0]?.id ?? "";
+    const nextPromptId = result.campaigns[0]?.prompts[0]?.id ?? "";
+
     setData(result);
-    setProjectId(result.selectedProjectId ?? "");
-    setSelectedCampaignId((current) => (current && result.campaigns.some((campaign) => campaign.id === current) ? current : result.campaigns[0]?.id ?? ""));
+    setProjectId(nextProjectId);
+    setSelectedCampaignId((current) => (current && result.campaigns.some((campaign) => campaign.id === current) ? current : nextCampaignId));
+    setSelectedPromptId((current) => {
+      const promptExists = result.campaigns.some((campaign) => campaign.prompts.some((prompt) => prompt.id === current));
+      return promptExists ? current : nextPromptId;
+    });
   }, []);
 
   useEffect(() => {
     let mounted = true;
-    loadVisibility(projectId || initialProjectId)
+    loadVisibility(initialProjectId)
       .catch((requestError) => {
         if (mounted) setError(requestError instanceof Error ? requestError.message : "AI 可见性数据加载失败");
       })
@@ -62,11 +80,15 @@ export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: s
     return () => {
       mounted = false;
     };
-  }, [initialProjectId, loadVisibility, projectId]);
+  }, [initialProjectId, loadVisibility]);
 
   const selectedCampaign = useMemo(
     () => data?.campaigns.find((campaign) => campaign.id === selectedCampaignId) ?? data?.campaigns[0] ?? null,
     [data?.campaigns, selectedCampaignId],
+  );
+  const selectedPrompt = useMemo(
+    () => selectedCampaign?.prompts.find((prompt) => prompt.id === selectedPromptId) ?? selectedCampaign?.prompts[0] ?? null,
+    [selectedCampaign, selectedPromptId],
   );
 
   async function createCampaign(event: React.FormEvent<HTMLFormElement>) {
@@ -91,9 +113,31 @@ export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: s
     }
   }
 
-  async function saveCheck(event: React.FormEvent<HTMLFormElement>) {
+  async function createPrompt(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedCampaign) return;
+    setSavingPrompt(true);
+    setError("");
+    try {
+      await readJson<{ prompt: VisibilityPrompt }>(
+        await fetch("/api/visibility/prompts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ campaignId: selectedCampaign.id, prompt: newPrompt }),
+        }),
+      );
+      setNewPrompt("");
+      await loadVisibility(projectId);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "创建 Prompt 失败");
+    } finally {
+      setSavingPrompt(false);
+    }
+  }
+
+  async function saveCheck(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedCampaign || !selectedPrompt) return;
     setSavingCheck(true);
     setError("");
     try {
@@ -103,19 +147,21 @@ export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: s
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             campaignId: selectedCampaign.id,
+            promptId: selectedPrompt.id,
+            prompt: selectedPrompt.prompt,
             provider,
-            prompt,
             answer,
             brandMentioned,
-            position: brandMentioned && position ? Number(position) : null,
+            mentionPosition: brandMentioned && mentionPosition ? Number(mentionPosition) : null,
+            sourceUrls: splitSourceUrls(sourceUrlsText),
             score: Number(score),
           }),
         }),
       );
-      setPrompt("");
       setAnswer("");
       setBrandMentioned(false);
-      setPosition("");
+      setMentionPosition("");
+      setSourceUrlsText("");
       setScore("0");
       await loadVisibility(projectId);
     } catch (requestError) {
@@ -128,7 +174,7 @@ export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: s
   if (loading) {
     return (
       <div>
-        <PageHeader title="AI 可见性监控" description="记录关键词在不同 AI 回答中的品牌出现、位置和可见性评分。" />
+        <PageHeader title="AI 可见性监控" description="正在加载真实关键词、Prompt 和检测记录。" />
         <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> 正在加载真实监控数据...
         </div>
@@ -153,7 +199,7 @@ export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: s
 
   return (
     <div className="space-y-6">
-      <PageHeader title="AI 可见性监控" description="不调用外部模型，先用真实数据库建立关键词、目标 AI 和检测记录的监控基础。" />
+      <PageHeader title="AI 可见性监控" description="用人工检测流程跟踪关键词在 ChatGPT、Claude、Gemini 等回答中的品牌曝光，不调用外部 AI API。" />
 
       {error ? (
         <div className="flex gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
@@ -173,20 +219,17 @@ export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: s
       ) : (
         <>
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <SummaryCard icon={<Target className="h-5 w-5" />} label="关键词数" value={`${data?.summary.totalCampaigns ?? 0}`} description="当前项目的监控关键词" />
-            <SummaryCard icon={<FileSearch className="h-5 w-5" />} label="检测记录" value={`${data?.summary.totalChecks ?? 0}`} description="手动保存的 AI 回答记录" />
-            <SummaryCard icon={<CheckCircle2 className="h-5 w-5" />} label="品牌出现" value={`${data?.summary.mentionedChecks ?? 0}`} description="检测中出现品牌的次数" />
-            <SummaryCard icon={<Radar className="h-5 w-5" />} label="平均可见性" value={`${data?.summary.averageScore ?? 0}`} suffix="/100" description="检测记录平均评分" />
+            <SummaryCard icon={<Eye className="h-5 w-5" />} label="AI 出现次数" value={`${data?.summary.aiAppearances ?? 0}`} description={`来自 ${data?.summary.totalChecks ?? 0} 条真实检测记录`} />
+            <SummaryCard icon={<Radar className="h-5 w-5" />} label="品牌出现率" value={`${data?.summary.brandMentionRate ?? 0}`} suffix="%" description="品牌出现次数 / 总检测次数" />
+            <SummaryCard icon={<Target className="h-5 w-5" />} label="平均排名" value={data?.summary.averageMentionPosition ? `${data.summary.averageMentionPosition}` : "-"} description="仅统计已出现品牌的检测记录" />
+            <SummaryCard icon={<FileSearch className="h-5 w-5" />} label="Prompt 数" value={`${data?.summary.totalPrompts ?? 0}`} description={`${data?.summary.totalCampaigns ?? 0} 个关键词监控`} />
           </section>
 
           <div className="flex flex-wrap gap-2">
             {projects.map((project) => (
               <button
                 key={project.id}
-                onClick={() => {
-                  setProjectId(project.id);
-                  void loadVisibility(project.id);
-                }}
+                onClick={() => void loadVisibility(project.id)}
                 className={`rounded-xl border px-4 py-2 text-sm transition ${project.id === projectId ? "border-primary/40 bg-primary/15 text-primary" : "border-white/10 bg-white/[0.03] text-muted-foreground hover:text-foreground"}`}
               >
                 {project.name}
@@ -210,26 +253,35 @@ export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: s
             <Card className="glass-panel border-white/10">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <Plus className="h-5 w-5 text-primary" /> 创建关键词监控
+                  <Plus className="h-5 w-5 text-primary" /> 关键词列表
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <form onSubmit={(event) => void createCampaign(event)} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="visibility-keyword">关键词</Label>
-                    <Input id="visibility-keyword" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="例如：best GEO platform for SaaS" required />
+                    <Input id="visibility-keyword" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="例如：广州展示柜厂家" required />
                   </div>
                   <Button type="submit" disabled={savingKeyword || !projectId}>
-                    {savingKeyword ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} 添加监控
+                    {savingKeyword ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} 添加关键词
                   </Button>
                 </form>
 
                 <div className="mt-6 space-y-3">
-                  <p className="text-sm font-medium text-foreground">关键词列表</p>
                   {(data?.campaigns.length ?? 0) === 0 ? (
                     <p className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-muted-foreground">暂无关键词。先添加一个关键词监控。</p>
                   ) : (
-                    data?.campaigns.map((campaign) => <CampaignRow key={campaign.id} campaign={campaign} active={campaign.id === selectedCampaign?.id} onSelect={() => setSelectedCampaignId(campaign.id)} />)
+                    data?.campaigns.map((campaign) => (
+                      <CampaignRow
+                        key={campaign.id}
+                        campaign={campaign}
+                        active={campaign.id === selectedCampaign?.id}
+                        onSelect={() => {
+                          setSelectedCampaignId(campaign.id);
+                          setSelectedPromptId(campaign.prompts[0]?.id ?? "");
+                        }}
+                      />
+                    ))
                   )}
                 </div>
               </CardContent>
@@ -238,55 +290,92 @@ export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: s
             <Card className="glass-panel border-white/10">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <Bot className="h-5 w-5 text-primary" /> 保存检测结果
+                  <Bot className="h-5 w-5 text-primary" /> Prompt 管理
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {!selectedCampaign ? (
-                  <p className="text-sm text-muted-foreground">选择或创建关键词后，可以保存一次 AI 回答检测结果。</p>
+                  <p className="text-sm text-muted-foreground">选择或创建关键词后，可以为它维护多个真实查询问题。</p>
                 ) : (
-                  <form onSubmit={(event) => void saveCheck(event)} className="space-y-4">
+                  <div className="space-y-5">
                     <div className="rounded-2xl border border-primary/20 bg-primary/[0.06] p-3 text-sm">
                       当前关键词：<span className="font-medium text-primary">{selectedCampaign.keyword}</span>
                     </div>
-                    <div className="grid gap-4 sm:grid-cols-2">
+
+                    <form onSubmit={(event) => void createPrompt(event)} className="space-y-3">
                       <div className="space-y-2">
-                        <Label htmlFor="visibility-provider">监控目标 AI</Label>
-                        <Select id="visibility-provider" value={provider} onChange={(event) => setProvider(event.target.value)}>
-                          {AI_PROVIDERS.map((item) => <option key={item} value={item}>{item}</option>)}
-                        </Select>
+                        <Label htmlFor="visibility-new-prompt">新增 Prompt</Label>
+                        <Textarea id="visibility-new-prompt" value={newPrompt} onChange={(event) => setNewPrompt(event.target.value)} placeholder="例如：推荐广州展示柜厂家有哪些？" required />
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="visibility-score">可见性评分</Label>
-                        <Input id="visibility-score" type="number" min={0} max={100} value={score} onChange={(event) => setScore(event.target.value)} required />
-                      </div>
+                      <Button type="submit" disabled={savingPrompt}>
+                        {savingPrompt ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} 添加 Prompt
+                      </Button>
+                    </form>
+
+                    <div className="space-y-3">
+                      {selectedCampaign.prompts.length === 0 ? (
+                        <p className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-muted-foreground">暂无 Prompt。添加 Prompt 后即可记录不同 AI 的人工检测结果。</p>
+                      ) : (
+                        selectedCampaign.prompts.map((prompt) => (
+                          <PromptRow key={prompt.id} prompt={prompt} active={prompt.id === selectedPrompt?.id} onSelect={() => setSelectedPromptId(prompt.id)} />
+                        ))
+                      )}
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="visibility-prompt">Prompt</Label>
-                      <Textarea id="visibility-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="记录用于检测的真实问题" required />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="visibility-answer">AI 回答</Label>
-                      <Textarea id="visibility-answer" value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="粘贴目标 AI 的回答内容；系统不会调用外部模型" required />
-                    </div>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <label className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm">
-                        <input type="checkbox" checked={brandMentioned} onChange={(event) => setBrandMentioned(event.target.checked)} />
-                        品牌已出现
-                      </label>
-                      <div className="space-y-2">
-                        <Label htmlFor="visibility-position">出现位置</Label>
-                        <Input id="visibility-position" type="number" min={1} max={100} value={position} onChange={(event) => setPosition(event.target.value)} disabled={!brandMentioned} placeholder="例如：1" />
-                      </div>
-                    </div>
-                    <Button type="submit" disabled={savingCheck}>
-                      {savingCheck ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} 保存检测
-                    </Button>
-                  </form>
+                  </div>
                 )}
               </CardContent>
             </Card>
           </section>
+
+          <Card className="glass-panel border-white/10">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <CheckCircle2 className="h-5 w-5 text-primary" /> 保存检测结果
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!selectedCampaign || !selectedPrompt ? (
+                <p className="text-sm text-muted-foreground">请先选择关键词并添加 Prompt，再保存 ChatGPT / Claude / Gemini 等目标 AI 的人工检测结果。</p>
+              ) : (
+                <form onSubmit={(event) => void saveCheck(event)} className="space-y-4">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm text-muted-foreground">
+                    <span className="font-medium text-foreground">检测 Prompt：</span>{selectedPrompt.prompt}
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="visibility-provider">目标 AI</Label>
+                      <Select id="visibility-provider" value={provider} onChange={(event) => setProvider(event.target.value)}>
+                        {AI_PROVIDERS.map((item) => <option key={item} value={item}>{item}</option>)}
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="visibility-score">可见性评分</Label>
+                      <Input id="visibility-score" type="number" min={0} max={100} value={score} onChange={(event) => setScore(event.target.value)} required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="visibility-position">出现位置</Label>
+                      <Input id="visibility-position" type="number" min={1} max={100} value={mentionPosition} onChange={(event) => setMentionPosition(event.target.value)} disabled={!brandMentioned} placeholder="例如：1" />
+                    </div>
+                    <label className="flex min-h-10 items-center gap-2 rounded-md border border-input bg-background/60 px-3 py-2 text-sm">
+                      <input type="checkbox" checked={brandMentioned} onChange={(event) => setBrandMentioned(event.target.checked)} />
+                      品牌已出现
+                    </label>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="visibility-answer">AI 回答</Label>
+                    <Textarea id="visibility-answer" value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="粘贴目标 AI 的真实回答；系统不会调用外部模型" required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="visibility-sources">来源链接</Label>
+                    <Textarea id="visibility-sources" value={sourceUrlsText} onChange={(event) => setSourceUrlsText(event.target.value)} placeholder="每行一个 URL，记录 AI 回答引用或推荐的来源页面" />
+                  </div>
+                  <Button type="submit" disabled={savingCheck}>
+                    {savingCheck ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} 保存检测
+                  </Button>
+                </form>
+              )}
+            </CardContent>
+          </Card>
 
           <Card className="glass-panel border-white/10">
             <CardHeader>
@@ -296,7 +385,7 @@ export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: s
             </CardHeader>
             <CardContent className="space-y-3">
               {checks.length === 0 ? (
-                <p className="text-sm text-muted-foreground">暂无检测记录。保存一次检测后，这里会显示品牌出现状态、位置和可见性评分。</p>
+                <p className="text-sm text-muted-foreground">暂无检测记录。保存一次检测后，这里会显示品牌出现状态、排名、来源链接和可见性评分。</p>
               ) : (
                 checks.map((check) => <CheckRow key={check.id} check={check} campaign={data?.campaigns.find((campaign) => campaign.id === check.campaignId)} />)
               )}
@@ -329,9 +418,21 @@ function CampaignRow({ campaign, active, onSelect }: { campaign: VisibilityCampa
           <p className="break-words text-sm font-medium text-foreground">{campaign.keyword}</p>
           <p className="mt-1 text-xs text-muted-foreground">创建于 {formatDateTime(campaign.createdAt)}</p>
         </div>
-        <Badge variant={campaign.latestCheck?.brandMentioned ? "success" : "muted"}>{campaign.checks.length} 次检测</Badge>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="outline">{campaign.prompts.length} Prompt</Badge>
+          <Badge variant={campaign.latestCheck?.brandMentioned ? "success" : "muted"}>{campaign.checks.length} 检测</Badge>
+        </div>
       </div>
       <Progress value={campaign.latestCheck?.score ?? 0} className="mt-3" />
+    </button>
+  );
+}
+
+function PromptRow({ prompt, active, onSelect }: { prompt: VisibilityPrompt; active: boolean; onSelect: () => void }) {
+  return (
+    <button onClick={onSelect} className={`w-full rounded-2xl border p-4 text-left transition ${active ? "border-primary/40 bg-primary/10" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.05]"}`}>
+      <p className="break-words text-sm font-medium text-foreground">{prompt.prompt}</p>
+      <p className="mt-2 text-xs text-muted-foreground">创建于 {formatDateTime(prompt.createdAt)}</p>
     </button>
   );
 }
@@ -347,11 +448,20 @@ function CheckRow({ check, campaign }: { check: VisibilityCheck; campaign?: Visi
         <div className="flex flex-wrap gap-2">
           <Badge variant={check.brandMentioned ? "success" : "warning"}>{check.brandMentioned ? "品牌出现" : "未出现"}</Badge>
           <Badge variant="outline">评分 {check.score}</Badge>
-          {check.position ? <Badge variant="outline">位置 {check.position}</Badge> : null}
+          {check.mentionPosition ? <Badge variant="outline">位置 {check.mentionPosition}</Badge> : null}
         </div>
       </div>
       <p className="mt-3 break-words text-sm text-muted-foreground">Prompt：{check.prompt}</p>
       <p className="mt-2 break-words text-sm text-foreground">{check.answer}</p>
+      {check.sourceUrls.length > 0 ? (
+        <div className="mt-3 flex flex-col gap-2">
+          {check.sourceUrls.map((url) => (
+            <a key={url} href={url} target="_blank" rel="noreferrer" className="inline-flex min-w-0 items-center gap-2 break-all text-xs text-primary hover:underline">
+              <LinkIcon className="h-3.5 w-3.5 shrink-0" /> {url}
+            </a>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
