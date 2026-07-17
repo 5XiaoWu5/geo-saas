@@ -4,30 +4,35 @@ import { prisma } from "@/features/auth/server/prisma";
 import { toProject } from "@/features/projects/project-mapper";
 import { toGeoAnalysis } from "@/features/geo-analysis/server/analysis-mapper";
 import type { GeoAnalysis } from "@/features/geo-analysis/types";
+import { toGeoBrainAnalysis } from "@/features/geo-brain/mapper";
+import type { GeoBrainAnalysis } from "@/features/geo-brain/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type AnalyzedProject = { projectId: string; projectName: string; websiteUrl: string; analysis: GeoAnalysis };
+type AnalyzedProject = { projectId: string; projectName: string; websiteUrl: string; analysis: GeoAnalysis; brainAnalysis: GeoBrainAnalysis | null };
 
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "请先登录" }, { status: 401 });
 
-  const [projects, analysesRows] = await Promise.all([
+  const [projects, analysesRows, brainRows] = await Promise.all([
     prisma.project.findMany({ where: { userId: user.id } }),
     prisma.geoAnalysis.findLatestForUser({ where: { userId: user.id } }),
+    prisma.geoBrainAnalysis.findLatestForUser({ where: { userId: user.id } }),
   ]);
 
   const projectList = projects.map(toProject);
   const analyses = analysesRows.map((row) => toGeoAnalysis(row));
+  const brainAnalyses = brainRows.map((row) => toGeoBrainAnalysis(row));
   const projectById = new Map(projectList.map((project) => [project.id, project]));
+  const brainByProjectId = new Map(brainAnalyses.map((analysis) => [analysis.projectId, analysis]));
 
   const analyzedProjects = analyses
     .map((analysis) => {
       const project = projectById.get(analysis.projectId);
       if (!project) return null;
-      return { projectId: project.id, projectName: project.name, websiteUrl: project.websiteUrl, analysis };
+      return { projectId: project.id, projectName: project.name, websiteUrl: project.websiteUrl, analysis, brainAnalysis: brainByProjectId.get(project.id) ?? null };
     })
     .filter((item): item is AnalyzedProject => item !== null)
     .sort((left, right) => new Date(right.analysis.createdAt).getTime() - new Date(left.analysis.createdAt).getTime());

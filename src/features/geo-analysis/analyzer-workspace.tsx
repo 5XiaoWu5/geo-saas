@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -6,12 +6,15 @@ import { useEffect, useState } from "react";
 import { AlertCircle, ArrowRight, BarChart3, CheckCircle2, ClipboardList, Layers3, Loader2, Sparkles, Target } from "lucide-react";
 import type { GeoAnalysis, GeoIssue } from "@/features/geo-analysis/types";
 import { buildOptimizationSuggestions, categoryLabel, diagnoseIssues, type DiagnosedIssue, type OptimizationSuggestion } from "@/features/geo-analysis/recommendations";
+import { GeoBrainScoreCard } from "@/features/geo-brain/components/GeoBrainScoreCard";
+import type { GeoBrainAnalysis } from "@/features/geo-brain/types";
 import { ComingSoon, PageHeader } from "@/components/shared/page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { formatDateTime, getHostname } from "@/lib/format";
+import { useI18n } from "@/i18n/provider";
 
 type AnalyzerSummary = {
   totalScore: number;
@@ -27,6 +30,7 @@ type AnalyzedProject = {
   projectName: string;
   websiteUrl: string;
   analysis: GeoAnalysis;
+  brainAnalysis: GeoBrainAnalysis | null;
 };
 
 type AnalyzerResponse = {
@@ -51,6 +55,8 @@ export function AnalyzerWorkspace() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [brainLoading, setBrainLoading] = useState(false);
+  const { t } = useI18n();
 
   useEffect(() => {
     let mounted = true;
@@ -119,6 +125,29 @@ export function AnalyzerWorkspace() {
   const activeProject = data.projects.find((project) => project.projectId === selectedProjectId) ?? data.projects[0];
   const diagnosed = diagnoseIssues(activeProject.analysis.issues);
   const suggestions = buildOptimizationSuggestions(activeProject.analysis.issues);
+  const geoBrainAnalysis = activeProject.brainAnalysis ?? null;
+
+  async function runGeoBrain() {
+    setBrainLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/geo-brain/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: activeProject.projectId }),
+      });
+      const text = await response.text();
+      const payload = text ? (JSON.parse(text) as { error?: string }) : {};
+      if (!response.ok) throw new Error(payload.error ?? "GEO Brain failed");
+      const refreshed = await loadAnalyzer();
+      setData(refreshed);
+      setSelectedProjectId(activeProject.projectId);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "GEO Brain failed");
+    } finally {
+      setBrainLoading(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -171,9 +200,14 @@ export function AnalyzerWorkspace() {
             <Button asChild size="sm">
               <Link href={`/optimization?projectId=${activeProject.projectId}`}>进入优化中心 <ClipboardList className="h-4 w-4" /></Link>
             </Button>
+            <Button onClick={() => void runGeoBrain()} size="sm" variant="outline" disabled={brainLoading}>
+              {brainLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} {t("geoBrain.runAnalysis")}
+            </Button>
           </div>
         </CardHeader>
       </Card>
+
+      <GeoBrainScoreCard analysis={geoBrainAnalysis} />
 
       <section className="grid gap-6 xl:grid-cols-2">
         <Card className="glass-panel border-white/10">

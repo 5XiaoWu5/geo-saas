@@ -73,6 +73,21 @@ type GeoAnalysisRow = Record<string, unknown> & {
   createdAt: Date;
 };
 
+type GeoBrainAnalysisRow = Record<string, unknown> & {
+  id: string;
+  projectId: string;
+  score: number;
+  scoreDetails: unknown;
+  insights: unknown;
+  problems: unknown;
+  recommendations: unknown;
+  aiSummary: string;
+  provider: string;
+  model: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 type OptimizationTaskRow = Record<string, unknown> & {
   id: string;
   projectId: string;
@@ -180,6 +195,11 @@ async function geoAnalysisQuery(sqlText: string, params: unknown[] = []): Promis
   return (await sql.query(sqlText, params)) as GeoAnalysisRow[];
 }
 
+async function geoBrainAnalysisQuery(sqlText: string, params: unknown[] = []): Promise<GeoBrainAnalysisRow[]> {
+  const sql = getSql();
+  return (await sql.query(sqlText, params)) as GeoBrainAnalysisRow[];
+}
+
 async function optimizationTaskQuery(sqlText: string, params: unknown[] = []): Promise<OptimizationTaskRow[]> {
   const sql = getSql();
   return (await sql.query(sqlText, params)) as OptimizationTaskRow[];
@@ -258,6 +278,27 @@ function normalizeGeoAnalysisRow<T extends GeoAnalysisRow | null>(row: T): T {
   return row;
 }
 
+function normalizeGeoBrainAnalysisRow<T extends GeoBrainAnalysisRow | null>(row: T): T {
+  if (!row) return row;
+  for (const key of ["createdAt", "updatedAt"]) {
+    if (row[key] && !(row[key] instanceof Date)) row[key] = new Date(row[key] as string);
+  }
+  for (const key of ["scoreDetails", "insights", "problems", "recommendations"]) {
+    if (typeof row[key] === "string") {
+      try {
+        row[key] = JSON.parse(row[key] as string);
+      } catch {
+        row[key] = key === "scoreDetails" ? {} : [];
+      }
+    }
+  }
+  if (!row.scoreDetails || typeof row.scoreDetails !== "object" || Array.isArray(row.scoreDetails)) row.scoreDetails = {};
+  if (!Array.isArray(row.insights)) row.insights = [];
+  if (!Array.isArray(row.problems)) row.problems = [];
+  if (!Array.isArray(row.recommendations)) row.recommendations = [];
+  return row;
+}
+
 function normalizeOptimizationTaskRow<T extends OptimizationTaskRow | null>(row: T): T {
   if (!row) return row;
   for (const key of ["createdAt", "updatedAt"]) {
@@ -313,6 +354,7 @@ function normalizeVisibilityCheckRow<T extends VisibilityCheckRow | null>(row: T
 let projectSchemaReady = false;
 let websiteScanSchemaReady = false;
 let geoAnalysisSchemaReady = false;
+let geoBrainAnalysisSchemaReady = false;
 let optimizationTaskSchemaReady = false;
 let queryTemplateSchemaReady = false;
 let entitySchemaReady = false;
@@ -350,6 +392,17 @@ async function ensureGeoAnalysisSchema() {
   await geoAnalysisQuery('CREATE INDEX IF NOT EXISTS "GeoAnalysis_projectId_idx" ON "GeoAnalysis"("projectId")');
   await geoAnalysisQuery('CREATE INDEX IF NOT EXISTS "GeoAnalysis_scanId_idx" ON "GeoAnalysis"("scanId")');
   geoAnalysisSchemaReady = true;
+}
+
+async function ensureGeoBrainAnalysisSchema() {
+  if (geoBrainAnalysisSchemaReady) return;
+  await ensureProjectSchema();
+  await geoBrainAnalysisQuery('CREATE TABLE IF NOT EXISTS "GeoBrainAnalysis" ("id" TEXT PRIMARY KEY, "projectId" TEXT NOT NULL, "score" INTEGER NOT NULL, "scoreDetails" JSONB NOT NULL DEFAULT \'{}\'::jsonb, "insights" JSONB NOT NULL DEFAULT \'[]\'::jsonb, "problems" JSONB NOT NULL DEFAULT \'[]\'::jsonb, "recommendations" JSONB NOT NULL DEFAULT \'[]\'::jsonb, "aiSummary" TEXT NOT NULL DEFAULT \'\', "provider" TEXT NOT NULL, "model" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
+  await geoBrainAnalysisQuery('ALTER TABLE "GeoBrainAnalysis" ADD COLUMN IF NOT EXISTS "scoreDetails" JSONB NOT NULL DEFAULT \'{}\'::jsonb');
+  await geoBrainAnalysisQuery('ALTER TABLE "GeoBrainAnalysis" ADD COLUMN IF NOT EXISTS "problems" JSONB NOT NULL DEFAULT \'[]\'::jsonb');
+  await geoBrainAnalysisQuery('ALTER TABLE "GeoBrainAnalysis" ADD COLUMN IF NOT EXISTS "aiSummary" TEXT NOT NULL DEFAULT \'\'');
+  await geoBrainAnalysisQuery('CREATE INDEX IF NOT EXISTS "GeoBrainAnalysis_projectId_idx" ON "GeoBrainAnalysis"("projectId")');
+  geoBrainAnalysisSchemaReady = true;
 }
 
 async function ensureOptimizationTaskSchema() {
@@ -591,6 +644,34 @@ export const prisma = {
         data.technicalScore ?? 0,
         data.contentScore ?? 0,
         issues,
+      ]))[0]);
+    },
+  },
+  geoBrainAnalysis: {
+    async findLatestForProject({ where }: { where: { projectId: string; userId: string } }) {
+      await ensureGeoBrainAnalysisSchema();
+      return normalizeGeoBrainAnalysisRow((await geoBrainAnalysisQuery('SELECT gba.* FROM "GeoBrainAnalysis" gba INNER JOIN "Project" p ON p."id" = gba."projectId" WHERE gba."projectId" = $1 AND p."userId" = $2 ORDER BY gba."createdAt" DESC LIMIT 1', [where.projectId, where.userId]))[0] ?? null);
+    },
+    async findLatestForUser({ where }: { where: { userId: string } }) {
+      await ensureGeoBrainAnalysisSchema();
+      return (await geoBrainAnalysisQuery('SELECT DISTINCT ON (gba."projectId") gba.* FROM "GeoBrainAnalysis" gba INNER JOIN "Project" p ON p."id" = gba."projectId" WHERE p."userId" = $1 ORDER BY gba."projectId", gba."createdAt" DESC', [where.userId])).map((row) => normalizeGeoBrainAnalysisRow(row));
+    },
+    async create({ data }: { data: Data }) {
+      await ensureGeoBrainAnalysisSchema();
+      const now = new Date();
+      return normalizeGeoBrainAnalysisRow((await geoBrainAnalysisQuery('INSERT INTO "GeoBrainAnalysis" ("id", "projectId", "score", "scoreDetails", "insights", "problems", "recommendations", "aiSummary", "provider", "model", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9, $10, $11, $12) RETURNING *', [
+        data.id ?? createId(),
+        data.projectId,
+        data.score ?? 0,
+        JSON.stringify(data.scoreDetails ?? {}),
+        JSON.stringify(data.insights ?? []),
+        JSON.stringify(data.problems ?? []),
+        JSON.stringify(data.recommendations ?? []),
+        data.aiSummary ?? "",
+        data.provider ?? "local",
+        data.model ?? "geo-brain-rules",
+        now,
+        now,
       ]))[0]);
     },
   },

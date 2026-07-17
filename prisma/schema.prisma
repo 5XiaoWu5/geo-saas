@@ -116,6 +116,7 @@ model Project {
   visibilityCampaigns VisibilityCampaign[]
   queryTemplates QueryTemplate[]
   entityProfiles EntityProfile[]
+  geoBrainAnalyses GeoBrainAnalysis[]
 
   @@index([userId])
 }
@@ -161,6 +162,25 @@ model GeoAnalysis {
 
   @@index([projectId])
   @@index([scanId])
+}
+
+model GeoBrainAnalysis {
+  id              String   @id @default(cuid())
+  projectId       String
+  score           Int
+  scoreDetails    Json     @default("{}")
+  insights        Json
+  problems        Json     @default("[]")
+  recommendations Json
+  aiSummary       String   @default("")
+  provider        String
+  model           String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
 }
 
 model OptimizationTask {

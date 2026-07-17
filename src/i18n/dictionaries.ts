@@ -1,4 +1,4 @@
-export const locales = ["zh", "en"] as const;
+﻿export const locales = ["zh", "en"] as const;
 export type Locale = (typeof locales)[number];
 
 export const defaultLocale: Locale = "zh";
@@ -209,6 +209,25 @@ export const zh = {
     recommendedReason: "推荐原因",
     notRecommendedReason: "未推荐原因",
     sourceInventory: "读取 Site Inventory 数据",
+  },
+  geoBrain: {
+    title: "GEO AI Brain",
+    description: "真实 AI 推理分析引擎，会整合抓取、实体和权威信号。",
+    geoScore: "GEO Score",
+    entityAuthority: "Entity Authority",
+    contentStructure: "Content Structure",
+    schemaCoverage: "Schema Coverage",
+    authoritySignal: "Authority Signal",
+    citationPotential: "AI Citation Potential",
+    insights: "AI Insights",
+    problems: "Problems",
+    recommendations: "Recommendations",
+    aiSummary: "AI Summary",
+    provider: "Provider",
+    model: "Model",
+    runAnalysis: "Run GEO Brain",
+    loading: "Running GEO Brain...",
+    notConfigured: "AI provider not configured; using live rule-based inference.",
   },
   visibility: {
     title: "AI 可见性监控",
