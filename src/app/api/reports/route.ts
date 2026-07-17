@@ -7,6 +7,8 @@ import { toWebsiteScan } from "@/features/website-crawl/server/scan-mapper";
 import { toOptimizationTask } from "@/features/optimization/mapper";
 import { toSimulationResult, toSimulationTask } from "@/features/ai-search-simulator/simulator.service";
 import type { SimulationRecord } from "@/features/ai-search-simulator/types";
+import { toGrowthSnapshot } from "@/features/growth/snapshot.service";
+import { buildGrowthTrend } from "@/features/growth/trend-engine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,11 +17,12 @@ export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "请先登录" }, { status: 401 });
 
-  const [projectRows, analysisRows, scanRows, simulationTaskRows] = await Promise.all([
+  const [projectRows, analysisRows, scanRows, simulationTaskRows, growthRows] = await Promise.all([
     prisma.project.findMany({ where: { userId: user.id } }),
     prisma.geoAnalysis.findLatestForUser({ where: { userId: user.id } }),
     prisma.websiteScan.findManyForUser({ where: { userId: user.id } }),
     prisma.simulationTask.findManyForUser({ where: { userId: user.id, limit: 200 } }),
+    prisma.growthSnapshot.findManyForUser({ where: { userId: user.id, limit: 1000 } }),
   ]);
 
   const projects = projectRows.map(toProject);
@@ -35,6 +38,7 @@ export async function GET() {
   const analysisByProjectId = new Map(analyses.map((analysis) => [analysis.projectId, analysis]));
   const latestScanByProjectId = new Map(scans.map((scan) => [scan.projectId, scan]));
   const taskMap = new Map(tasksByProject);
+  const growthSnapshots = growthRows.map(toGrowthSnapshot);
   const simulationResultRows = await prisma.simulationResult.findManyForTasks({ where: { taskIds: simulationTaskRows.map((row) => String(row.id)) } });
   const simulationResultByTaskId = new Map(simulationResultRows.map((row) => {
     const result = toSimulationResult(row);
@@ -64,6 +68,7 @@ export async function GET() {
         scan,
         analysis,
         latestSimulation: latestSimulationByProjectId.get(project.id) ?? null,
+        growthTrend: buildGrowthTrend(growthSnapshots.filter((snapshot) => snapshot.projectId === project.id), "30d"),
         optimization: {
           totalTasks: tasks.length,
           completedTasks,

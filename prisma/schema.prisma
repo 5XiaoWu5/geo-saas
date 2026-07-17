@@ -3,6 +3,21 @@ generator client {
   engineType = "client"
 }
 
+enum GrowthEventType {
+  SCAN
+  ENTITY
+  SIMULATION
+  VISIBILITY
+  OPTIMIZATION
+}
+
+enum GrowthTriggerType {
+  MANUAL
+  AUTO
+  SCHEDULE
+  API
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -119,6 +134,7 @@ model Project {
   geoBrainAnalyses    GeoBrainAnalysis[]
   geoCampaigns        GeoCampaign[]
   simulationTasks     SimulationTask[]
+  growthSnapshots     GrowthSnapshot[]
 
   @@index([userId])
 }
@@ -268,6 +284,7 @@ model GeoCampaign {
   project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   queries         GeoQuery[]
   simulationTasks SimulationTask[]
+  growthSnapshots GrowthSnapshot[]
 
   @@index([projectId])
 }
@@ -324,9 +341,37 @@ model SimulationResult {
   missing        Json
   createdAt      DateTime @default(now())
 
-  task SimulationTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  task            SimulationTask   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  growthSnapshots GrowthSnapshot[]
 
   @@index([taskId])
+}
+
+model GrowthSnapshot {
+  id              String            @id @default(cuid())
+  projectId       String
+  campaignId      String?
+  simulationId    String?
+  eventType       GrowthEventType
+  triggerType     GrowthTriggerType @default(AUTO)
+  sourceId        String
+  visibilityScore Int?
+  entityScore     Int?
+  schemaScore     Int?
+  authorityScore  Int?
+  citationScore   Int?
+  overallScore    Int?
+  metadata        Json              @default("{}")
+  createdAt       DateTime          @default(now())
+
+  project    Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  campaign   GeoCampaign?      @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  simulation SimulationResult? @relation(fields: [simulationId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, eventType, sourceId])
+  @@index([projectId])
+  @@index([campaignId])
+  @@index([simulationId])
 }
 
 model VisibilityCampaign {

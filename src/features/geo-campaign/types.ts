@@ -79,6 +79,11 @@ export type GeoCampaignWithRelations = GeoCampaign & {
   latestCheck: VisibilityCheck | null;
   trend: VisibilityTrendPoint[];
   score: GeoCampaignScore;
+  growthImpact: {
+    snapshotCount: number;
+    visibilityChange: number | null;
+    overallChange: number | null;
+  };
 };
 
 export type GeoCampaignSummary = {
@@ -119,4 +124,3 @@ export type GeoCampaignCreateInput = {
   platforms: GeoCampaignPlatform[];
   queryCount: number;
 };
-

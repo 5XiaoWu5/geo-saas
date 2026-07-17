@@ -8,21 +8,25 @@ import { toGeoBrainAnalysis } from "@/features/geo-brain/mapper";
 import type { GeoBrainAnalysis } from "@/features/geo-brain/types";
 import { toSimulationResult, toSimulationTask } from "@/features/ai-search-simulator/simulator.service";
 import type { SimulationRecord } from "@/features/ai-search-simulator/types";
+import { toGrowthSnapshot } from "@/features/growth/snapshot.service";
+import { buildGrowthTrend } from "@/features/growth/trend-engine";
+import type { GrowthTrend } from "@/features/growth/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type AnalyzedProject = { projectId: string; projectName: string; websiteUrl: string; analysis: GeoAnalysis; brainAnalysis: GeoBrainAnalysis | null; latestSimulation: SimulationRecord | null };
+type AnalyzedProject = { projectId: string; projectName: string; websiteUrl: string; analysis: GeoAnalysis; brainAnalysis: GeoBrainAnalysis | null; latestSimulation: SimulationRecord | null; growthTrend: GrowthTrend };
 
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "请先登录" }, { status: 401 });
 
-  const [projects, analysesRows, brainRows, simulationTaskRows] = await Promise.all([
+  const [projects, analysesRows, brainRows, simulationTaskRows, growthRows] = await Promise.all([
     prisma.project.findMany({ where: { userId: user.id } }),
     prisma.geoAnalysis.findLatestForUser({ where: { userId: user.id } }),
     prisma.geoBrainAnalysis.findLatestForUser({ where: { userId: user.id } }),
     prisma.simulationTask.findManyForUser({ where: { userId: user.id, limit: 200 } }),
+    prisma.growthSnapshot.findManyForUser({ where: { userId: user.id, limit: 1000 } }),
   ]);
 
   const projectList = projects.map(toProject);
@@ -30,6 +34,7 @@ export async function GET() {
   const brainAnalyses = brainRows.map((row) => toGeoBrainAnalysis(row));
   const projectById = new Map(projectList.map((project) => [project.id, project]));
   const brainByProjectId = new Map(brainAnalyses.map((analysis) => [analysis.projectId, analysis]));
+  const growthSnapshots = growthRows.map(toGrowthSnapshot);
   const simulationResultRows = await prisma.simulationResult.findManyForTasks({ where: { taskIds: simulationTaskRows.map((row) => String(row.id)) } });
   const simulationResultByTaskId = new Map(simulationResultRows.map((row) => {
     const result = toSimulationResult(row);
@@ -48,7 +53,7 @@ export async function GET() {
     .map((analysis) => {
       const project = projectById.get(analysis.projectId);
       if (!project) return null;
-      return { projectId: project.id, projectName: project.name, websiteUrl: project.websiteUrl, analysis, brainAnalysis: brainByProjectId.get(project.id) ?? null, latestSimulation: latestSimulationByProjectId.get(project.id) ?? null };
+      return { projectId: project.id, projectName: project.name, websiteUrl: project.websiteUrl, analysis, brainAnalysis: brainByProjectId.get(project.id) ?? null, latestSimulation: latestSimulationByProjectId.get(project.id) ?? null, growthTrend: buildGrowthTrend(growthSnapshots.filter((snapshot) => snapshot.projectId === project.id), "30d") };
     })
     .filter((item): item is AnalyzedProject => item !== null)
     .sort((left, right) => new Date(right.analysis.createdAt).getTime() - new Date(left.analysis.createdAt).getTime());

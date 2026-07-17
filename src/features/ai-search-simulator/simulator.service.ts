@@ -22,6 +22,7 @@ import {
   type SimulatorWorkspaceResponse,
 } from "./types";
 import { calculateSimulationTrend } from "./visibility-engine";
+import { captureGrowthSnapshot } from "@/features/growth/snapshot.service";
 
 export class SimulatorServiceError extends Error {
   constructor(message: string, readonly status: number) {
@@ -217,6 +218,7 @@ export async function runSimulation(userId: string, input: RunSimulationInput) {
       });
       const result = toSimulationResult(await prisma.simulationResult.create({ data: { taskId: task.id, ...resultDraft } }));
       const completedTask = toSimulationTask(await prisma.simulationTask.updateStatus({ where: { id: task.id, userId }, data: { status: "COMPLETED" } }));
+      await captureGrowthSnapshot(userId, { projectId: task.projectId, eventType: "SIMULATION", sourceId: result.id, triggerType: "AUTO" });
       records.push({ ...completedTask, result, trend: null });
     } catch {
       const failedTask = await prisma.simulationTask.updateStatus({ where: { id: task.id, userId }, data: { status: "FAILED" } });

@@ -3,8 +3,9 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { AlertCircle, ArrowRight, BarChart3, CheckCircle2, ClipboardList, FlaskConical, Layers3, Loader2, Sparkles, Target } from "lucide-react";
+import { AlertCircle, ArrowRight, BarChart3, CheckCircle2, ClipboardList, FlaskConical, Layers3, Loader2, Sparkles, Target, TrendingUp } from "lucide-react";
 import type { SimulationRecord } from "@/features/ai-search-simulator/types";
+import type { GrowthTrend } from "@/features/growth/types";
 import type { GeoAnalysis, GeoIssue } from "@/features/geo-analysis/types";
 import { buildOptimizationSuggestions, categoryLabel, diagnoseIssues, type DiagnosedIssue, type OptimizationSuggestion } from "@/features/geo-analysis/recommendations";
 import { GeoBrainScoreCard } from "@/features/geo-brain/components/GeoBrainScoreCard";
@@ -33,6 +34,7 @@ type AnalyzedProject = {
   analysis: GeoAnalysis;
   brainAnalysis: GeoBrainAnalysis | null;
   latestSimulation: SimulationRecord | null;
+  growthTrend: GrowthTrend;
 };
 
 type AnalyzerResponse = {
@@ -225,6 +227,16 @@ export function AnalyzerWorkspace() {
           </CardContent>
         </Card>
       ) : null}
+
+      <Card className="glass-panel border-white/10">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div><CardTitle className="flex items-center gap-2 text-lg"><TrendingUp className="h-5 w-5 text-primary" />{t("growth.analyzerTitle")}</CardTitle><p className="mt-1 text-sm text-muted-foreground">{t("growth.ranges.30d")}</p></div>
+          <Button asChild variant="outline" size="sm"><Link href={`/project/${activeProject.projectId}/growth`}>{t("growth.viewGrowth")} <ArrowRight className="h-4 w-4" /></Link></Button>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {activeProject.growthTrend.deltas.slice(0, 4).map((delta) => <div key={delta.key} className="rounded-xl border border-white/10 bg-white/[0.03] p-4"><p className="text-xs text-muted-foreground">{t(`growth.metrics.${delta.key}`)}</p><p className={delta.change === null ? "mt-2 font-mono text-xl text-muted-foreground" : delta.change >= 0 ? "mt-2 font-mono text-xl text-emerald-400" : "mt-2 font-mono text-xl text-rose-400"}>{delta.change === null ? t("growth.unavailable") : `${delta.change > 0 ? "+" : ""}${delta.change}`}</p></div>)}
+        </CardContent>
+      </Card>
 
       <section className="grid gap-6 xl:grid-cols-2">
         <Card className="glass-panel border-white/10">

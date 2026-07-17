@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   Sparkles,
   Target,
+  TrendingUp,
 } from "lucide-react";
 import { useProject } from "@/features/project-center/context/ProjectContext";
 import { getProjectStatusLabel } from "@/features/projects/project-mapper";
@@ -194,6 +195,11 @@ export function ProjectOverviewTab() {
             <Button asChild variant="outline">
               <Link href={`/project/${project.id}/simulator`}>
                 <FlaskConical className="h-4 w-4" /> {t("simulator.title")}
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href={`/project/${project.id}/growth`}>
+                <TrendingUp className="h-4 w-4" /> {t("growth.title")}
               </Link>
             </Button>
           </div>

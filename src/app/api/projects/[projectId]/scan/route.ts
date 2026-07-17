@@ -5,18 +5,19 @@ import { analyzeWebsiteScan } from "@/features/geo-analysis/server/analyzer";
 import { toGeoAnalysis } from "@/features/geo-analysis/server/analysis-mapper";
 import { crawlWebsite } from "@/features/website-crawl/server/crawler";
 import { toWebsiteScan } from "@/features/website-crawl/server/scan-mapper";
+import { captureGrowthSnapshot } from "@/features/growth/snapshot.service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 async function requireOwnedProject(projectId: string) {
   const user = await getCurrentUser();
-  if (!user) return { project: null, response: NextResponse.json({ error: "请先登录" }, { status: 401 }) };
+  if (!user) return { user: null, project: null, response: NextResponse.json({ error: "请先登录" }, { status: 401 }) };
 
   const project = await prisma.project.findFirst({ where: { id: projectId, userId: user.id } });
-  if (!project) return { project: null, response: NextResponse.json({ error: "项目不存在或无权访问" }, { status: 404 }) };
+  if (!project) return { user, project: null, response: NextResponse.json({ error: "项目不存在或无权访问" }, { status: 404 }) };
 
-  return { project, response: null };
+  return { user, project, response: null };
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ projectId: string }> }) {
@@ -35,7 +36,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pro
 
 export async function POST(_request: Request, { params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
-  const { project, response } = await requireOwnedProject(projectId);
+  const { user, project, response } = await requireOwnedProject(projectId);
   if (response) return response;
 
   const startedScan = await prisma.websiteScan.create({
@@ -86,6 +87,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ pr
         status: "Monitoring",
       },
     });
+
+    await captureGrowthSnapshot(user.id, { projectId: project.id, eventType: "SCAN", sourceId: String(analysis.id), triggerType: "AUTO" });
 
     return NextResponse.json({
       scan: normalizedScan,

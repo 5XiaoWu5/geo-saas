@@ -218,6 +218,24 @@ type SimulationResultRow = Record<string, unknown> & {
   createdAt: Date;
 };
 
+type GrowthSnapshotRow = Record<string, unknown> & {
+  id: string;
+  projectId: string;
+  campaignId: string | null;
+  simulationId: string | null;
+  eventType: string;
+  triggerType: string;
+  sourceId: string;
+  visibilityScore: number | null;
+  entityScore: number | null;
+  schemaScore: number | null;
+  authorityScore: number | null;
+  citationScore: number | null;
+  overallScore: number | null;
+  metadata: unknown;
+  createdAt: Date;
+};
+
 const fallbackDatabaseUrl = "postgresql://postgres:postgres@127.0.0.1:5432/geopilot_ai";
 
 if (!process.env.DATABASE_URL) {
@@ -306,6 +324,11 @@ async function simulationTaskQuery(sqlText: string, params: unknown[] = []): Pro
 async function simulationResultQuery(sqlText: string, params: unknown[] = []): Promise<SimulationResultRow[]> {
   const sql = getSql();
   return (await sql.query(sqlText, params)) as SimulationResultRow[];
+}
+
+async function growthSnapshotQuery(sqlText: string, params: unknown[] = []): Promise<GrowthSnapshotRow[]> {
+  const sql = getSql();
+  return (await sql.query(sqlText, params)) as GrowthSnapshotRow[];
 }
 
 function createId() {
@@ -463,6 +486,20 @@ function normalizeSimulationResultRow<T extends SimulationResultRow | null>(row:
   return row;
 }
 
+function normalizeGrowthSnapshotRow<T extends GrowthSnapshotRow | null>(row: T): T {
+  if (!row) return row;
+  if (row.createdAt && !(row.createdAt instanceof Date)) row.createdAt = new Date(row.createdAt as string);
+  if (typeof row.metadata === "string") {
+    try {
+      row.metadata = JSON.parse(row.metadata);
+    } catch {
+      row.metadata = {};
+    }
+  }
+  if (!row.metadata || typeof row.metadata !== "object" || Array.isArray(row.metadata)) row.metadata = {};
+  return row;
+}
+
 let projectSchemaReady = false;
 let websiteScanSchemaReady = false;
 let geoAnalysisSchemaReady = false;
@@ -473,6 +510,7 @@ let geoCampaignSchemaReady = false;
 let entitySchemaReady = false;
 let visibilitySchemaReady = false;
 let simulationSchemaReady = false;
+let growthSchemaReady = false;
 
 async function ensureProjectSchema() {
   if (projectSchemaReady) return;
@@ -583,6 +621,17 @@ async function ensureSimulationSchema() {
   await simulationResultQuery('CREATE TABLE IF NOT EXISTS "SimulationResult" ("id" TEXT PRIMARY KEY, "taskId" TEXT NOT NULL UNIQUE, "probability" INTEGER NOT NULL, "ranking" INTEGER, "confidence" INTEGER NOT NULL, "entityScore" INTEGER NOT NULL, "schemaScore" INTEGER NOT NULL, "authorityScore" INTEGER NOT NULL, "citationScore" INTEGER NOT NULL, "mentioned" BOOLEAN NOT NULL DEFAULT false, "reasons" JSONB NOT NULL DEFAULT \'[]\'::jsonb, "missing" JSONB NOT NULL DEFAULT \'[]\'::jsonb, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
   await simulationResultQuery('CREATE INDEX IF NOT EXISTS "SimulationResult_taskId_idx" ON "SimulationResult"("taskId")');
   simulationSchemaReady = true;
+}
+
+async function ensureGrowthSchema() {
+  if (growthSchemaReady) return;
+  await ensureSimulationSchema();
+  await growthSnapshotQuery('CREATE TABLE IF NOT EXISTS "GrowthSnapshot" ("id" TEXT PRIMARY KEY, "projectId" TEXT NOT NULL, "campaignId" TEXT, "simulationId" TEXT, "eventType" TEXT NOT NULL, "triggerType" TEXT NOT NULL DEFAULT \'AUTO\', "sourceId" TEXT NOT NULL, "visibilityScore" INTEGER, "entityScore" INTEGER, "schemaScore" INTEGER, "authorityScore" INTEGER, "citationScore" INTEGER, "overallScore" INTEGER, "metadata" JSONB NOT NULL DEFAULT \'{}\'::jsonb, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
+  await growthSnapshotQuery('CREATE INDEX IF NOT EXISTS "GrowthSnapshot_projectId_idx" ON "GrowthSnapshot"("projectId")');
+  await growthSnapshotQuery('CREATE INDEX IF NOT EXISTS "GrowthSnapshot_campaignId_idx" ON "GrowthSnapshot"("campaignId")');
+  await growthSnapshotQuery('CREATE INDEX IF NOT EXISTS "GrowthSnapshot_simulationId_idx" ON "GrowthSnapshot"("simulationId")');
+  await growthSnapshotQuery('CREATE UNIQUE INDEX IF NOT EXISTS "GrowthSnapshot_projectId_eventType_sourceId_key" ON "GrowthSnapshot"("projectId", "eventType", "sourceId")');
+  growthSchemaReady = true;
 }
 
 function assignments(data: Data, start = 1) {
@@ -781,6 +830,10 @@ export const prisma = {
         data.contentScore ?? 0,
         issues,
       ]))[0]);
+    },
+    async findByIdForProject({ where }: { where: { id: string; projectId: string; userId: string } }) {
+      await ensureGeoAnalysisSchema();
+      return normalizeGeoAnalysisRow((await geoAnalysisQuery('SELECT ga.* FROM "GeoAnalysis" ga INNER JOIN "Project" p ON p."id" = ga."projectId" WHERE ga."id" = $1 AND ga."projectId" = $2 AND p."userId" = $3 LIMIT 1', [where.id, where.projectId, where.userId]))[0] ?? null);
     },
   },
   geoBrainAnalysis: {
@@ -1122,6 +1175,10 @@ export const prisma = {
         new Date(),
       ]))[0]);
     },
+    async findByIdForUser({ where }: { where: { id: string; userId: string } }) {
+      await ensureVisibilitySchema();
+      return normalizeVisibilityCheckRow((await visibilityCheckQuery('SELECT vc.* FROM "VisibilityCheck" vc INNER JOIN "VisibilityCampaign" c ON c."id" = vc."campaignId" INNER JOIN "Project" p ON p."id" = c."projectId" WHERE vc."id" = $1 AND p."userId" = $2 LIMIT 1', [where.id, where.userId]))[0] ?? null);
+    },
   },
   simulationTask: {
     async findManyForUser({ where }: { where: { userId: string; projectId?: string; limit?: number } }) {
@@ -1170,6 +1227,10 @@ export const prisma = {
       await ensureSimulationSchema();
       return normalizeSimulationResultRow((await simulationResultQuery('SELECT * FROM "SimulationResult" WHERE "taskId" = $1 LIMIT 1', [where.taskId]))[0] ?? null);
     },
+    async findByIdForUser({ where }: { where: { id: string; userId: string } }) {
+      await ensureSimulationSchema();
+      return normalizeSimulationResultRow((await simulationResultQuery('SELECT sr.* FROM "SimulationResult" sr INNER JOIN "SimulationTask" st ON st."id" = sr."taskId" INNER JOIN "Project" p ON p."id" = st."projectId" WHERE sr."id" = $1 AND p."userId" = $2 LIMIT 1', [where.id, where.userId]))[0] ?? null);
+    },
     async create({ data }: { data: Data }) {
       await ensureSimulationSchema();
       return normalizeSimulationResultRow((await simulationResultQuery('INSERT INTO "SimulationResult" ("id", "taskId", "probability", "ranking", "confidence", "entityScore", "schemaScore", "authorityScore", "citationScore", "mentioned", "reasons", "missing", "createdAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13) ON CONFLICT ("taskId") DO UPDATE SET "probability" = EXCLUDED."probability", "ranking" = EXCLUDED."ranking", "confidence" = EXCLUDED."confidence", "entityScore" = EXCLUDED."entityScore", "schemaScore" = EXCLUDED."schemaScore", "authorityScore" = EXCLUDED."authorityScore", "citationScore" = EXCLUDED."citationScore", "mentioned" = EXCLUDED."mentioned", "reasons" = EXCLUDED."reasons", "missing" = EXCLUDED."missing" RETURNING *', [
@@ -1187,6 +1248,40 @@ export const prisma = {
         JSON.stringify(data.missing ?? []),
         new Date(),
       ]))[0]);
+    },
+  },
+  growthSnapshot: {
+    async findManyForUser({ where }: { where: { userId: string; projectId?: string; campaignId?: string; limit?: number } }) {
+      await ensureGrowthSchema();
+      const limit = Math.max(1, Math.min(1000, where.limit ?? 500));
+      const rows = where.projectId
+        ? await growthSnapshotQuery('SELECT gs.* FROM "GrowthSnapshot" gs INNER JOIN "Project" p ON p."id" = gs."projectId" WHERE p."userId" = $1 AND gs."projectId" = $2 ORDER BY gs."createdAt" DESC LIMIT $3', [where.userId, where.projectId, limit])
+        : where.campaignId
+          ? await growthSnapshotQuery('SELECT gs.* FROM "GrowthSnapshot" gs INNER JOIN "Project" p ON p."id" = gs."projectId" WHERE p."userId" = $1 AND gs."campaignId" = $2 ORDER BY gs."createdAt" DESC LIMIT $3', [where.userId, where.campaignId, limit])
+          : await growthSnapshotQuery('SELECT gs.* FROM "GrowthSnapshot" gs INNER JOIN "Project" p ON p."id" = gs."projectId" WHERE p."userId" = $1 ORDER BY gs."createdAt" DESC LIMIT $2', [where.userId, limit]);
+      return rows.map((row) => normalizeGrowthSnapshotRow(row));
+    },
+    async upsertForUser({ where, data }: { where: { projectId: string; eventType: string; sourceId: string; userId: string }; data: Data }) {
+      await ensureGrowthSchema();
+      const ownedProject = (await projectQuery('SELECT "id" FROM "Project" WHERE "id" = $1 AND "userId" = $2 LIMIT 1', [where.projectId, where.userId]))[0] ?? null;
+      if (!ownedProject) return null;
+      return normalizeGrowthSnapshotRow((await growthSnapshotQuery('INSERT INTO "GrowthSnapshot" ("id", "projectId", "campaignId", "simulationId", "eventType", "triggerType", "sourceId", "visibilityScore", "entityScore", "schemaScore", "authorityScore", "citationScore", "overallScore", "metadata", "createdAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15) ON CONFLICT ("projectId", "eventType", "sourceId") DO UPDATE SET "campaignId" = EXCLUDED."campaignId", "simulationId" = EXCLUDED."simulationId", "triggerType" = EXCLUDED."triggerType", "visibilityScore" = EXCLUDED."visibilityScore", "entityScore" = EXCLUDED."entityScore", "schemaScore" = EXCLUDED."schemaScore", "authorityScore" = EXCLUDED."authorityScore", "citationScore" = EXCLUDED."citationScore", "overallScore" = EXCLUDED."overallScore", "metadata" = EXCLUDED."metadata" RETURNING *', [
+        data.id ?? createId(),
+        where.projectId,
+        data.campaignId ?? null,
+        data.simulationId ?? null,
+        where.eventType,
+        data.triggerType ?? "AUTO",
+        where.sourceId,
+        data.visibilityScore ?? null,
+        data.entityScore ?? null,
+        data.schemaScore ?? null,
+        data.authorityScore ?? null,
+        data.citationScore ?? null,
+        data.overallScore ?? null,
+        JSON.stringify(data.metadata ?? {}),
+        new Date(),
+      ]))[0] ?? null);
     },
   },
   async $transaction(operations: Array<Promise<unknown>>) {

@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/features/auth/server/session";
 import { prisma } from "@/features/auth/server/prisma";
 import { toOptimizationTask } from "@/features/optimization/mapper";
 import { isOptimizationStatus } from "@/features/optimization/types";
+import { captureGrowthSnapshot } from "@/features/growth/snapshot.service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,6 +36,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ pr
 
   const updated = await prisma.optimizationTask.updateStatus({ where: { id: taskId, userId: user.id }, data: { status: body.status } });
   if (!updated) return NextResponse.json({ error: "任务不存在或无权访问" }, { status: 404 });
+
+  if (body.status === "COMPLETED") {
+    await captureGrowthSnapshot(user.id, { projectId, eventType: "OPTIMIZATION", sourceId: String(updated.id), triggerType: "AUTO" });
+  }
 
   return NextResponse.json({ task: toOptimizationTask(updated) });
 }

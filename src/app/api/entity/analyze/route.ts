@@ -5,6 +5,7 @@ import { prisma } from "@/features/auth/server/prisma";
 import { buildEntityOptimizationTask, toEntityIssueId } from "@/features/entity/recommendations";
 import { buildEntityProjectReport } from "@/features/entity/server";
 import { toOptimizationTask } from "@/features/optimization/mapper";
+import { captureGrowthSnapshot } from "@/features/growth/snapshot.service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,6 +36,10 @@ export async function POST(request: Request) {
       });
       tasks.push(toOptimizationTask(task));
     }
+  }
+
+  if (report.profile) {
+    await captureGrowthSnapshot(user.id, { projectId: parsed.data.projectId, eventType: "ENTITY", sourceId: `${report.profile.id}:${report.profile.updatedAt}`, triggerType: "AUTO" });
   }
 
   return NextResponse.json({

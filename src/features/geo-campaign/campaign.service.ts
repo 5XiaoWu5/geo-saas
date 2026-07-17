@@ -3,6 +3,9 @@ import { toProject } from "@/features/projects/project-mapper";
 import { buildVisibilityAnalytics, emptyVisibilityAnalytics } from "@/features/visibility/analytics";
 import { toVisibilityCheck, toVisibilityPrompt } from "@/features/visibility/mapper";
 import type { VisibilityCampaign, VisibilityCheck, VisibilityPrompt } from "@/features/visibility/types";
+import { toGrowthSnapshot } from "@/features/growth/snapshot.service";
+import { metricDelta } from "@/features/growth/trend-engine";
+import type { GrowthSnapshot } from "@/features/growth/types";
 import { buildCampaignScore, buildCampaignSummary } from "./campaign-score";
 import { clusterGeoQueries } from "./query-cluster";
 import { generateGeoQueryDrafts } from "./query-generator";
@@ -134,13 +137,14 @@ async function ensurePromptsForQueries(userId: string, campaign: GeoCampaign, qu
   return [...prompts, ...created];
 }
 
-function buildCampaignRelations(campaigns: GeoCampaign[], queries: GeoQuery[], prompts: VisibilityPrompt[], checks: VisibilityCheck[]) {
+function buildCampaignRelations(campaigns: GeoCampaign[], queries: GeoQuery[], prompts: VisibilityPrompt[], checks: VisibilityCheck[], growthSnapshots: GrowthSnapshot[] = []) {
   return campaigns.map<GeoCampaignWithRelations>((campaign) => {
     const campaignQueries = queries.filter((query) => query.campaignId === campaign.id);
     const campaignPrompts = prompts.filter((prompt) => prompt.campaignId === campaign.id);
     const campaignChecks = checks.filter((check) => check.campaignId === campaign.id);
     const analytics = buildVisibilityAnalytics([toVisibilityCampaign(campaign)], campaignPrompts, campaignChecks);
     const score = buildCampaignScore(campaign, campaignQueries, campaignPrompts, analytics);
+    const campaignGrowth = growthSnapshots.filter((snapshot) => snapshot.campaignId === campaign.id);
     return {
       ...campaign,
       queries: campaignQueries,
@@ -150,6 +154,11 @@ function buildCampaignRelations(campaigns: GeoCampaign[], queries: GeoQuery[], p
       latestCheck: latestCheck(campaignChecks),
       trend: analytics.trend,
       score,
+      growthImpact: {
+        snapshotCount: campaignGrowth.length,
+        visibilityChange: metricDelta(campaignGrowth, "visibilityScore"),
+        overallChange: metricDelta(campaignGrowth, "overallScore"),
+      },
     };
   });
 }
@@ -186,7 +195,8 @@ export async function loadCampaignWorkspace(userId: string, requestedProjectId?:
   const checks = (await prisma.visibilityCheck.findManyForUser({ where: { userId, campaignIds } })).map(toVisibilityCheck);
   const visibilityCampaigns = campaigns.map(toVisibilityCampaign);
   const analytics = buildVisibilityAnalytics(visibilityCampaigns, prompts, checks);
-  const campaignsWithRelations = buildCampaignRelations(campaigns, queries, prompts, checks);
+  const growthSnapshots = (await prisma.growthSnapshot.findManyForUser({ where: { userId, projectId: selectedProjectId, limit: 1000 } })).map(toGrowthSnapshot);
+  const campaignsWithRelations = buildCampaignRelations(campaigns, queries, prompts, checks, growthSnapshots);
   const summary = buildCampaignSummary(campaignsWithRelations, analytics);
   const selectedCampaignId = requestedCampaign?.id
     ?? (requestedCampaignId && campaignsWithRelations.some((campaign) => campaign.id === requestedCampaignId) ? requestedCampaignId : null)
@@ -216,7 +226,8 @@ export async function loadCampaignDetail(userId: string, campaignId: string) {
   const prompts = (await prisma.visibilityPrompt.findManyForUser({ where: { userId, campaignIds: [campaign.id] } })).map(toVisibilityPrompt);
   const checks = (await prisma.visibilityCheck.findManyForUser({ where: { userId, campaignIds: [campaign.id] } })).map(toVisibilityCheck);
   const analytics = buildVisibilityAnalytics([toVisibilityCampaign(campaign)], prompts, checks);
-  const campaignWithRelations = buildCampaignRelations([campaign], queries, prompts, checks)[0];
+  const growthSnapshots = (await prisma.growthSnapshot.findManyForUser({ where: { userId, campaignId: campaign.id, limit: 1000 } })).map(toGrowthSnapshot);
+  const campaignWithRelations = buildCampaignRelations([campaign], queries, prompts, checks, growthSnapshots)[0];
   const summary = buildCampaignSummary([campaignWithRelations], analytics);
 
   return { project, campaign: campaignWithRelations, summary, analytics };

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/features/auth/server/session";
 import { prisma } from "@/features/auth/server/prisma";
 import { toVisibilityCheck } from "@/features/visibility/mapper";
+import { captureGrowthSnapshot } from "@/features/growth/snapshot.service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,6 +55,8 @@ export async function POST(request: Request) {
       score: parsed.data.score,
     },
   });
+
+  await captureGrowthSnapshot(user.id, { projectId: String(campaign.projectId), eventType: "VISIBILITY", sourceId: String(check.id), triggerType: "AUTO" });
 
   return NextResponse.json({ check: toVisibilityCheck(check) }, { status: 201 });
 }

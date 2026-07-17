@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, ArrowRight, FlaskConical, Loader2, Play, PlusCircle } from "lucide-react";
+import { AlertCircle, ArrowRight, FlaskConical, Loader2, Play, PlusCircle, TrendingUp } from "lucide-react";
 import { PageHeader } from "@/components/shared/page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -231,6 +231,14 @@ export function CampaignWorkspace({ initialProjectId, initialCampaignId }: Props
                     </div>
                   </CardContent>
                 </Card>
+                <Card className="glass-panel border-white/10">
+                  <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><TrendingUp className="h-5 w-5 text-primary" />{t("growth.campaignImpact")}</CardTitle></CardHeader>
+                  <CardContent className="grid gap-3 sm:grid-cols-3">
+                    <GrowthImpactMetric label={t("growth.snapshotCount")} value={`${activeCampaign.growthImpact.snapshotCount}`} />
+                    <GrowthImpactMetric label={t("growth.metrics.visibilityScore")} value={formatGrowthChange(activeCampaign.growthImpact.visibilityChange)} />
+                    <GrowthImpactMetric label={t("growth.metrics.overallScore")} value={formatGrowthChange(activeCampaign.growthImpact.overallChange)} />
+                  </CardContent>
+                </Card>
                 <QueryClusterTable clusters={activeCampaign.clusters} queries={activeCampaign.queries} />
               </div>
               <GrowthChart trend={activeCampaign.trend} />
@@ -281,6 +289,14 @@ function CampaignList({ campaigns, selectedCampaignId, onSelect }: { campaigns: 
       </CardContent>
     </Card>
   );
+}
+
+function GrowthImpactMetric({ label, value }: { label: string; value: string }) {
+  return <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.03] p-4"><p className="truncate text-xs text-muted-foreground">{label}</p><p className="mt-2 font-mono text-xl font-semibold text-foreground">{value}</p></div>;
+}
+
+function formatGrowthChange(value: number | null) {
+  return value === null ? "-" : `${value > 0 ? "+" : ""}${value}`;
 }
 
 function emptySummary() {

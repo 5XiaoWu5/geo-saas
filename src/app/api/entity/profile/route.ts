@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/features/auth/server/session";
 import { prisma } from "@/features/auth/server/prisma";
 import { buildEntityProjectReport } from "@/features/entity/server";
 import { toEntityAttribute, toEntityProfile } from "@/features/entity/mapper";
+import { captureGrowthSnapshot } from "@/features/growth/snapshot.service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -63,6 +64,7 @@ export async function POST(request: Request) {
   });
 
   const report = await buildEntityProjectReport(prisma, parsed.data.projectId, user.id);
+  await captureGrowthSnapshot(user.id, { projectId: parsed.data.projectId, eventType: "ENTITY", sourceId: `${profile.id}:${new Date(profile.updatedAt).toISOString()}`, triggerType: "AUTO" });
 
   return NextResponse.json({
     profile: toEntityProfile(profile),
