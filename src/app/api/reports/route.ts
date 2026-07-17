@@ -5,6 +5,8 @@ import { toProject } from "@/features/projects/project-mapper";
 import { toGeoAnalysis } from "@/features/geo-analysis/server/analysis-mapper";
 import { toWebsiteScan } from "@/features/website-crawl/server/scan-mapper";
 import { toOptimizationTask } from "@/features/optimization/mapper";
+import { toSimulationResult, toSimulationTask } from "@/features/ai-search-simulator/simulator.service";
+import type { SimulationRecord } from "@/features/ai-search-simulator/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,10 +15,11 @@ export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "请先登录" }, { status: 401 });
 
-  const [projectRows, analysisRows, scanRows] = await Promise.all([
+  const [projectRows, analysisRows, scanRows, simulationTaskRows] = await Promise.all([
     prisma.project.findMany({ where: { userId: user.id } }),
     prisma.geoAnalysis.findLatestForUser({ where: { userId: user.id } }),
     prisma.websiteScan.findManyForUser({ where: { userId: user.id } }),
+    prisma.simulationTask.findManyForUser({ where: { userId: user.id, limit: 200 } }),
   ]);
 
   const projects = projectRows.map(toProject);
@@ -32,6 +35,19 @@ export async function GET() {
   const analysisByProjectId = new Map(analyses.map((analysis) => [analysis.projectId, analysis]));
   const latestScanByProjectId = new Map(scans.map((scan) => [scan.projectId, scan]));
   const taskMap = new Map(tasksByProject);
+  const simulationResultRows = await prisma.simulationResult.findManyForTasks({ where: { taskIds: simulationTaskRows.map((row) => String(row.id)) } });
+  const simulationResultByTaskId = new Map(simulationResultRows.map((row) => {
+    const result = toSimulationResult(row);
+    return [result.taskId, result] as const;
+  }));
+  const latestSimulationByProjectId = new Map<string, SimulationRecord>();
+  for (const row of simulationTaskRows) {
+    const task = toSimulationTask(row);
+    const result = simulationResultByTaskId.get(task.id) ?? null;
+    if (!latestSimulationByProjectId.has(task.projectId) && task.status === "COMPLETED" && result) {
+      latestSimulationByProjectId.set(task.projectId, { ...task, result, trend: null });
+    }
+  }
 
   const reports = projects
     .map((project) => {
@@ -47,6 +63,7 @@ export async function GET() {
         project,
         scan,
         analysis,
+        latestSimulation: latestSimulationByProjectId.get(project.id) ?? null,
         optimization: {
           totalTasks: tasks.length,
           completedTasks,

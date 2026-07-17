@@ -1,6 +1,7 @@
 import type { GeoAnalysis } from "@/features/geo-analysis/types";
 import type { WebsiteScan } from "@/features/website-crawl/types";
 import type { Project } from "@/types/project";
+import type { SimulationRecord } from "@/features/ai-search-simulator/types";
 
 export type ProjectReport = {
   projectId: string;
@@ -9,6 +10,7 @@ export type ProjectReport = {
   project: Project;
   scan: WebsiteScan | null;
   analysis: GeoAnalysis | null;
+  latestSimulation: SimulationRecord | null;
   optimization: {
     totalTasks: number;
     completedTasks: number;

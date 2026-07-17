@@ -190,6 +190,34 @@ type VisibilityCheckRow = Record<string, unknown> & {
   createdAt: Date;
 };
 
+type SimulationTaskRow = Record<string, unknown> & {
+  id: string;
+  projectId: string;
+  campaignId: string | null;
+  queryId: string | null;
+  query: string;
+  provider: string;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type SimulationResultRow = Record<string, unknown> & {
+  id: string;
+  taskId: string;
+  probability: number;
+  ranking: number | null;
+  confidence: number;
+  entityScore: number;
+  schemaScore: number;
+  authorityScore: number;
+  citationScore: number;
+  mentioned: boolean;
+  reasons: unknown;
+  missing: unknown;
+  createdAt: Date;
+};
+
 const fallbackDatabaseUrl = "postgresql://postgres:postgres@127.0.0.1:5432/geopilot_ai";
 
 if (!process.env.DATABASE_URL) {
@@ -268,6 +296,16 @@ async function visibilityPromptQuery(sqlText: string, params: unknown[] = []): P
 async function visibilityCheckQuery(sqlText: string, params: unknown[] = []): Promise<VisibilityCheckRow[]> {
   const sql = getSql();
   return (await sql.query(sqlText, params)) as VisibilityCheckRow[];
+}
+
+async function simulationTaskQuery(sqlText: string, params: unknown[] = []): Promise<SimulationTaskRow[]> {
+  const sql = getSql();
+  return (await sql.query(sqlText, params)) as SimulationTaskRow[];
+}
+
+async function simulationResultQuery(sqlText: string, params: unknown[] = []): Promise<SimulationResultRow[]> {
+  const sql = getSql();
+  return (await sql.query(sqlText, params)) as SimulationResultRow[];
 }
 
 function createId() {
@@ -401,6 +439,30 @@ function normalizeVisibilityCheckRow<T extends VisibilityCheckRow | null>(row: T
   return row;
 }
 
+function normalizeSimulationTaskRow<T extends SimulationTaskRow | null>(row: T): T {
+  if (!row) return row;
+  for (const key of ["createdAt", "updatedAt"]) {
+    if (row[key] && !(row[key] instanceof Date)) row[key] = new Date(row[key] as string);
+  }
+  return row;
+}
+
+function normalizeSimulationResultRow<T extends SimulationResultRow | null>(row: T): T {
+  if (!row) return row;
+  if (row.createdAt && !(row.createdAt instanceof Date)) row.createdAt = new Date(row.createdAt as string);
+  for (const key of ["reasons", "missing"] as const) {
+    if (typeof row[key] === "string") {
+      try {
+        row[key] = JSON.parse(row[key] as string);
+      } catch {
+        row[key] = [];
+      }
+    }
+    if (!Array.isArray(row[key])) row[key] = [];
+  }
+  return row;
+}
+
 let projectSchemaReady = false;
 let websiteScanSchemaReady = false;
 let geoAnalysisSchemaReady = false;
@@ -410,6 +472,7 @@ let queryTemplateSchemaReady = false;
 let geoCampaignSchemaReady = false;
 let entitySchemaReady = false;
 let visibilitySchemaReady = false;
+let simulationSchemaReady = false;
 
 async function ensureProjectSchema() {
   if (projectSchemaReady) return;
@@ -508,6 +571,18 @@ async function ensureVisibilitySchema() {
   await visibilityCheckQuery('CREATE INDEX IF NOT EXISTS "VisibilityCheck_campaignId_idx" ON "VisibilityCheck"("campaignId")');
   await visibilityCheckQuery('CREATE INDEX IF NOT EXISTS "VisibilityCheck_promptId_idx" ON "VisibilityCheck"("promptId")');
   visibilitySchemaReady = true;
+}
+
+async function ensureSimulationSchema() {
+  if (simulationSchemaReady) return;
+  await ensureGeoCampaignSchema();
+  await simulationTaskQuery('CREATE TABLE IF NOT EXISTS "SimulationTask" ("id" TEXT PRIMARY KEY, "projectId" TEXT NOT NULL, "campaignId" TEXT, "queryId" TEXT, "query" TEXT NOT NULL, "provider" TEXT NOT NULL, "status" TEXT NOT NULL DEFAULT \'PENDING\', "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
+  await simulationTaskQuery('CREATE INDEX IF NOT EXISTS "SimulationTask_projectId_idx" ON "SimulationTask"("projectId")');
+  await simulationTaskQuery('CREATE INDEX IF NOT EXISTS "SimulationTask_campaignId_idx" ON "SimulationTask"("campaignId")');
+  await simulationTaskQuery('CREATE INDEX IF NOT EXISTS "SimulationTask_queryId_idx" ON "SimulationTask"("queryId")');
+  await simulationResultQuery('CREATE TABLE IF NOT EXISTS "SimulationResult" ("id" TEXT PRIMARY KEY, "taskId" TEXT NOT NULL UNIQUE, "probability" INTEGER NOT NULL, "ranking" INTEGER, "confidence" INTEGER NOT NULL, "entityScore" INTEGER NOT NULL, "schemaScore" INTEGER NOT NULL, "authorityScore" INTEGER NOT NULL, "citationScore" INTEGER NOT NULL, "mentioned" BOOLEAN NOT NULL DEFAULT false, "reasons" JSONB NOT NULL DEFAULT \'[]\'::jsonb, "missing" JSONB NOT NULL DEFAULT \'[]\'::jsonb, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
+  await simulationResultQuery('CREATE INDEX IF NOT EXISTS "SimulationResult_taskId_idx" ON "SimulationResult"("taskId")');
+  simulationSchemaReady = true;
 }
 
 function assignments(data: Data, start = 1) {
@@ -1044,6 +1119,72 @@ export const prisma = {
         data.mentionPosition ?? null,
         data.sourceUrls ?? [],
         data.score ?? 0,
+        new Date(),
+      ]))[0]);
+    },
+  },
+  simulationTask: {
+    async findManyForUser({ where }: { where: { userId: string; projectId?: string; limit?: number } }) {
+      await ensureSimulationSchema();
+      const limit = Math.max(1, Math.min(200, where.limit ?? 80));
+      const rows = where.projectId
+        ? await simulationTaskQuery('SELECT st.* FROM "SimulationTask" st INNER JOIN "Project" p ON p."id" = st."projectId" WHERE p."userId" = $1 AND st."projectId" = $2 ORDER BY st."createdAt" DESC LIMIT $3', [where.userId, where.projectId, limit])
+        : await simulationTaskQuery('SELECT st.* FROM "SimulationTask" st INNER JOIN "Project" p ON p."id" = st."projectId" WHERE p."userId" = $1 ORDER BY st."createdAt" DESC LIMIT $2', [where.userId, limit]);
+      return rows.map((row) => normalizeSimulationTaskRow(row));
+    },
+    async findByIdForUser({ where }: { where: { id: string; userId: string } }) {
+      await ensureSimulationSchema();
+      return normalizeSimulationTaskRow((await simulationTaskQuery('SELECT st.* FROM "SimulationTask" st INNER JOIN "Project" p ON p."id" = st."projectId" WHERE st."id" = $1 AND p."userId" = $2 LIMIT 1', [where.id, where.userId]))[0] ?? null);
+    },
+    async exists({ where }: { where: { id: string } }) {
+      await ensureSimulationSchema();
+      return Boolean((await simulationTaskQuery('SELECT * FROM "SimulationTask" WHERE "id" = $1 LIMIT 1', [where.id]))[0]);
+    },
+    async create({ data }: { data: Data }) {
+      await ensureSimulationSchema();
+      const now = new Date();
+      return normalizeSimulationTaskRow((await simulationTaskQuery('INSERT INTO "SimulationTask" ("id", "projectId", "campaignId", "queryId", "query", "provider", "status", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *', [
+        data.id ?? createId(),
+        data.projectId,
+        data.campaignId ?? null,
+        data.queryId ?? null,
+        data.query,
+        data.provider,
+        data.status ?? "PENDING",
+        now,
+        now,
+      ]))[0]);
+    },
+    async updateStatus({ where, data }: { where: { id: string; userId: string }; data: { status: string } }) {
+      await ensureSimulationSchema();
+      return normalizeSimulationTaskRow((await simulationTaskQuery('UPDATE "SimulationTask" st SET "status" = $1, "updatedAt" = $2 FROM "Project" p WHERE st."id" = $3 AND st."projectId" = p."id" AND p."userId" = $4 RETURNING st.*', [data.status, new Date(), where.id, where.userId]))[0] ?? null);
+    },
+  },
+  simulationResult: {
+    async findManyForTasks({ where }: { where: { taskIds: string[] } }) {
+      await ensureSimulationSchema();
+      if (!where.taskIds.length) return [];
+      return (await simulationResultQuery('SELECT * FROM "SimulationResult" WHERE "taskId" = ANY($1::text[]) ORDER BY "createdAt" DESC', [where.taskIds])).map((row) => normalizeSimulationResultRow(row));
+    },
+    async findByTaskId({ where }: { where: { taskId: string } }) {
+      await ensureSimulationSchema();
+      return normalizeSimulationResultRow((await simulationResultQuery('SELECT * FROM "SimulationResult" WHERE "taskId" = $1 LIMIT 1', [where.taskId]))[0] ?? null);
+    },
+    async create({ data }: { data: Data }) {
+      await ensureSimulationSchema();
+      return normalizeSimulationResultRow((await simulationResultQuery('INSERT INTO "SimulationResult" ("id", "taskId", "probability", "ranking", "confidence", "entityScore", "schemaScore", "authorityScore", "citationScore", "mentioned", "reasons", "missing", "createdAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13) ON CONFLICT ("taskId") DO UPDATE SET "probability" = EXCLUDED."probability", "ranking" = EXCLUDED."ranking", "confidence" = EXCLUDED."confidence", "entityScore" = EXCLUDED."entityScore", "schemaScore" = EXCLUDED."schemaScore", "authorityScore" = EXCLUDED."authorityScore", "citationScore" = EXCLUDED."citationScore", "mentioned" = EXCLUDED."mentioned", "reasons" = EXCLUDED."reasons", "missing" = EXCLUDED."missing" RETURNING *', [
+        data.id ?? createId(),
+        data.taskId,
+        data.probability ?? 0,
+        data.ranking ?? null,
+        data.confidence ?? 0,
+        data.entityScore ?? 0,
+        data.schemaScore ?? 0,
+        data.authorityScore ?? 0,
+        data.citationScore ?? 0,
+        data.mentioned ?? false,
+        JSON.stringify(data.reasons ?? []),
+        JSON.stringify(data.missing ?? []),
         new Date(),
       ]))[0]);
     },

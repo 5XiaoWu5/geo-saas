@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, ArrowRight, Loader2, Play, PlusCircle } from "lucide-react";
+import { AlertCircle, ArrowRight, FlaskConical, Loader2, Play, PlusCircle } from "lucide-react";
 import { PageHeader } from "@/components/shared/page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -221,6 +221,11 @@ export function CampaignWorkspace({ initialProjectId, initialCampaignId }: Props
                       <Button asChild variant="outline">
                         <Link href={`/campaigns/${activeCampaign.id}`}>
                           {t("campaigns.openDetail")} <ArrowRight className="h-4 w-4" />
+                        </Link>
+                      </Button>
+                      <Button asChild variant="outline">
+                        <Link href={`/simulator?projectId=${activeCampaign.projectId}&campaignId=${activeCampaign.id}${activeCampaign.queries[0] ? `&queryId=${activeCampaign.queries[0].id}` : ""}`}>
+                          <FlaskConical className="h-4 w-4" /> {t("simulator.run")}
                         </Link>
                       </Button>
                     </div>

@@ -1,5 +1,5 @@
 ﻿import type { LucideIcon } from "lucide-react";
-import { Activity, BarChart3, Boxes, Building2, ClipboardList, CreditCard, Eye, FileText, Gauge, HelpCircle, KeyRound, Layers3, MessagesSquare, ScanSearch, Settings, Sparkles, UserCircle } from "lucide-react";
+import { Activity, BarChart3, Boxes, Building2, ClipboardList, CreditCard, Eye, FileText, FlaskConical, Gauge, HelpCircle, KeyRound, Layers3, MessagesSquare, ScanSearch, Settings, Sparkles, UserCircle } from "lucide-react";
 
 export type NavItem = {
   titleKey: string;
@@ -21,6 +21,7 @@ export const mainNavItems: NavItem[] = [
   { titleKey: "nav.analyzer", href: "/analyzer", icon: Sparkles },
   { titleKey: "nav.entity", href: "/entity", icon: Building2 },
   { titleKey: "nav.campaigns", href: "/campaigns", icon: MessagesSquare },
+  { titleKey: "nav.simulator", href: "/simulator", icon: FlaskConical },
   { titleKey: "nav.optimization", href: "/optimization", icon: ClipboardList },
   { titleKey: "nav.visibility", href: "/visibility", icon: Eye },
   { titleKey: "nav.monitoring", href: "/monitoring", icon: Activity },

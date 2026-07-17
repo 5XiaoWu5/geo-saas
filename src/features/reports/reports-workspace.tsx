@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { AlertCircle, ArrowRight, BarChart3, CheckCircle2, ClipboardList, FileText, Globe2, Loader2, Sparkles, Target } from "lucide-react";
+import { AlertCircle, ArrowRight, BarChart3, CheckCircle2, ClipboardList, FileText, FlaskConical, Globe2, Loader2, Sparkles, Target } from "lucide-react";
 import type { GeoIssue } from "@/features/geo-analysis/types";
 import { categoryLabel, recommendForIssue } from "@/features/geo-analysis/recommendations";
 import type { ProjectReport, ReportsResponse } from "@/features/reports/types";
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { formatDateTime, getHostname } from "@/lib/format";
+import { useI18n } from "@/i18n/provider";
 
 async function loadReports(): Promise<ReportsResponse> {
   const response = await fetch("/api/reports", { cache: "no-store" });
@@ -136,6 +137,7 @@ export function ReportsWorkspace() {
 }
 
 function ProjectReportView({ report }: { report: ProjectReport }) {
+  const { t } = useI18n();
   if (!report.analysis) {
     return (
       <Card className="glass-panel border-white/10">
@@ -211,6 +213,18 @@ function ProjectReportView({ report }: { report: ProjectReport }) {
           </CardContent>
         </Card>
       </section>
+
+      {report.latestSimulation?.result ? (
+        <Card className="glass-panel border-white/10">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <CardTitle className="flex items-center gap-2 text-lg"><FlaskConical className="h-5 w-5 text-primary" /> {t("simulator.reportTitle")}</CardTitle>
+              <p className="mt-2 break-words text-sm text-muted-foreground">{report.latestSimulation.provider} · {report.latestSimulation.query}</p>
+            </div>
+            <div className="flex items-center gap-3"><span className="font-mono text-3xl font-semibold text-foreground">{report.latestSimulation.result.probability}%</span><Button asChild variant="outline" size="sm"><Link href={`/project/${report.projectId}/simulator`}>{t("simulator.viewSimulator")}</Link></Button></div>
+          </CardHeader>
+        </Card>
+      ) : null}
 
       <Card className="glass-panel border-white/10">
         <CardHeader>

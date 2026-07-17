@@ -3,7 +3,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { AlertCircle, ArrowRight, BarChart3, CheckCircle2, ClipboardList, Layers3, Loader2, Sparkles, Target } from "lucide-react";
+import { AlertCircle, ArrowRight, BarChart3, CheckCircle2, ClipboardList, FlaskConical, Layers3, Loader2, Sparkles, Target } from "lucide-react";
+import type { SimulationRecord } from "@/features/ai-search-simulator/types";
 import type { GeoAnalysis, GeoIssue } from "@/features/geo-analysis/types";
 import { buildOptimizationSuggestions, categoryLabel, diagnoseIssues, type DiagnosedIssue, type OptimizationSuggestion } from "@/features/geo-analysis/recommendations";
 import { GeoBrainScoreCard } from "@/features/geo-brain/components/GeoBrainScoreCard";
@@ -31,6 +32,7 @@ type AnalyzedProject = {
   websiteUrl: string;
   analysis: GeoAnalysis;
   brainAnalysis: GeoBrainAnalysis | null;
+  latestSimulation: SimulationRecord | null;
 };
 
 type AnalyzerResponse = {
@@ -208,6 +210,21 @@ export function AnalyzerWorkspace() {
       </Card>
 
       <GeoBrainScoreCard analysis={geoBrainAnalysis} />
+
+      {activeProject.latestSimulation?.result ? (
+        <Card className="glass-panel border-white/10">
+          <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-sm font-medium text-primary"><FlaskConical className="h-4 w-4" /> {t("simulator.analyzerTitle")}</div>
+              <p className="mt-2 break-words text-sm text-muted-foreground">{activeProject.latestSimulation.provider} · {activeProject.latestSimulation.query}</p>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="font-mono text-3xl font-semibold text-foreground">{activeProject.latestSimulation.result.probability}%</div>
+              <Button asChild variant="outline" size="sm"><Link href={`/project/${activeProject.projectId}/simulator`}>{t("simulator.viewSimulator")} <ArrowRight className="h-4 w-4" /></Link></Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <section className="grid gap-6 xl:grid-cols-2">
         <Card className="glass-panel border-white/10">

@@ -11,6 +11,7 @@ import {
   ClipboardList,
   Eye,
   FileJson2,
+  FlaskConical,
   Globe2,
   Heading1,
   Heading2,
@@ -31,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { formatDate, formatDateTime, getHostname } from "@/lib/format";
+import { useI18n } from "@/i18n/provider";
 
 type ScanResponse = {
   scan: WebsiteScan | null;
@@ -48,6 +50,7 @@ async function parseScanResponse(response: Response): Promise<ScanResponse> {
 
 export function ProjectOverviewTab() {
   const { project, refreshProject } = useProject();
+  const { t } = useI18n();
   const [scan, setScan] = useState<WebsiteScan | null>(null);
   const [analysis, setAnalysis] = useState<GeoAnalysis | null>(null);
   const [loadingScan, setLoadingScan] = useState(true);
@@ -186,6 +189,11 @@ export function ProjectOverviewTab() {
             <Button asChild variant="outline">
               <Link href={`/projects/${project.id}/visibility`}>
                 <Eye className="h-4 w-4" /> AI 可见性
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href={`/project/${project.id}/simulator`}>
+                <FlaskConical className="h-4 w-4" /> {t("simulator.title")}
               </Link>
             </Button>
           </div>
