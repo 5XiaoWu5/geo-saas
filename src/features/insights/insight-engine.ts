@@ -7,6 +7,14 @@ import { toOptimizationTask } from "@/features/optimization/mapper";
 import { toProject } from "@/features/projects/project-mapper";
 import { toSimulationResult, toSimulationTask } from "@/features/ai-search-simulator/simulator.service";
 import { toVisibilityCheck } from "@/features/visibility/mapper";
+import type { SimulationResult, SimulationTask } from "@/features/ai-search-simulator/types";
+import type { EntityProfile } from "@/features/entity/types";
+import type { GeoCampaign } from "@/features/geo-campaign/types";
+import type { GeoAnalysis } from "@/features/geo-analysis/types";
+import type { GrowthSnapshot } from "@/features/growth/types";
+import type { OptimizationTask } from "@/features/optimization/types";
+import type { VisibilityCheck } from "@/features/visibility/types";
+import { loadOptionalInsightSource } from "./optional-source";
 import { analyzeSignals } from "./signal-analyzer";
 import type { InsightRecommendation, InsightScoreAnchor, InsightSourceType, InsightsResponse, ProjectInsight } from "./types";
 
@@ -51,24 +59,26 @@ export async function buildProjectInsight(userId: string, projectId: string): Pr
   if (!projectRow) throw new InsightEngineError("PROJECT_FORBIDDEN", 403);
   const project = toProject(projectRow);
 
-  const [taskRows, growthRows, analysisRow, entityRow, visibilityCampaignRows, campaignRows, optimizationRows] = await Promise.all([
-    prisma.simulationTask.findManyForUser({ where: { userId, projectId, limit: 200 } }),
-    prisma.growthSnapshot.findManyForUser({ where: { userId, projectId, limit: 500 } }),
-    prisma.geoAnalysis.findLatest({ where: { projectId } }),
-    prisma.entityProfile.findFirstForProject({ where: { projectId, userId } }),
-    prisma.visibilityCampaign.findManyForUser({ where: { projectId, userId } }),
-    prisma.geoCampaign.findManyForUser({ where: { projectId, userId } }),
-    prisma.optimizationTask.findManyForProject({ where: { projectId, userId } }),
+  const [tasks, growthSnapshots, analysis, entityProfile, visibilityCampaignRows, campaigns, tasksForOptimization] = await Promise.all([
+    loadOptionalInsightSource<SimulationTask[]>("SimulationTask", async () => (await prisma.simulationTask.findManyForUser({ where: { userId, projectId, limit: 200 } })).map(toSimulationTask), []),
+    loadOptionalInsightSource<GrowthSnapshot[]>("GrowthSnapshot", async () => (await prisma.growthSnapshot.findManyForUser({ where: { userId, projectId, limit: 500 } })).map(toGrowthSnapshot), []),
+    loadOptionalInsightSource<GeoAnalysis | null>("GeoAnalysis", async () => {
+      const row = await prisma.geoAnalysis.findLatest({ where: { projectId } });
+      return row ? toGeoAnalysis(row) : null;
+    }, null),
+    loadOptionalInsightSource<EntityProfile | null>("EntityProfile", async () => {
+      const row = await prisma.entityProfile.findFirstForProject({ where: { projectId, userId } });
+      return row ? toEntityProfile(row) : null;
+    }, null),
+    loadOptionalInsightSource<Record<string, unknown>[]>("VisibilityCampaign", () => prisma.visibilityCampaign.findManyForUser({ where: { projectId, userId } }), []),
+    loadOptionalInsightSource<GeoCampaign[]>("GeoCampaign", async () => (await prisma.geoCampaign.findManyForUser({ where: { projectId, userId } })).map(toGeoCampaign), []),
+    loadOptionalInsightSource<OptimizationTask[]>("OptimizationTask", async () => (await prisma.optimizationTask.findManyForProject({ where: { projectId, userId } })).map(toOptimizationTask), []),
   ]);
-  const tasks = taskRows.map(toSimulationTask);
-  const resultRows = await prisma.simulationResult.findManyForTasks({ where: { taskIds: tasks.map((task) => task.id) } });
-  const results = resultRows.map(toSimulationResult);
+  const results = await loadOptionalInsightSource<SimulationResult[]>("SimulationResult", async () => (await prisma.simulationResult.findManyForTasks({ where: { taskIds: tasks.map((task) => task.id) } })).map(toSimulationResult), []);
   const resultByTaskId = new Map(results.map((result) => [result.taskId, result]));
   const latestSimulationTask = tasks.find((task) => task.status === "COMPLETED" && resultByTaskId.has(task.id)) ?? null;
   const simulation = latestSimulationTask ? resultByTaskId.get(latestSimulationTask.id) ?? null : null;
-  const growthSnapshots = growthRows.map(toGrowthSnapshot);
   const growth = growthSnapshots.find((snapshot) => validScore(snapshot.overallScore)) ?? null;
-  const analysis = analysisRow ? toGeoAnalysis(analysisRow) : null;
 
   let anchor: InsightScoreAnchor | null = null;
   if (simulation && validScore(simulation.probability)) anchor = { score: simulation.probability, sourceType: "SimulationResult", sourceId: simulation.id, createdAt: simulation.createdAt };
@@ -76,11 +86,7 @@ export async function buildProjectInsight(userId: string, projectId: string): Pr
   else if (analysis && validScore(analysis.totalScore)) anchor = { score: analysis.totalScore, sourceType: "GeoAnalysis", sourceId: analysis.id, createdAt: analysis.createdAt };
 
   const campaignIds = visibilityCampaignRows.map((row) => String(row.id));
-  const visibilityRows = await prisma.visibilityCheck.findManyForUser({ where: { userId, campaignIds } });
-  const visibilityChecks = visibilityRows.map(toVisibilityCheck);
-  const entityProfile = entityRow ? toEntityProfile(entityRow) : null;
-  const campaigns = campaignRows.map(toGeoCampaign);
-  const tasksForOptimization = optimizationRows.map(toOptimizationTask);
+  const visibilityChecks = await loadOptionalInsightSource<VisibilityCheck[]>("VisibilityCheck", async () => (await prisma.visibilityCheck.findManyForUser({ where: { userId, campaignIds } })).map(toVisibilityCheck), []);
   const unavailable = unavailableSources([
     ["SimulationResult", simulation],
     ["GrowthSnapshot", growth],
@@ -122,4 +128,3 @@ export async function loadInsightsWorkspace(userId: string, requestedProjectId?:
   const insights = await Promise.all(projects.map((project) => buildProjectInsight(userId, project.id)));
   return { projects: projects.map((project) => ({ id: project.id, name: project.name, websiteUrl: project.websiteUrl })), selectedProjectId, insights };
 }
-
