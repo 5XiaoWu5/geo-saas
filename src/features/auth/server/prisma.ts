@@ -86,6 +86,18 @@ type OptimizationTaskRow = Record<string, unknown> & {
   updatedAt: Date;
 };
 
+type QueryTemplateRow = Record<string, unknown> & {
+  id: string;
+  projectId: string;
+  content: string;
+  category: string;
+  intent: string;
+  priority: string;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 type VisibilityCampaignRow = Record<string, unknown> & {
   id: string;
   projectId: string;
@@ -148,6 +160,11 @@ async function geoAnalysisQuery(sqlText: string, params: unknown[] = []): Promis
 async function optimizationTaskQuery(sqlText: string, params: unknown[] = []): Promise<OptimizationTaskRow[]> {
   const sql = getSql();
   return (await sql.query(sqlText, params)) as OptimizationTaskRow[];
+}
+
+async function queryTemplateQuery(sqlText: string, params: unknown[] = []): Promise<QueryTemplateRow[]> {
+  const sql = getSql();
+  return (await sql.query(sqlText, params)) as QueryTemplateRow[];
 }
 
 async function visibilityCampaignQuery(sqlText: string, params: unknown[] = []): Promise<VisibilityCampaignRow[]> {
@@ -216,6 +233,14 @@ function normalizeOptimizationTaskRow<T extends OptimizationTaskRow | null>(row:
   return row;
 }
 
+function normalizeQueryTemplateRow<T extends QueryTemplateRow | null>(row: T): T {
+  if (!row) return row;
+  for (const key of ["createdAt", "updatedAt"]) {
+    if (row[key] && !(row[key] instanceof Date)) row[key] = new Date(row[key] as string);
+  }
+  return row;
+}
+
 function normalizeVisibilityCampaignRow<T extends VisibilityCampaignRow | null>(row: T): T {
   if (!row) return row;
   if (row.createdAt && !(row.createdAt instanceof Date)) row.createdAt = new Date(row.createdAt as string);
@@ -239,6 +264,7 @@ let projectSchemaReady = false;
 let websiteScanSchemaReady = false;
 let geoAnalysisSchemaReady = false;
 let optimizationTaskSchemaReady = false;
+let queryTemplateSchemaReady = false;
 let visibilitySchemaReady = false;
 
 async function ensureProjectSchema() {
@@ -282,6 +308,14 @@ async function ensureOptimizationTaskSchema() {
   await optimizationTaskQuery('CREATE INDEX IF NOT EXISTS "OptimizationTask_projectId_idx" ON "OptimizationTask"("projectId")');
   await optimizationTaskQuery('CREATE UNIQUE INDEX IF NOT EXISTS "OptimizationTask_projectId_issueId_key" ON "OptimizationTask"("projectId", "issueId")');
   optimizationTaskSchemaReady = true;
+}
+
+async function ensureQueryTemplateSchema() {
+  if (queryTemplateSchemaReady) return;
+  await ensureProjectSchema();
+  await queryTemplateQuery('CREATE TABLE IF NOT EXISTS "QueryTemplate" ("id" TEXT PRIMARY KEY, "projectId" TEXT NOT NULL, "content" TEXT NOT NULL, "category" TEXT NOT NULL, "intent" TEXT NOT NULL, "priority" TEXT NOT NULL DEFAULT \'medium\', "status" TEXT NOT NULL DEFAULT \'GENERATED\', "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
+  await queryTemplateQuery('CREATE INDEX IF NOT EXISTS "QueryTemplate_projectId_idx" ON "QueryTemplate"("projectId")');
+  queryTemplateSchemaReady = true;
 }
 
 async function ensureVisibilitySchema() {
@@ -538,6 +572,40 @@ export const prisma = {
       return { count: (await optimizationTaskQuery('DELETE FROM "OptimizationTask" WHERE "projectId" = $1 RETURNING "id"', [where.projectId])).length };
     },
   },
+  queryTemplate: {
+    async findManyForProject({ where }: { where: { projectId: string; userId: string } }) {
+      await ensureQueryTemplateSchema();
+      return (await queryTemplateQuery('SELECT qt.* FROM "QueryTemplate" qt INNER JOIN "Project" p ON p."id" = qt."projectId" WHERE qt."projectId" = $1 AND p."userId" = $2 ORDER BY qt."createdAt" DESC', [where.projectId, where.userId])).map((row) => normalizeQueryTemplateRow(row));
+    },
+    async findByIdForUser({ where }: { where: { id: string; userId: string } }) {
+      await ensureQueryTemplateSchema();
+      return normalizeQueryTemplateRow((await queryTemplateQuery('SELECT qt.* FROM "QueryTemplate" qt INNER JOIN "Project" p ON p."id" = qt."projectId" WHERE qt."id" = $1 AND p."userId" = $2 LIMIT 1', [where.id, where.userId]))[0] ?? null);
+    },
+    async createMany({ data }: { data: Data[] }) {
+      await ensureQueryTemplateSchema();
+      const rows: QueryTemplateRow[] = [];
+      for (const item of data) {
+        const now = new Date();
+        const row = await queryTemplateQuery('INSERT INTO "QueryTemplate" ("id", "projectId", "content", "category", "intent", "priority", "status", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *', [
+          item.id ?? createId(),
+          item.projectId,
+          item.content,
+          item.category,
+          item.intent,
+          item.priority ?? "medium",
+          item.status ?? "GENERATED",
+          now,
+          now,
+        ]);
+        rows.push(normalizeQueryTemplateRow(row[0]));
+      }
+      return rows;
+    },
+    async updateStatus({ where, data }: { where: { id: string; userId: string }; data: { status: string } }) {
+      await ensureQueryTemplateSchema();
+      return normalizeQueryTemplateRow((await queryTemplateQuery('UPDATE "QueryTemplate" qt SET "status" = $1, "updatedAt" = $2 FROM "Project" p WHERE qt."id" = $3 AND qt."projectId" = p."id" AND p."userId" = $4 RETURNING qt.*', [data.status, new Date(), where.id, where.userId]))[0] ?? null);
+    },
+  },
   visibilityCampaign: {
     async findManyForUser({ where }: { where: { userId: string; projectId?: string } }) {
       await ensureVisibilitySchema();
@@ -553,6 +621,10 @@ export const prisma = {
     async findFirstForUser({ where }: { where: { id: string; userId: string } }) {
       await ensureVisibilitySchema();
       return normalizeVisibilityCampaignRow((await visibilityCampaignQuery('SELECT vc.* FROM "VisibilityCampaign" vc INNER JOIN "Project" p ON p."id" = vc."projectId" WHERE vc."id" = $1 AND p."userId" = $2 LIMIT 1', [where.id, where.userId]))[0] ?? null);
+    },
+    async findByKeywordForUser({ where }: { where: { projectId: string; userId: string; keyword: string } }) {
+      await ensureVisibilitySchema();
+      return normalizeVisibilityCampaignRow((await visibilityCampaignQuery('SELECT vc.* FROM "VisibilityCampaign" vc INNER JOIN "Project" p ON p."id" = vc."projectId" WHERE vc."projectId" = $1 AND p."userId" = $2 AND vc."keyword" = $3 ORDER BY vc."createdAt" DESC LIMIT 1', [where.projectId, where.userId, where.keyword]))[0] ?? null);
     },
   },
   visibilityPrompt: {
