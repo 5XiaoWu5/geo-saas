@@ -1284,6 +1284,45 @@ export const prisma = {
       ]))[0] ?? null);
     },
   },
+  insightSource: {
+    async projectsForUser({ where }: { where: { userId: string } }) {
+      return (await projectQuery('SELECT * FROM "Project" WHERE "userId" = $1 ORDER BY "createdAt" DESC', [where.userId])).map((row) => normalizeProjectRow(row));
+    },
+    async projectForUser({ where }: { where: { id: string; userId: string } }) {
+      return normalizeProjectRow((await projectQuery('SELECT * FROM "Project" WHERE "id" = $1 AND "userId" = $2 LIMIT 1', [where.id, where.userId]))[0] ?? null);
+    },
+    async simulationTasksForProject({ where }: { where: { projectId: string; userId: string; limit?: number } }) {
+      const limit = Math.max(1, Math.min(200, where.limit ?? 200));
+      return (await simulationTaskQuery('SELECT st.* FROM "SimulationTask" st INNER JOIN "Project" p ON p."id" = st."projectId" WHERE st."projectId" = $1 AND p."userId" = $2 ORDER BY st."createdAt" DESC LIMIT $3', [where.projectId, where.userId, limit])).map((row) => normalizeSimulationTaskRow(row));
+    },
+    async simulationResultsForTasks({ where }: { where: { taskIds: string[] } }) {
+      if (!where.taskIds.length) return [];
+      return (await simulationResultQuery('SELECT * FROM "SimulationResult" WHERE "taskId" = ANY($1::text[]) ORDER BY "createdAt" DESC', [where.taskIds])).map((row) => normalizeSimulationResultRow(row));
+    },
+    async growthSnapshotsForProject({ where }: { where: { projectId: string; userId: string; limit?: number } }) {
+      const limit = Math.max(1, Math.min(1000, where.limit ?? 500));
+      return (await growthSnapshotQuery('SELECT gs.* FROM "GrowthSnapshot" gs INNER JOIN "Project" p ON p."id" = gs."projectId" WHERE gs."projectId" = $1 AND p."userId" = $2 ORDER BY gs."createdAt" DESC LIMIT $3', [where.projectId, where.userId, limit])).map((row) => normalizeGrowthSnapshotRow(row));
+    },
+    async geoAnalysisForProject({ where }: { where: { projectId: string; userId: string } }) {
+      return normalizeGeoAnalysisRow((await geoAnalysisQuery('SELECT ga.* FROM "GeoAnalysis" ga INNER JOIN "Project" p ON p."id" = ga."projectId" WHERE ga."projectId" = $1 AND p."userId" = $2 ORDER BY ga."createdAt" DESC LIMIT 1', [where.projectId, where.userId]))[0] ?? null);
+    },
+    async entityProfileForProject({ where }: { where: { projectId: string; userId: string } }) {
+      return normalizeEntityProfileRow((await entityProfileQuery('SELECT ep.* FROM "EntityProfile" ep INNER JOIN "Project" p ON p."id" = ep."projectId" WHERE ep."projectId" = $1 AND p."userId" = $2 ORDER BY ep."updatedAt" DESC LIMIT 1', [where.projectId, where.userId]))[0] ?? null);
+    },
+    async visibilityCampaignsForProject({ where }: { where: { projectId: string; userId: string } }) {
+      return (await visibilityCampaignQuery('SELECT vc.* FROM "VisibilityCampaign" vc INNER JOIN "Project" p ON p."id" = vc."projectId" WHERE vc."projectId" = $1 AND p."userId" = $2 ORDER BY vc."createdAt" DESC', [where.projectId, where.userId])).map((row) => normalizeVisibilityCampaignRow(row));
+    },
+    async visibilityChecksForCampaigns({ where }: { where: { campaignIds: string[]; userId: string } }) {
+      if (!where.campaignIds.length) return [];
+      return (await visibilityCheckQuery('SELECT vc.* FROM "VisibilityCheck" vc INNER JOIN "VisibilityCampaign" c ON c."id" = vc."campaignId" INNER JOIN "Project" p ON p."id" = c."projectId" WHERE vc."campaignId" = ANY($1::text[]) AND p."userId" = $2 ORDER BY vc."createdAt" DESC', [where.campaignIds, where.userId])).map((row) => normalizeVisibilityCheckRow(row));
+    },
+    async geoCampaignsForProject({ where }: { where: { projectId: string; userId: string } }) {
+      return (await geoCampaignQuery('SELECT gc.* FROM "GeoCampaign" gc INNER JOIN "Project" p ON p."id" = gc."projectId" WHERE gc."projectId" = $1 AND p."userId" = $2 ORDER BY gc."createdAt" DESC', [where.projectId, where.userId])).map((row) => normalizeGeoCampaignRow(row));
+    },
+    async optimizationTasksForProject({ where }: { where: { projectId: string; userId: string } }) {
+      return (await optimizationTaskQuery('SELECT ot.* FROM "OptimizationTask" ot INNER JOIN "Project" p ON p."id" = ot."projectId" WHERE ot."projectId" = $1 AND p."userId" = $2 ORDER BY ot."createdAt" DESC', [where.projectId, where.userId])).map((row) => normalizeOptimizationTaskRow(row));
+    },
+  },
   async $transaction(operations: Array<Promise<unknown>>) {
     return Promise.all(operations);
   },

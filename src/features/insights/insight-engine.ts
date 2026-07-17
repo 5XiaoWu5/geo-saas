@@ -55,26 +55,26 @@ function unavailableSources(values: Array<[InsightSourceType, unknown]>) {
 }
 
 export async function buildProjectInsight(userId: string, projectId: string): Promise<ProjectInsight> {
-  const projectRow = await prisma.project.findFirst({ where: { id: projectId, userId } });
+  const projectRow = await prisma.insightSource.projectForUser({ where: { id: projectId, userId } });
   if (!projectRow) throw new InsightEngineError("PROJECT_FORBIDDEN", 403);
   const project = toProject(projectRow);
 
   const [tasks, growthSnapshots, analysis, entityProfile, visibilityCampaignRows, campaigns, tasksForOptimization] = await Promise.all([
-    loadOptionalInsightSource<SimulationTask[]>("SimulationTask", async () => (await prisma.simulationTask.findManyForUser({ where: { userId, projectId, limit: 200 } })).map(toSimulationTask), []),
-    loadOptionalInsightSource<GrowthSnapshot[]>("GrowthSnapshot", async () => (await prisma.growthSnapshot.findManyForUser({ where: { userId, projectId, limit: 500 } })).map(toGrowthSnapshot), []),
+    loadOptionalInsightSource<SimulationTask[]>("SimulationTask", async () => (await prisma.insightSource.simulationTasksForProject({ where: { userId, projectId, limit: 200 } })).map(toSimulationTask), []),
+    loadOptionalInsightSource<GrowthSnapshot[]>("GrowthSnapshot", async () => (await prisma.insightSource.growthSnapshotsForProject({ where: { userId, projectId, limit: 500 } })).map(toGrowthSnapshot), []),
     loadOptionalInsightSource<GeoAnalysis | null>("GeoAnalysis", async () => {
-      const row = await prisma.geoAnalysis.findLatest({ where: { projectId } });
+      const row = await prisma.insightSource.geoAnalysisForProject({ where: { projectId, userId } });
       return row ? toGeoAnalysis(row) : null;
     }, null),
     loadOptionalInsightSource<EntityProfile | null>("EntityProfile", async () => {
-      const row = await prisma.entityProfile.findFirstForProject({ where: { projectId, userId } });
+      const row = await prisma.insightSource.entityProfileForProject({ where: { projectId, userId } });
       return row ? toEntityProfile(row) : null;
     }, null),
-    loadOptionalInsightSource<Record<string, unknown>[]>("VisibilityCampaign", () => prisma.visibilityCampaign.findManyForUser({ where: { projectId, userId } }), []),
-    loadOptionalInsightSource<GeoCampaign[]>("GeoCampaign", async () => (await prisma.geoCampaign.findManyForUser({ where: { projectId, userId } })).map(toGeoCampaign), []),
-    loadOptionalInsightSource<OptimizationTask[]>("OptimizationTask", async () => (await prisma.optimizationTask.findManyForProject({ where: { projectId, userId } })).map(toOptimizationTask), []),
+    loadOptionalInsightSource<Record<string, unknown>[]>("VisibilityCampaign", () => prisma.insightSource.visibilityCampaignsForProject({ where: { projectId, userId } }), []),
+    loadOptionalInsightSource<GeoCampaign[]>("GeoCampaign", async () => (await prisma.insightSource.geoCampaignsForProject({ where: { projectId, userId } })).map(toGeoCampaign), []),
+    loadOptionalInsightSource<OptimizationTask[]>("OptimizationTask", async () => (await prisma.insightSource.optimizationTasksForProject({ where: { projectId, userId } })).map(toOptimizationTask), []),
   ]);
-  const results = await loadOptionalInsightSource<SimulationResult[]>("SimulationResult", async () => (await prisma.simulationResult.findManyForTasks({ where: { taskIds: tasks.map((task) => task.id) } })).map(toSimulationResult), []);
+  const results = await loadOptionalInsightSource<SimulationResult[]>("SimulationResult", async () => (await prisma.insightSource.simulationResultsForTasks({ where: { taskIds: tasks.map((task) => task.id) } })).map(toSimulationResult), []);
   const resultByTaskId = new Map(results.map((result) => [result.taskId, result]));
   const latestSimulationTask = tasks.find((task) => task.status === "COMPLETED" && resultByTaskId.has(task.id)) ?? null;
   const simulation = latestSimulationTask ? resultByTaskId.get(latestSimulationTask.id) ?? null : null;
@@ -86,7 +86,7 @@ export async function buildProjectInsight(userId: string, projectId: string): Pr
   else if (analysis && validScore(analysis.totalScore)) anchor = { score: analysis.totalScore, sourceType: "GeoAnalysis", sourceId: analysis.id, createdAt: analysis.createdAt };
 
   const campaignIds = visibilityCampaignRows.map((row) => String(row.id));
-  const visibilityChecks = await loadOptionalInsightSource<VisibilityCheck[]>("VisibilityCheck", async () => (await prisma.visibilityCheck.findManyForUser({ where: { userId, campaignIds } })).map(toVisibilityCheck), []);
+  const visibilityChecks = await loadOptionalInsightSource<VisibilityCheck[]>("VisibilityCheck", async () => (await prisma.insightSource.visibilityChecksForCampaigns({ where: { userId, campaignIds } })).map(toVisibilityCheck), []);
   const unavailable = unavailableSources([
     ["SimulationResult", simulation],
     ["GrowthSnapshot", growth],
@@ -123,7 +123,7 @@ export async function buildProjectInsight(userId: string, projectId: string): Pr
 }
 
 export async function loadInsightsWorkspace(userId: string, requestedProjectId?: string | null): Promise<InsightsResponse> {
-  const projects = (await prisma.project.findMany({ where: { userId } })).map(toProject);
+  const projects = (await prisma.insightSource.projectsForUser({ where: { userId } })).map(toProject);
   const selectedProjectId = requestedProjectId && projects.some((project) => project.id === requestedProjectId) ? requestedProjectId : projects[0]?.id ?? null;
   const insights = await Promise.all(projects.map((project) => buildProjectInsight(userId, project.id)));
   return { projects: projects.map((project) => ({ id: project.id, name: project.name, websiteUrl: project.websiteUrl })), selectedProjectId, insights };
