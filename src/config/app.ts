@@ -1,5 +1,5 @@
 ﻿import type { LucideIcon } from "lucide-react";
-import { Activity, BarChart3, Boxes, ClipboardList, CreditCard, FileText, Gauge, HelpCircle, KeyRound, Layers3, ScanSearch, Settings, Sparkles, UserCircle } from "lucide-react";
+import { Activity, BarChart3, Boxes, ClipboardList, CreditCard, Eye, FileText, Gauge, HelpCircle, KeyRound, Layers3, ScanSearch, Settings, Sparkles, UserCircle } from "lucide-react";
 
 export type NavItem = {
   titleKey: string;
@@ -20,6 +20,7 @@ export const mainNavItems: NavItem[] = [
   { titleKey: "nav.siteInventory", href: "/inventory", icon: Boxes },
   { titleKey: "nav.analyzer", href: "/analyzer", icon: Sparkles },
   { titleKey: "nav.optimization", href: "/optimization", icon: ClipboardList },
+  { titleKey: "nav.visibility", href: "/visibility", icon: Eye },
   { titleKey: "nav.monitoring", href: "/monitoring", icon: Activity },
   { titleKey: "nav.analysis", href: "/analysis", icon: BarChart3 },
   { titleKey: "nav.reports", href: "/reports", icon: FileText },
@@ -32,5 +33,4 @@ export const accountNavItems: NavItem[] = [
   { titleKey: "nav.billing", href: "/billing", icon: CreditCard },
   { titleKey: "nav.help", href: "/help", icon: HelpCircle },
 ];
-
 

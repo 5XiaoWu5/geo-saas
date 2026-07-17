@@ -1,6 +1,6 @@
-import { redirect } from "next/navigation";
+import { VisibilityWorkspace } from "@/features/visibility/visibility-workspace";
 
 export default async function ProjectVisibilityPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
-  redirect(`/projects/${projectId}`);
+  return <VisibilityWorkspace initialProjectId={projectId} />;
 }

@@ -9,6 +9,7 @@ import {
   BarChart3,
   CheckCircle2,
   ClipboardList,
+  Eye,
   FileJson2,
   Globe2,
   Heading1,
@@ -180,6 +181,11 @@ export function ProjectOverviewTab() {
             <Button asChild variant="outline">
               <Link href={`/projects/${project.id}/optimization`}>
                 <ClipboardList className="h-4 w-4" /> 进入优化中心
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href={`/projects/${project.id}/visibility`}>
+                <Eye className="h-4 w-4" /> AI 可见性
               </Link>
             </Button>
           </div>

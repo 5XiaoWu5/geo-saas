@@ -44,6 +44,7 @@ export const zh = {
     siteInventory: "网站资产库",
     analyzer: "GEO 分析器",
     optimization: "优化中心",
+    visibility: "AI 可见性",
     monitoring: "GEO 监控",
     analysis: "分析",
     reports: "报告",

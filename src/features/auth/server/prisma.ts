@@ -86,6 +86,25 @@ type OptimizationTaskRow = Record<string, unknown> & {
   updatedAt: Date;
 };
 
+type VisibilityCampaignRow = Record<string, unknown> & {
+  id: string;
+  projectId: string;
+  keyword: string;
+  createdAt: Date;
+};
+
+type VisibilityCheckRow = Record<string, unknown> & {
+  id: string;
+  campaignId: string;
+  provider: string;
+  prompt: string;
+  answer: string;
+  brandMentioned: boolean;
+  position: number | null;
+  score: number;
+  createdAt: Date;
+};
+
 const fallbackDatabaseUrl = "postgresql://postgres:postgres@127.0.0.1:5432/geopilot_ai";
 
 if (!process.env.DATABASE_URL) {
@@ -119,6 +138,16 @@ async function geoAnalysisQuery(sqlText: string, params: unknown[] = []): Promis
 async function optimizationTaskQuery(sqlText: string, params: unknown[] = []): Promise<OptimizationTaskRow[]> {
   const sql = getSql();
   return (await sql.query(sqlText, params)) as OptimizationTaskRow[];
+}
+
+async function visibilityCampaignQuery(sqlText: string, params: unknown[] = []): Promise<VisibilityCampaignRow[]> {
+  const sql = getSql();
+  return (await sql.query(sqlText, params)) as VisibilityCampaignRow[];
+}
+
+async function visibilityCheckQuery(sqlText: string, params: unknown[] = []): Promise<VisibilityCheckRow[]> {
+  const sql = getSql();
+  return (await sql.query(sqlText, params)) as VisibilityCheckRow[];
 }
 
 function createId() {
@@ -172,10 +201,23 @@ function normalizeOptimizationTaskRow<T extends OptimizationTaskRow | null>(row:
   return row;
 }
 
+function normalizeVisibilityCampaignRow<T extends VisibilityCampaignRow | null>(row: T): T {
+  if (!row) return row;
+  if (row.createdAt && !(row.createdAt instanceof Date)) row.createdAt = new Date(row.createdAt as string);
+  return row;
+}
+
+function normalizeVisibilityCheckRow<T extends VisibilityCheckRow | null>(row: T): T {
+  if (!row) return row;
+  if (row.createdAt && !(row.createdAt instanceof Date)) row.createdAt = new Date(row.createdAt as string);
+  return row;
+}
+
 let projectSchemaReady = false;
 let websiteScanSchemaReady = false;
 let geoAnalysisSchemaReady = false;
 let optimizationTaskSchemaReady = false;
+let visibilitySchemaReady = false;
 
 async function ensureProjectSchema() {
   if (projectSchemaReady) return;
@@ -218,6 +260,16 @@ async function ensureOptimizationTaskSchema() {
   await optimizationTaskQuery('CREATE INDEX IF NOT EXISTS "OptimizationTask_projectId_idx" ON "OptimizationTask"("projectId")');
   await optimizationTaskQuery('CREATE UNIQUE INDEX IF NOT EXISTS "OptimizationTask_projectId_issueId_key" ON "OptimizationTask"("projectId", "issueId")');
   optimizationTaskSchemaReady = true;
+}
+
+async function ensureVisibilitySchema() {
+  if (visibilitySchemaReady) return;
+  await ensureProjectSchema();
+  await visibilityCampaignQuery('CREATE TABLE IF NOT EXISTS "VisibilityCampaign" ("id" TEXT PRIMARY KEY, "projectId" TEXT NOT NULL, "keyword" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
+  await visibilityCampaignQuery('CREATE INDEX IF NOT EXISTS "VisibilityCampaign_projectId_idx" ON "VisibilityCampaign"("projectId")');
+  await visibilityCheckQuery('CREATE TABLE IF NOT EXISTS "VisibilityCheck" ("id" TEXT PRIMARY KEY, "campaignId" TEXT NOT NULL, "provider" TEXT NOT NULL, "prompt" TEXT NOT NULL, "answer" TEXT NOT NULL, "brandMentioned" BOOLEAN NOT NULL DEFAULT false, "position" INTEGER, "score" INTEGER NOT NULL DEFAULT 0, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
+  await visibilityCheckQuery('CREATE INDEX IF NOT EXISTS "VisibilityCheck_campaignId_idx" ON "VisibilityCheck"("campaignId")');
+  visibilitySchemaReady = true;
 }
 
 function assignments(data: Data, start = 1) {
@@ -455,6 +507,49 @@ export const prisma = {
     async deleteByProjectId({ where }: { where: { projectId: string } }) {
       await ensureOptimizationTaskSchema();
       return { count: (await optimizationTaskQuery('DELETE FROM "OptimizationTask" WHERE "projectId" = $1 RETURNING "id"', [where.projectId])).length };
+    },
+  },
+  visibilityCampaign: {
+    async findManyForUser({ where }: { where: { userId: string; projectId?: string } }) {
+      await ensureVisibilitySchema();
+      const rows = where.projectId
+        ? await visibilityCampaignQuery('SELECT vc.* FROM "VisibilityCampaign" vc INNER JOIN "Project" p ON p."id" = vc."projectId" WHERE p."userId" = $1 AND vc."projectId" = $2 ORDER BY vc."createdAt" DESC', [where.userId, where.projectId])
+        : await visibilityCampaignQuery('SELECT vc.* FROM "VisibilityCampaign" vc INNER JOIN "Project" p ON p."id" = vc."projectId" WHERE p."userId" = $1 ORDER BY vc."createdAt" DESC', [where.userId]);
+      return rows.map((row) => normalizeVisibilityCampaignRow(row));
+    },
+    async create({ data }: { data: Data }) {
+      await ensureVisibilitySchema();
+      return normalizeVisibilityCampaignRow((await visibilityCampaignQuery('INSERT INTO "VisibilityCampaign" ("id", "projectId", "keyword", "createdAt") VALUES ($1, $2, $3, $4) RETURNING *', [data.id ?? createId(), data.projectId, data.keyword, new Date()]))[0]);
+    },
+    async findFirstForUser({ where }: { where: { id: string; userId: string } }) {
+      await ensureVisibilitySchema();
+      return normalizeVisibilityCampaignRow((await visibilityCampaignQuery('SELECT vc.* FROM "VisibilityCampaign" vc INNER JOIN "Project" p ON p."id" = vc."projectId" WHERE vc."id" = $1 AND p."userId" = $2 LIMIT 1', [where.id, where.userId]))[0] ?? null);
+    },
+  },
+  visibilityCheck: {
+    async findManyForUser({ where }: { where: { userId: string; projectId?: string; campaignIds?: string[] } }) {
+      await ensureVisibilitySchema();
+      if (where.campaignIds && where.campaignIds.length === 0) return [];
+      const rows = where.campaignIds
+        ? await visibilityCheckQuery('SELECT vc.* FROM "VisibilityCheck" vc INNER JOIN "VisibilityCampaign" c ON c."id" = vc."campaignId" INNER JOIN "Project" p ON p."id" = c."projectId" WHERE p."userId" = $1 AND vc."campaignId" = ANY($2::text[]) ORDER BY vc."createdAt" DESC', [where.userId, where.campaignIds])
+        : where.projectId
+          ? await visibilityCheckQuery('SELECT vc.* FROM "VisibilityCheck" vc INNER JOIN "VisibilityCampaign" c ON c."id" = vc."campaignId" INNER JOIN "Project" p ON p."id" = c."projectId" WHERE p."userId" = $1 AND c."projectId" = $2 ORDER BY vc."createdAt" DESC', [where.userId, where.projectId])
+          : await visibilityCheckQuery('SELECT vc.* FROM "VisibilityCheck" vc INNER JOIN "VisibilityCampaign" c ON c."id" = vc."campaignId" INNER JOIN "Project" p ON p."id" = c."projectId" WHERE p."userId" = $1 ORDER BY vc."createdAt" DESC', [where.userId]);
+      return rows.map((row) => normalizeVisibilityCheckRow(row));
+    },
+    async create({ data }: { data: Data }) {
+      await ensureVisibilitySchema();
+      return normalizeVisibilityCheckRow((await visibilityCheckQuery('INSERT INTO "VisibilityCheck" ("id", "campaignId", "provider", "prompt", "answer", "brandMentioned", "position", "score", "createdAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *', [
+        data.id ?? createId(),
+        data.campaignId,
+        data.provider,
+        data.prompt,
+        data.answer,
+        data.brandMentioned ?? false,
+        data.position ?? null,
+        data.score ?? 0,
+        new Date(),
+      ]))[0]);
     },
   },
   async $transaction(operations: Array<Promise<unknown>>) {

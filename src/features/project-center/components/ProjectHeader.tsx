@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Activity, BarChart3, CalendarClock, CheckCircle2, ClipboardList, Globe2 } from "lucide-react";
+import { Activity, BarChart3, CalendarClock, CheckCircle2, ClipboardList, Eye, Globe2 } from "lucide-react";
 import { useProject } from "@/features/project-center/context/ProjectContext";
 import { getProjectStatusLabel } from "@/features/projects/project-mapper";
 import { Badge } from "@/components/ui/badge";
@@ -31,10 +31,15 @@ export function ProjectHeader() {
               <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">创建于 {formatDate(project.createdAt)}</span>
               <span className="max-w-full break-all rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-1">项目 ID {project.id}</span>
             </div>
-            <div className="mt-5">
+            <div className="mt-5 flex flex-wrap gap-2">
               <Button asChild>
                 <Link href={`/projects/${project.id}/optimization`}>
                   <ClipboardList className="h-4 w-4" /> 进入优化中心
+                </Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href={`/projects/${project.id}/visibility`}>
+                  <Eye className="h-4 w-4" /> AI 可见性
                 </Link>
               </Button>
             </div>
