@@ -122,7 +122,7 @@ export function SimulatorWorkspace({ initialProjectId, initialCampaignId, initia
   const projects = data?.projects ?? [];
   return (
     <div className="min-w-0 space-y-6">
-      <PageHeader title={t("simulator.title")} description={t("simulator.description")} action={<Button asChild variant="outline"><Link href="/campaigns">{t("simulator.openCampaigns")} <ArrowRight className="h-4 w-4" /></Link></Button>} />
+      <PageHeader title={t("simulator.title")} description={t("simulator.description")} action={<div className="flex flex-wrap gap-2"><Button asChild variant="outline"><Link href="/campaigns">{t("simulator.openCampaigns")} <ArrowRight className="h-4 w-4" /></Link></Button>{projectId ? <Button asChild variant="outline"><Link href={`/project/${projectId}/insights`}>{t("insights.viewInsights")} <ArrowRight className="h-4 w-4" /></Link></Button> : null}</div>} />
 
       {errorMessage ? <div className="flex gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive"><AlertCircle className="h-4 w-4 shrink-0" /><span className="break-words">{errorMessage}</span></div> : null}
 
@@ -173,4 +173,3 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export const simulatorProviders = SIMULATION_PROVIDERS;
-

@@ -38,7 +38,7 @@ async function readJson<T>(response: Response): Promise<T> {
   return data;
 }
 
-export function OptimizationWorkspace({ initialProjectId }: { initialProjectId?: string }) {
+export function OptimizationWorkspace({ initialProjectId, initialIssueId }: { initialProjectId?: string; initialIssueId?: string }) {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [projectId, setProjectId] = useState(initialProjectId ?? "");
   const [data, setData] = useState<OptimizationData | null>(null);
@@ -86,6 +86,14 @@ export function OptimizationWorkspace({ initialProjectId }: { initialProjectId?:
   useEffect(() => {
     if (projectId) void loadData(projectId);
   }, [projectId, loadData]);
+
+  useEffect(() => {
+    if (!initialIssueId || !data?.tasks.some((task) => task.issueId === initialIssueId)) return;
+    const task = data.tasks.find((item) => item.issueId === initialIssueId);
+    if (!task) return;
+    const frame = requestAnimationFrame(() => document.getElementById(`optimization-task-${task.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
+    return () => cancelAnimationFrame(frame);
+  }, [data, initialIssueId]);
 
   async function createTask(issue: GeoIssue) {
     setBusyIssueId(toIssueId(issue));
@@ -240,7 +248,7 @@ export function OptimizationWorkspace({ initialProjectId }: { initialProjectId?:
                 <p className="text-sm text-muted-foreground">还没有优化任务。从左侧问题列表点击「加入任务」开始跟踪。</p>
               ) : (
                 tasks.map((task) => (
-                  <TaskRow key={task.id} task={task} busy={busyTaskId === task.id} onStatusChange={(status) => void updateStatus(task.id, status)} />
+                  <TaskRow key={task.id} task={task} busy={busyTaskId === task.id} highlighted={task.issueId === initialIssueId} onStatusChange={(status) => void updateStatus(task.id, status)} />
                 ))
               )}
             </CardContent>
@@ -293,9 +301,9 @@ function IssueRow({ issue, busy, onCreate }: { issue: GeoIssue; busy: boolean; o
   );
 }
 
-function TaskRow({ task, busy, onStatusChange }: { task: OptimizationTask; busy: boolean; onStatusChange: (status: OptimizationStatus) => void }) {
+function TaskRow({ task, busy, highlighted, onStatusChange }: { task: OptimizationTask; busy: boolean; highlighted: boolean; onStatusChange: (status: OptimizationStatus) => void }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+    <div id={`optimization-task-${task.id}`} className={`rounded-2xl border bg-white/[0.03] p-4 transition ${highlighted ? "border-primary/50 ring-2 ring-primary/20" : "border-white/10"}`}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="break-words text-sm font-medium text-foreground">{task.title}</p>

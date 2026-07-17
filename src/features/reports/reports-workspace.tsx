@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { formatDateTime, getHostname } from "@/lib/format";
 import { useI18n } from "@/i18n/provider";
+import { InsightSummary } from "@/features/insights";
 
 async function loadReports(): Promise<ReportsResponse> {
   const response = await fetch("/api/reports", { cache: "no-store" });
@@ -225,6 +226,8 @@ function ProjectReportView({ report }: { report: ProjectReport }) {
           </CardHeader>
         </Card>
       ) : null}
+
+      <InsightSummary projectId={report.projectId} />
 
       <Card className="glass-panel border-white/10">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><CardTitle className="flex items-center gap-2 text-lg"><TrendingUp className="h-5 w-5 text-primary" />{t("growth.reportTitle")}</CardTitle><p className="mt-1 text-sm text-muted-foreground">{t("growth.ranges.30d")}</p></div><Button asChild variant="outline" size="sm"><Link href={`/project/${report.projectId}/growth`}>{t("growth.viewGrowth")}</Link></Button></CardHeader>

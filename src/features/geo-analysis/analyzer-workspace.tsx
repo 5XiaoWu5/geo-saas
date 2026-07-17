@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { formatDateTime, getHostname } from "@/lib/format";
 import { useI18n } from "@/i18n/provider";
+import { InsightSummary } from "@/features/insights";
 
 type AnalyzerSummary = {
   totalScore: number;
@@ -227,6 +228,8 @@ export function AnalyzerWorkspace() {
           </CardContent>
         </Card>
       ) : null}
+
+      <InsightSummary projectId={activeProject.projectId} />
 
       <Card className="glass-panel border-white/10">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
