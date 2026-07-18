@@ -10,6 +10,7 @@
     "db:migrate:deploy": "node scripts/deploy-migrations.mjs",
     "check:competitor-foundation": "node scripts/check-competitor-foundation.mjs",
     "check:benchmark-repository": "node scripts/check-benchmark-repository.mjs",
+    "test:benchmark-engine": "tsx --test src/features/competitor-benchmark/benchmark-engine.test.ts",
     "preview": "opennextjs-cloudflare preview",
     "start": "next start",
     "lint": "eslint",
@@ -53,6 +54,7 @@
     "postcss": "^8.4.49",
     "prisma": "^6.11.1",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.23.1",
     "typescript": "^5.7.2",
     "wrangler": "^4.107.1"
   }

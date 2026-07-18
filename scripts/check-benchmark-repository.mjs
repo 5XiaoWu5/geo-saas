@@ -1,8 +1,12 @@
 import { readFileSync } from "node:fs";
 
-const path = "src/features/competitor-benchmark/benchmark.repository.ts";
-const source = readFileSync(path, "utf8");
-const queryLines = source.split(/\r?\n/).filter((line) => line.includes("competitorDatabase().query("));
+const paths = [
+  "src/features/competitor-benchmark/benchmark.repository.ts",
+  "src/features/competitor-benchmark/benchmark-optimization-builder.ts",
+];
+const sources = paths.map((path) => readFileSync(path, "utf8"));
+const source = sources.join("\n");
+const queryLines = sources.flatMap((content) => content.split(/\r?\n/).filter((line) => line.includes("competitorDatabase().query(")));
 
 if (!queryLines.length) throw new Error("Benchmark repository has no database queries to verify.");
 
@@ -15,8 +19,12 @@ for (const line of queryLines) {
   }
 }
 
-if (!source.includes('cp."projectId" = br."projectId"')) {
+if (!source.includes('cp."projectId" = run."projectId"')) {
   throw new Error("Benchmark result writes must verify competitor and run project ownership.");
+}
+
+if (!source.includes('ON CONFLICT ("projectId", "issueId") DO NOTHING')) {
+  throw new Error("Benchmark optimization writes must preserve issueId idempotency.");
 }
 
 console.log(`Verified ${queryLines.length} user-scoped Benchmark repository queries.`);

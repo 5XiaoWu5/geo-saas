@@ -107,6 +107,11 @@ export const competitorRepository = {
     return row ? toCompetitorSnapshot(row) : null;
   },
 
+  async latestSnapshotsForProject(userId: string, projectId: string) {
+    const rows = await competitorDatabase().query('SELECT DISTINCT ON (cp."id") cs.* FROM "CompetitorProfile" cp INNER JOIN "Project" p ON p."id" = cp."projectId" LEFT JOIN "CompetitorSnapshot" cs ON cs."competitorId" = cp."id" WHERE cp."projectId" = $1 AND p."userId" = $2 AND cs."id" IS NOT NULL ORDER BY cp."id", cs."createdAt" DESC', [projectId, userId]);
+    return rows.map(toCompetitorSnapshot);
+  },
+
   async saveSnapshotForUser(userId: string, input: CompetitorSnapshotInput) {
     const row = (await competitorDatabase().query('INSERT INTO "CompetitorSnapshot" ("id", "competitorId", "overallScore", "visibilityScore", "entityScore", "schemaScore", "authorityScore", "citationScore", "methodVersion", "sourceId", "metadata", "createdAt") SELECT $1, cp."id", $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13 FROM "CompetitorProfile" cp INNER JOIN "Project" p ON p."id" = cp."projectId" WHERE cp."id" = $2 AND cp."projectId" = $3 AND p."userId" = $14 ON CONFLICT ("competitorId", "methodVersion", "sourceId") DO UPDATE SET "overallScore" = EXCLUDED."overallScore", "visibilityScore" = EXCLUDED."visibilityScore", "entityScore" = EXCLUDED."entityScore", "schemaScore" = EXCLUDED."schemaScore", "authorityScore" = EXCLUDED."authorityScore", "citationScore" = EXCLUDED."citationScore", "metadata" = EXCLUDED."metadata" RETURNING *', [
       crypto.randomUUID(),

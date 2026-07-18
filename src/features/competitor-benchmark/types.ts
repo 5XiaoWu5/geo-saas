@@ -149,6 +149,88 @@ export type BenchmarkGap = {
   difference: number | null;
 };
 
+export const BENCHMARK_DIMENSIONS = ["visibility", "entity", "schema", "authority", "citation", "simulation"] as const;
+export type BenchmarkDimension = (typeof BENCHMARK_DIMENSIONS)[number];
+export type BenchmarkGapMetric = "overall" | BenchmarkDimension;
+
+export type BenchmarkMetricEvidence = {
+  available: boolean;
+  score: number | null;
+  confidence: number | null;
+  sourceType: string;
+  sourceIds: string[];
+  sampleSize: number;
+  method: string;
+};
+
+export type BenchmarkTargetEvidence = {
+  targetType: BenchmarkTargetType;
+  targetKey: string;
+  competitorId: string | null;
+  name: string;
+  metrics: Record<BenchmarkDimension, BenchmarkMetricEvidence>;
+};
+
+export type BenchmarkScoreBasis = {
+  methodVersion: string;
+  weights: Record<BenchmarkDimension, number>;
+  dimensions: Record<BenchmarkDimension, {
+    available: boolean;
+    confidence: number | null;
+    sourceType: string;
+    sourceIds: string[];
+    sampleSize: number;
+    method: string;
+  }>;
+};
+
+export type CalculatedBenchmarkResult = {
+  benchmarkRunId: string;
+  targetType: BenchmarkTargetType;
+  targetKey: string;
+  competitorId: string | null;
+  name: string;
+  available: boolean;
+  overallScore: number | null;
+  visibilityScore: number | null;
+  entityScore: number | null;
+  schemaScore: number | null;
+  authorityScore: number | null;
+  citationScore: number | null;
+  simulationScore: number | null;
+  difference: number | null;
+  ranking: number | null;
+  coverage: number | null;
+  confidence: number | null;
+  scoreBasis: BenchmarkScoreBasis;
+  metadata: Record<string, unknown>;
+};
+
+export type RankedBenchmarkResult = CalculatedBenchmarkResult & {
+  ranking: number | null;
+  difference: number | null;
+};
+
+export type BenchmarkGapAnalysis = {
+  metric: BenchmarkGapMetric;
+  available: boolean;
+  ownScore: number | null;
+  competitorScore: number | null;
+  difference: number | null;
+  leadingCompetitorId: string | null;
+  leadingCompetitor: string | null;
+  confidence: number | null;
+  actionable: boolean;
+  reason: string;
+};
+
+export type BenchmarkEngineOutput = {
+  status: "available" | "unavailable";
+  run: BenchmarkRun;
+  results: RankedBenchmarkResult[];
+  gaps: BenchmarkGapAnalysis[];
+};
+
 export type CompetitorEntityEvidence = {
   targetType: SimulationTargetType;
   targetId: string;

@@ -10,6 +10,58 @@ import {
   type BenchmarkTargetType,
 } from "./types";
 
+export type BenchmarkAnalysisEvidenceRow = {
+  id: string;
+  totalScore: number;
+  entityScore: number;
+  schemaScore: number;
+  createdAt: string;
+};
+
+export type BenchmarkCompetitorEvidenceRow = {
+  competitorId: string;
+  name: string;
+  snapshotId: string | null;
+  overallScore: number | null;
+  visibilityScore: number | null;
+  entityScore: number | null;
+  schemaScore: number | null;
+  authorityScore: number | null;
+  citationScore: number | null;
+  methodVersion: string | null;
+  createdAt: string | null;
+};
+
+export type BenchmarkSimulationAggregateRow = {
+  targetType: BenchmarkTargetType;
+  competitorId: string | null;
+  sampleCount: number;
+  probability: number | null;
+  confidence: number | null;
+  entityScore: number | null;
+  schemaScore: number | null;
+  authorityScore: number | null;
+  citationScore: number | null;
+  sourceIds: string[];
+};
+
+export type BenchmarkVisibilityAggregateRow = {
+  targetType: BenchmarkTargetType;
+  competitorId: string | null;
+  checkCount: number;
+  mentionCount: number;
+  averagePosition: number | null;
+  citedCheckCount: number;
+  sourceIds: string[];
+};
+
+export type BenchmarkEvidenceBundle = {
+  analysis: BenchmarkAnalysisEvidenceRow | null;
+  competitors: BenchmarkCompetitorEvidenceRow[];
+  simulations: BenchmarkSimulationAggregateRow[];
+  visibility: BenchmarkVisibilityAggregateRow[];
+};
+
 function runStatus(value: unknown): BenchmarkRunStatus {
   const status = String(value ?? "PENDING");
   return BENCHMARK_RUN_STATUSES.includes(status as BenchmarkRunStatus) ? status as BenchmarkRunStatus : "PENDING";
@@ -35,9 +87,19 @@ function validateOptionalScore(value: number | null | undefined) {
 }
 
 function validateResultInput(input: BenchmarkResultInput) {
+  if (!BENCHMARK_TARGET_TYPES.includes(input.targetType)) throw new Error("INVALID_BENCHMARK_RESULT");
   const scores = [input.overallScore, input.visibilityScore, input.entityScore, input.schemaScore, input.authorityScore, input.citationScore, input.simulationScore, input.coverage, input.confidence];
   if (scores.some((score) => !validateOptionalScore(score))) throw new Error("INVALID_BENCHMARK_RESULT");
   if (input.ranking !== null && typeof input.ranking !== "undefined" && (!Number.isInteger(input.ranking) || input.ranking < 1)) throw new Error("INVALID_BENCHMARK_RESULT");
+}
+
+function stringArray(value: unknown) {
+  return Array.isArray(value) ? value.map(String).filter(Boolean).sort() : [];
+}
+
+function averageNumber(value: unknown) {
+  const number = nullableNumber(value);
+  return number === null ? null : Math.round(number);
 }
 
 export function toBenchmarkRun(row: DatabaseRow): BenchmarkRun {
@@ -107,6 +169,60 @@ export const benchmarkRepository = {
     return rows.map(toBenchmarkResult);
   },
 
+  async loadEvidenceForRun(userId: string, run: BenchmarkRun): Promise<BenchmarkEvidenceBundle> {
+    const windowStart = run.windowStart ? new Date(run.windowStart) : null;
+    const windowEnd = run.windowEnd ? new Date(run.windowEnd) : null;
+    const [analysisRows, competitorRows, simulationRows, visibilityRows] = await Promise.all([
+      competitorDatabase().query('SELECT ga."id", ga."totalScore", ga."entityScore", ga."schemaScore", ga."createdAt" FROM "GeoAnalysis" ga INNER JOIN "Project" p ON p."id" = ga."projectId" WHERE ga."projectId" = $1 AND p."userId" = $2 AND ($3::timestamptz IS NULL OR ga."createdAt" <= $3) ORDER BY ga."createdAt" DESC LIMIT 1', [run.projectId, userId, windowEnd]),
+      competitorDatabase().query('SELECT DISTINCT ON (cp."id") cp."id" AS "competitorId", cp."name", cs."id" AS "snapshotId", cs."overallScore", cs."visibilityScore", cs."entityScore", cs."schemaScore", cs."authorityScore", cs."citationScore", cs."methodVersion", cs."createdAt" FROM "CompetitorProfile" cp INNER JOIN "Project" p ON p."id" = cp."projectId" LEFT JOIN "CompetitorSnapshot" cs ON cs."competitorId" = cp."id" AND ($3::timestamptz IS NULL OR cs."createdAt" <= $3) WHERE cp."projectId" = $1 AND p."userId" = $2 AND cp."status" = \'ACTIVE\' ORDER BY cp."id", cs."createdAt" DESC NULLS LAST', [run.projectId, userId, windowEnd]),
+      competitorDatabase().query('SELECT st."targetType"::text AS "targetType", st."competitorId", COUNT(sr."id")::int AS "sampleCount", AVG(sr."probability") AS "probability", AVG(sr."confidence") AS "confidence", AVG(sr."entityScore") AS "entityScore", AVG(sr."schemaScore") AS "schemaScore", AVG(sr."authorityScore") AS "authorityScore", AVG(sr."citationScore") AS "citationScore", (ARRAY_AGG(sr."id" ORDER BY sr."id"))[1:20] AS "sourceIds" FROM "SimulationTask" st INNER JOIN "SimulationResult" sr ON sr."taskId" = st."id" INNER JOIN "Project" p ON p."id" = st."projectId" LEFT JOIN "CompetitorProfile" cp ON cp."id" = st."competitorId" WHERE st."projectId" = $1 AND p."userId" = $2 AND ($3 = \'ALL\' OR st."provider" = $3) AND ($4::text IS NULL OR st."campaignId" = $4) AND ($5::timestamptz IS NULL OR sr."createdAt" >= $5) AND ($6::timestamptz IS NULL OR sr."createdAt" <= $6) AND ((st."targetType" = \'OWN\' AND st."competitorId" IS NULL) OR (st."targetType" = \'COMPETITOR\' AND cp."projectId" = st."projectId")) GROUP BY st."targetType", st."competitorId"', [run.projectId, userId, run.provider, run.campaignId, windowStart, windowEnd]),
+      competitorDatabase().query('WITH filtered_checks AS (SELECT vc.* FROM "VisibilityCheck" vc INNER JOIN "VisibilityCampaign" campaign ON campaign."id" = vc."campaignId" INNER JOIN "Project" p ON p."id" = campaign."projectId" WHERE campaign."projectId" = $1 AND p."userId" = $2 AND ($3 = \'ALL\' OR vc."provider" = $3) AND ($4::timestamptz IS NULL OR vc."createdAt" >= $4) AND ($5::timestamptz IS NULL OR vc."createdAt" <= $5)), own_evidence AS (SELECT \'OWN\'::text AS "targetType", NULL::text AS "competitorId", COUNT(DISTINCT fc."id")::int AS "checkCount", COUNT(DISTINCT fc."id") FILTER (WHERE fc."brandMentioned")::int AS "mentionCount", AVG(fc."mentionPosition") FILTER (WHERE fc."brandMentioned") AS "averagePosition", COUNT(DISTINCT fc."id") FILTER (WHERE CARDINALITY(fc."sourceUrls") > 0 OR citation."id" IS NOT NULL)::int AS "citedCheckCount", (COALESCE(ARRAY_AGG(DISTINCT fc."id" ORDER BY fc."id") FILTER (WHERE fc."id" IS NOT NULL), ARRAY[]::text[]))[1:20] AS "sourceIds" FROM filtered_checks fc LEFT JOIN "VisibilityCitation" citation ON citation."checkId" = fc."id"), competitor_evidence AS (SELECT \'COMPETITOR\'::text AS "targetType", cp."id" AS "competitorId", COUNT(DISTINCT fc."id")::int AS "checkCount", COUNT(DISTINCT fc."id") FILTER (WHERE mention."id" IS NOT NULL)::int AS "mentionCount", AVG(mention."position") FILTER (WHERE mention."id" IS NOT NULL) AS "averagePosition", COUNT(DISTINCT fc."id") FILTER (WHERE citation."id" IS NOT NULL)::int AS "citedCheckCount", (COALESCE(ARRAY_AGG(DISTINCT fc."id" ORDER BY fc."id") FILTER (WHERE fc."id" IS NOT NULL), ARRAY[]::text[]))[1:20] AS "sourceIds" FROM "CompetitorProfile" cp INNER JOIN "Project" p ON p."id" = cp."projectId" LEFT JOIN filtered_checks fc ON TRUE LEFT JOIN "VisibilityMention" mention ON mention."checkId" = fc."id" AND mention."competitorId" = cp."id" LEFT JOIN "VisibilityCitation" citation ON citation."checkId" = fc."id" AND citation."mentionId" = mention."id" WHERE cp."projectId" = $1 AND p."userId" = $2 AND cp."status" = \'ACTIVE\' GROUP BY cp."id") SELECT * FROM own_evidence UNION ALL SELECT * FROM competitor_evidence', [run.projectId, userId, run.provider, windowStart, windowEnd]),
+    ]);
+
+    const analysis = analysisRows[0] ? {
+      id: String(analysisRows[0].id),
+      totalScore: Number(analysisRows[0].totalScore),
+      entityScore: Number(analysisRows[0].entityScore),
+      schemaScore: Number(analysisRows[0].schemaScore),
+      createdAt: isoDate(analysisRows[0].createdAt),
+    } : null;
+    const competitors = competitorRows.map<BenchmarkCompetitorEvidenceRow>((row) => ({
+      competitorId: String(row.competitorId),
+      name: String(row.name ?? ""),
+      snapshotId: row.snapshotId ? String(row.snapshotId) : null,
+      overallScore: nullableNumber(row.overallScore),
+      visibilityScore: nullableNumber(row.visibilityScore),
+      entityScore: nullableNumber(row.entityScore),
+      schemaScore: nullableNumber(row.schemaScore),
+      authorityScore: nullableNumber(row.authorityScore),
+      citationScore: nullableNumber(row.citationScore),
+      methodVersion: row.methodVersion ? String(row.methodVersion) : null,
+      createdAt: row.createdAt ? isoDate(row.createdAt) : null,
+    }));
+    const simulations = simulationRows.map<BenchmarkSimulationAggregateRow>((row) => ({
+      targetType: targetType(row.targetType),
+      competitorId: row.competitorId ? String(row.competitorId) : null,
+      sampleCount: Number(row.sampleCount ?? 0),
+      probability: averageNumber(row.probability),
+      confidence: averageNumber(row.confidence),
+      entityScore: averageNumber(row.entityScore),
+      schemaScore: averageNumber(row.schemaScore),
+      authorityScore: averageNumber(row.authorityScore),
+      citationScore: averageNumber(row.citationScore),
+      sourceIds: stringArray(row.sourceIds),
+    }));
+    const visibility = visibilityRows.map<BenchmarkVisibilityAggregateRow>((row) => ({
+      targetType: targetType(row.targetType),
+      competitorId: row.competitorId ? String(row.competitorId) : null,
+      checkCount: Number(row.checkCount ?? 0),
+      mentionCount: Number(row.mentionCount ?? 0),
+      averagePosition: nullableNumber(row.averagePosition),
+      citedCheckCount: Number(row.citedCheckCount ?? 0),
+      sourceIds: stringArray(row.sourceIds),
+    }));
+    return { analysis, competitors, simulations, visibility };
+  },
+
   async createRunForUser(userId: string, input: BenchmarkRunCreateInput) {
     if (!input.runKey.trim() || !input.scopeHash.trim() || !input.provider.trim() || !input.methodVersion.trim() || !Number.isInteger(input.queryCount) || input.queryCount < 0) throw new Error("INVALID_BENCHMARK_RUN");
     if (input.windowStart && input.windowEnd && input.windowStart > input.windowEnd) throw new Error("INVALID_BENCHMARK_RUN");
@@ -137,30 +253,46 @@ export const benchmarkRepository = {
   },
 
   async upsertResultForUser(userId: string, input: BenchmarkResultInput) {
-    validateResultInput(input);
-    const key = benchmarkTargetKey(input.targetType, input.competitorId);
-    const row = (await competitorDatabase().query('INSERT INTO "BenchmarkResult" ("id", "benchmarkRunId", "targetType", "targetKey", "competitorId", "overallScore", "visibilityScore", "entityScore", "schemaScore", "authorityScore", "citationScore", "simulationScore", "difference", "ranking", "coverage", "confidence", "scoreBasis", "metadata", "createdAt") SELECT $1, br."id", $3::"BenchmarkTargetType", $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18::jsonb, $19 FROM "BenchmarkRun" br INNER JOIN "Project" p ON p."id" = br."projectId" LEFT JOIN "CompetitorProfile" cp ON cp."id" = $5 WHERE br."id" = $2 AND p."userId" = $20 AND (($3 = \'OWN\' AND $5::text IS NULL) OR ($3 = \'COMPETITOR\' AND cp."id" IS NOT NULL AND cp."projectId" = br."projectId")) ON CONFLICT ("benchmarkRunId", "targetKey") DO UPDATE SET "overallScore" = EXCLUDED."overallScore", "visibilityScore" = EXCLUDED."visibilityScore", "entityScore" = EXCLUDED."entityScore", "schemaScore" = EXCLUDED."schemaScore", "authorityScore" = EXCLUDED."authorityScore", "citationScore" = EXCLUDED."citationScore", "simulationScore" = EXCLUDED."simulationScore", "difference" = EXCLUDED."difference", "ranking" = EXCLUDED."ranking", "coverage" = EXCLUDED."coverage", "confidence" = EXCLUDED."confidence", "scoreBasis" = EXCLUDED."scoreBasis", "metadata" = EXCLUDED."metadata" RETURNING *', [
-      crypto.randomUUID(),
-      input.benchmarkRunId,
-      input.targetType,
-      key,
-      input.competitorId ?? null,
-      input.overallScore ?? null,
-      input.visibilityScore ?? null,
-      input.entityScore ?? null,
-      input.schemaScore ?? null,
-      input.authorityScore ?? null,
-      input.citationScore ?? null,
-      input.simulationScore ?? null,
-      input.difference ?? null,
-      input.ranking ?? null,
-      input.coverage ?? null,
-      input.confidence ?? null,
-      input.scoreBasis ?? null,
-      JSON.stringify(input.metadata ?? {}),
-      new Date(),
-      userId,
-    ]))[0];
-    return row ? toBenchmarkResult(row) : null;
+    const rows = await this.upsertResultsForUser(userId, input.benchmarkRunId, [input]);
+    return rows[0] ?? null;
+  },
+
+  async upsertResultsForUser(userId: string, benchmarkRunId: string, inputs: BenchmarkResultInput[]) {
+    if (!inputs.length) return [];
+    const targetKeys = new Set<string>();
+    const payload = inputs.map((input) => {
+      validateResultInput(input);
+      if (input.benchmarkRunId !== benchmarkRunId) throw new Error("BENCHMARK_RUN_MISMATCH");
+      const key = benchmarkTargetKey(input.targetType, input.competitorId);
+      if (targetKeys.has(key)) throw new Error("DUPLICATE_BENCHMARK_TARGET");
+      targetKeys.add(key);
+      return {
+        id: crypto.randomUUID(),
+        targetType: input.targetType,
+        targetKey: key,
+        competitorId: input.competitorId ?? null,
+        overallScore: input.overallScore ?? null,
+        visibilityScore: input.visibilityScore ?? null,
+        entityScore: input.entityScore ?? null,
+        schemaScore: input.schemaScore ?? null,
+        authorityScore: input.authorityScore ?? null,
+        citationScore: input.citationScore ?? null,
+        simulationScore: input.simulationScore ?? null,
+        difference: input.difference ?? null,
+        ranking: input.ranking ?? null,
+        coverage: input.coverage ?? null,
+        confidence: input.confidence ?? null,
+        scoreBasis: input.scoreBasis ?? null,
+        metadata: input.metadata ?? {},
+      };
+    });
+    const rows = await competitorDatabase().query('WITH authorized_run AS (SELECT br."id", br."projectId" FROM "BenchmarkRun" br INNER JOIN "Project" p ON p."id" = br."projectId" WHERE br."id" = $1 AND p."userId" = $3), input_rows AS (SELECT * FROM JSONB_TO_RECORDSET($2::jsonb) AS item("id" text, "targetType" text, "targetKey" text, "competitorId" text, "overallScore" int, "visibilityScore" int, "entityScore" int, "schemaScore" int, "authorityScore" int, "citationScore" int, "simulationScore" int, "difference" int, "ranking" int, "coverage" int, "confidence" int, "scoreBasis" text, "metadata" jsonb)) INSERT INTO "BenchmarkResult" ("id", "benchmarkRunId", "targetType", "targetKey", "competitorId", "overallScore", "visibilityScore", "entityScore", "schemaScore", "authorityScore", "citationScore", "simulationScore", "difference", "ranking", "coverage", "confidence", "scoreBasis", "metadata", "createdAt") SELECT item."id", run."id", item."targetType"::"BenchmarkTargetType", item."targetKey", item."competitorId", item."overallScore", item."visibilityScore", item."entityScore", item."schemaScore", item."authorityScore", item."citationScore", item."simulationScore", item."difference", item."ranking", item."coverage", item."confidence", item."scoreBasis", item."metadata", NOW() FROM input_rows item CROSS JOIN authorized_run run LEFT JOIN "CompetitorProfile" cp ON cp."id" = item."competitorId" WHERE (item."targetType" = \'OWN\' AND item."competitorId" IS NULL AND item."targetKey" = \'OWN\') OR (item."targetType" = \'COMPETITOR\' AND cp."id" IS NOT NULL AND cp."projectId" = run."projectId" AND item."targetKey" = \'COMPETITOR:\' || cp."id") ON CONFLICT ("benchmarkRunId", "targetKey") DO UPDATE SET "overallScore" = EXCLUDED."overallScore", "visibilityScore" = EXCLUDED."visibilityScore", "entityScore" = EXCLUDED."entityScore", "schemaScore" = EXCLUDED."schemaScore", "authorityScore" = EXCLUDED."authorityScore", "citationScore" = EXCLUDED."citationScore", "simulationScore" = EXCLUDED."simulationScore", "difference" = EXCLUDED."difference", "ranking" = EXCLUDED."ranking", "coverage" = EXCLUDED."coverage", "confidence" = EXCLUDED."confidence", "scoreBasis" = EXCLUDED."scoreBasis", "metadata" = EXCLUDED."metadata" RETURNING *', [benchmarkRunId, JSON.stringify(payload), userId]);
+    if (rows.length !== inputs.length) throw new Error("BENCHMARK_RESULT_FORBIDDEN");
+    return rows.map(toBenchmarkResult).sort((left, right) => left.targetKey.localeCompare(right.targetKey, "en-US"));
+  },
+
+  async deleteResultsOutsideTargetsForUser(userId: string, benchmarkRunId: string, targetKeys: string[]) {
+    const rows = await competitorDatabase().query('DELETE FROM "BenchmarkResult" result USING "BenchmarkRun" br, "Project" p WHERE result."benchmarkRunId" = br."id" AND br."projectId" = p."id" AND br."id" = $1 AND p."userId" = $2 AND NOT (result."targetKey" = ANY($3::text[])) RETURNING result."id"', [benchmarkRunId, userId, targetKeys]);
+    return rows.length;
   },
 };

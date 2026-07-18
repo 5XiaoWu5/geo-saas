@@ -7,11 +7,12 @@ import { COMPETITOR_SNAPSHOT_METRICS, type BenchmarkMetricKey, type CompetitorSn
 type MetricSource = Partial<Record<BenchmarkMetricKey, number | null>>;
 
 export async function loadBenchmarkFoundation(userId: string, projectId: string) {
-  const competitors = await listCompetitors(userId, projectId);
-  const entries = await Promise.all(competitors.map(async (competitor) => ({
-    competitor,
-    snapshot: await competitorRepository.latestSnapshotForUser(userId, competitor.id),
-  })));
+  const [competitors, snapshots] = await Promise.all([
+    listCompetitors(userId, projectId),
+    competitorRepository.latestSnapshotsForProject(userId, projectId),
+  ]);
+  const snapshotsByCompetitor = new Map(snapshots.map((snapshot) => [snapshot.competitorId, snapshot]));
+  const entries = competitors.map((competitor) => ({ competitor, snapshot: snapshotsByCompetitor.get(competitor.id) ?? null }));
   return {
     projectId,
     status: entries.some((entry) => entry.snapshot) ? "available" as const : "unavailable" as const,
