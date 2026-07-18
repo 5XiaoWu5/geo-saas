@@ -18,6 +18,30 @@ enum GrowthTriggerType {
   API
 }
 
+enum CompetitorStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum BenchmarkRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum SimulationTargetType {
+  OWN
+  COMPETITOR
+}
+
+enum VisibilityEntityType {
+  OWN
+  COMPETITOR
+  UNKNOWN
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -135,6 +159,8 @@ model Project {
   geoCampaigns        GeoCampaign[]
   simulationTasks     SimulationTask[]
   growthSnapshots     GrowthSnapshot[]
+  competitorProfiles  CompetitorProfile[]
+  benchmarkRuns       BenchmarkRun[]
 
   @@index([userId])
 }
@@ -285,6 +311,7 @@ model GeoCampaign {
   queries         GeoQuery[]
   simulationTasks SimulationTask[]
   growthSnapshots GrowthSnapshot[]
+  benchmarkRuns   BenchmarkRun[]
 
   @@index([projectId])
 }
@@ -306,24 +333,28 @@ model GeoQuery {
 }
 
 model SimulationTask {
-  id         String   @id @default(cuid())
-  projectId  String
-  campaignId String?
-  queryId    String?
-  query      String
-  provider   String
-  status     String   @default("PENDING")
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id           String               @id @default(cuid())
+  projectId    String
+  campaignId   String?
+  queryId      String?
+  query        String
+  provider     String
+  targetType   SimulationTargetType @default(OWN)
+  competitorId String?
+  status       String               @default("PENDING")
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
 
-  project  Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  campaign GeoCampaign?      @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  geoQuery GeoQuery?         @relation(fields: [queryId], references: [id], onDelete: SetNull)
-  result   SimulationResult?
+  project    Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  campaign   GeoCampaign?       @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  geoQuery   GeoQuery?          @relation(fields: [queryId], references: [id], onDelete: SetNull)
+  competitor CompetitorProfile? @relation(fields: [competitorId], references: [id], onDelete: SetNull)
+  result     SimulationResult?
 
   @@index([projectId])
   @@index([campaignId])
   @@index([queryId])
+  @@index([competitorId])
 }
 
 model SimulationResult {
@@ -412,9 +443,127 @@ model VisibilityCheck {
   score           Int      @default(0)
   createdAt       DateTime @default(now())
 
-  campaign         VisibilityCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  visibilityPrompt VisibilityPrompt?  @relation(fields: [promptId], references: [id], onDelete: SetNull)
+  campaign         VisibilityCampaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  visibilityPrompt VisibilityPrompt?    @relation(fields: [promptId], references: [id], onDelete: SetNull)
+  mentions         VisibilityMention[]
+  citations        VisibilityCitation[]
 
   @@index([campaignId])
   @@index([promptId])
+}
+
+model CompetitorProfile {
+  id               String           @id @default(cuid())
+  projectId        String
+  name             String
+  domain           String
+  normalizedDomain String
+  industry         String           @default("")
+  region           String           @default("")
+  status           CompetitorStatus @default(ACTIVE)
+  metadata         Json             @default("{}")
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  project            Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  snapshots          CompetitorSnapshot[]
+  benchmarkResults   BenchmarkResult[]
+  simulationTasks    SimulationTask[]
+  visibilityMentions VisibilityMention[]
+
+  @@unique([projectId, normalizedDomain])
+  @@index([projectId])
+  @@index([status])
+}
+
+model CompetitorSnapshot {
+  id              String   @id @default(cuid())
+  competitorId    String
+  overallScore    Int?
+  visibilityScore Int?
+  entityScore     Int?
+  schemaScore     Int?
+  authorityScore  Int?
+  citationScore   Int?
+  methodVersion   String
+  sourceId        String
+  metadata        Json     @default("{}")
+  createdAt       DateTime @default(now())
+
+  competitor CompetitorProfile @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  @@unique([competitorId, methodVersion, sourceId])
+  @@index([competitorId, createdAt])
+}
+
+model BenchmarkRun {
+  id            String             @id @default(cuid())
+  projectId     String
+  campaignId    String?
+  provider      String
+  methodVersion String
+  status        BenchmarkRunStatus @default(PENDING)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  project  Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  campaign GeoCampaign?      @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  results  BenchmarkResult[]
+
+  @@index([projectId, createdAt])
+  @@index([campaignId])
+}
+
+model BenchmarkResult {
+  id             String   @id @default(cuid())
+  benchmarkRunId String
+  competitorId   String
+  overallScore   Int?
+  difference     Int?
+  ranking        Int?
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now())
+
+  benchmarkRun BenchmarkRun      @relation(fields: [benchmarkRunId], references: [id], onDelete: Cascade)
+  competitor   CompetitorProfile @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  @@unique([benchmarkRunId, competitorId])
+  @@index([competitorId, createdAt])
+}
+
+model VisibilityMention {
+  id             String               @id @default(cuid())
+  checkId        String
+  competitorId   String?
+  entityType     VisibilityEntityType
+  brandName      String
+  normalizedName String
+  position       Int?
+  metadata       Json                 @default("{}")
+  createdAt      DateTime             @default(now())
+
+  check      VisibilityCheck      @relation(fields: [checkId], references: [id], onDelete: Cascade)
+  competitor CompetitorProfile?   @relation(fields: [competitorId], references: [id], onDelete: SetNull)
+  citations  VisibilityCitation[]
+
+  @@index([checkId, position])
+  @@index([competitorId])
+}
+
+model VisibilityCitation {
+  id        String   @id @default(cuid())
+  checkId   String
+  mentionId String?
+  url       String
+  domain    String
+  position  Int?
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  check   VisibilityCheck    @relation(fields: [checkId], references: [id], onDelete: Cascade)
+  mention VisibilityMention? @relation(fields: [mentionId], references: [id], onDelete: SetNull)
+
+  @@index([checkId])
+  @@index([mentionId])
+  @@index([domain])
 }

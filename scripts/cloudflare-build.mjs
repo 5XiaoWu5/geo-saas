@@ -2,6 +2,15 @@
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 
+if (process.env.DATABASE_URL && process.env.OPENNEXT_INNER_NEXT_BUILD !== "1") {
+  const migration = spawnSync("prisma", ["migrate", "deploy"], {
+    stdio: "inherit",
+    shell: true,
+    env: process.env,
+  });
+  if ((migration.status ?? 1) !== 0) process.exit(migration.status ?? 1);
+}
+
 if (process.env.OPENNEXT_INNER_NEXT_BUILD === "1") {
   const result = spawnSync("next", ["build"], {
     stdio: "inherit",

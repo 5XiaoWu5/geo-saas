@@ -3,15 +3,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useProject } from "@/features/project-center/context/ProjectContext";
+import { useI18n } from "@/i18n/provider";
 import { cn } from "@/lib/utils";
 
 const tabs = [
-  { label: "概览", segment: "overview" },
+  { labelKey: "projects.overview", segment: "overview" },
+  { labelKey: "nav.competitors", segment: "competitors" },
 ];
 
 export function ProjectTabs() {
   const pathname = usePathname();
   const { project } = useProject();
+  const { t } = useI18n();
 
   if (tabs.length <= 1) return null;
 
@@ -23,7 +26,7 @@ export function ProjectTabs() {
           const active = pathname === href || (tab.segment === "overview" && pathname === `/projects/${project.id}`);
           return (
             <Link key={tab.segment} href={href} className={cn("rounded-xl px-4 py-2 text-sm text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground", active && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground")}>
-              {tab.label}
+              {t(tab.labelKey)}
             </Link>
           );
         })}
@@ -31,4 +34,3 @@ export function ProjectTabs() {
     </div>
   );
 }
-

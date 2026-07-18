@@ -197,6 +197,8 @@ type SimulationTaskRow = Record<string, unknown> & {
   queryId: string | null;
   query: string;
   provider: string;
+  targetType: string;
+  competitorId: string | null;
   status: string;
   createdAt: Date;
   updatedAt: Date;
@@ -1200,13 +1202,15 @@ export const prisma = {
     async create({ data }: { data: Data }) {
       await ensureSimulationSchema();
       const now = new Date();
-      return normalizeSimulationTaskRow((await simulationTaskQuery('INSERT INTO "SimulationTask" ("id", "projectId", "campaignId", "queryId", "query", "provider", "status", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *', [
+      return normalizeSimulationTaskRow((await simulationTaskQuery('INSERT INTO "SimulationTask" ("id", "projectId", "campaignId", "queryId", "query", "provider", "targetType", "competitorId", "status", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7::"SimulationTargetType", $8, $9, $10, $11) RETURNING *', [
         data.id ?? createId(),
         data.projectId,
         data.campaignId ?? null,
         data.queryId ?? null,
         data.query,
         data.provider,
+        data.targetType ?? "OWN",
+        data.competitorId ?? null,
         data.status ?? "PENDING",
         now,
         now,

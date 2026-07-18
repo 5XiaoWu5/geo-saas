@@ -4,6 +4,7 @@ import type { GeoCampaign, GeoCampaignProject, GeoQuery } from "@/features/geo-c
 import type { EntityProfile } from "@/features/entity/types";
 import type { VisibilityAnalytics } from "@/features/visibility/types";
 import type { WebsiteScan } from "@/features/website-crawl/types";
+import type { SimulationTargetType } from "@/features/competitor-benchmark/types";
 
 export const SIMULATION_PROVIDERS = ["ChatGPT", "Gemini", "Claude", "Perplexity", "DeepSeek", "Doubao"] as const;
 export type SimulationProviderName = (typeof SIMULATION_PROVIDERS)[number];
@@ -35,6 +36,8 @@ export type SimulationTask = {
   queryId: string | null;
   query: string;
   provider: SimulationProviderName;
+  targetType: SimulationTargetType;
+  competitorId: string | null;
   status: SimulationStatus;
   createdAt: string;
   updatedAt: string;
@@ -89,6 +92,8 @@ export type RunSimulationInput = {
   queryId?: string | null;
   query: string;
   providers: SimulationProviderName[];
+  targetType?: SimulationTargetType;
+  competitorId?: string | null;
 };
 
 export type SimulatorWorkspaceResponse = {
@@ -102,4 +107,3 @@ export type SimulatorWorkspaceResponse = {
   latest: SimulationRecord[];
   error?: string;
 };
-

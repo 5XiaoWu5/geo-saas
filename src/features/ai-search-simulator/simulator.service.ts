@@ -53,6 +53,8 @@ export function toSimulationTask(row: Record<string, unknown>): SimulationTask {
     queryId: row.queryId ? String(row.queryId) : null,
     query: String(row.query ?? ""),
     provider: enumValue(SIMULATION_PROVIDERS, row.provider, "ChatGPT"),
+    targetType: row.targetType === "COMPETITOR" ? "COMPETITOR" : "OWN",
+    competitorId: row.competitorId ? String(row.competitorId) : null,
     status: enumValue(SIMULATION_STATUSES, row.status, "PENDING"),
     createdAt: iso(row.createdAt),
     updatedAt: iso(row.updatedAt),
@@ -191,6 +193,7 @@ export async function runSimulation(userId: string, input: RunSimulationInput) {
   const query = input.query.trim();
   const providers = [...new Set(input.providers)].filter((provider): provider is SimulationProviderName => SIMULATION_PROVIDERS.includes(provider));
   if (!input.projectId || query.length < 3 || !providers.length) throw new SimulatorServiceError("INVALID_SIMULATION_INPUT", 400);
+  if ((input.targetType ?? "OWN") !== "OWN" || input.competitorId) throw new SimulatorServiceError("COMPETITOR_SIMULATION_NOT_READY", 409);
   const evidence = await loadEvidence(userId, { ...input, query, providers });
   const effectiveQuery = evidence.geoQuery?.query ?? query;
   const records: SimulationRecord[] = [];
@@ -203,6 +206,8 @@ export async function runSimulation(userId: string, input: RunSimulationInput) {
         queryId: evidence.geoQuery?.id ?? null,
         query: effectiveQuery,
         provider: providerName,
+        targetType: "OWN",
+        competitorId: null,
         status: "RUNNING",
       },
     });

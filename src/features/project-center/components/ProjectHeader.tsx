@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Activity, BarChart3, Building2, CalendarClock, CheckCircle2, ClipboardList, Eye, Globe2, MessagesSquare } from "lucide-react";
+import { Activity, BarChart3, Building2, CalendarClock, CheckCircle2, ClipboardList, Eye, Globe2, MessagesSquare, Swords } from "lucide-react";
 import { useProject } from "@/features/project-center/context/ProjectContext";
 import { getProjectStatusLabel } from "@/features/projects/project-mapper";
 import { useI18n } from "@/i18n/provider";
@@ -52,6 +52,11 @@ export function ProjectHeader() {
               <Button asChild variant="outline">
                 <Link href={`/projects/${project.id}/campaigns`}>
                   <MessagesSquare className="h-4 w-4" /> {t("campaigns.enterCampaignCenter")}
+                </Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href={`/projects/${project.id}/competitors`}>
+                  <Swords className="h-4 w-4" /> {t("competitors.open")}
                 </Link>
               </Button>
             </div>
