@@ -7,6 +7,12 @@ export type SimulationTargetType = (typeof SIMULATION_TARGET_TYPES)[number];
 export const VISIBILITY_ENTITY_TYPES = ["OWN", "COMPETITOR", "UNKNOWN"] as const;
 export type VisibilityEntityType = (typeof VISIBILITY_ENTITY_TYPES)[number];
 
+export const BENCHMARK_RUN_STATUSES = ["PENDING", "RUNNING", "COMPLETED", "FAILED"] as const;
+export type BenchmarkRunStatus = (typeof BENCHMARK_RUN_STATUSES)[number];
+
+export const BENCHMARK_TARGET_TYPES = ["OWN", "COMPETITOR"] as const;
+export type BenchmarkTargetType = (typeof BENCHMARK_TARGET_TYPES)[number];
+
 export type CompetitorProfile = {
   id: string;
   projectId: string;
@@ -61,8 +67,79 @@ export type CompetitorSnapshotInput = {
   metadata?: Record<string, unknown>;
 };
 
-export const BENCHMARK_METRICS = ["overallScore", "visibilityScore", "entityScore", "schemaScore", "authorityScore", "citationScore"] as const;
+export const COMPETITOR_SNAPSHOT_METRICS = ["overallScore", "visibilityScore", "entityScore", "schemaScore", "authorityScore", "citationScore"] as const;
+export const BENCHMARK_METRICS = [...COMPETITOR_SNAPSHOT_METRICS, "simulationScore"] as const;
 export type BenchmarkMetricKey = (typeof BENCHMARK_METRICS)[number];
+
+export type BenchmarkRun = {
+  id: string;
+  projectId: string;
+  campaignId: string | null;
+  runKey: string;
+  scopeHash: string;
+  provider: string;
+  methodVersion: string;
+  windowStart: string | null;
+  windowEnd: string | null;
+  queryCount: number;
+  status: BenchmarkRunStatus;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BenchmarkRunCreateInput = {
+  projectId: string;
+  campaignId?: string | null;
+  runKey: string;
+  scopeHash: string;
+  provider: string;
+  methodVersion: string;
+  windowStart?: Date | null;
+  windowEnd?: Date | null;
+  queryCount: number;
+};
+
+export type BenchmarkResult = {
+  id: string;
+  benchmarkRunId: string;
+  targetType: BenchmarkTargetType;
+  targetKey: string;
+  competitorId: string | null;
+  overallScore: number | null;
+  visibilityScore: number | null;
+  entityScore: number | null;
+  schemaScore: number | null;
+  authorityScore: number | null;
+  citationScore: number | null;
+  simulationScore: number | null;
+  difference: number | null;
+  ranking: number | null;
+  coverage: number | null;
+  confidence: number | null;
+  scoreBasis: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+};
+
+export type BenchmarkResultInput = {
+  benchmarkRunId: string;
+  targetType: BenchmarkTargetType;
+  competitorId?: string | null;
+  overallScore?: number | null;
+  visibilityScore?: number | null;
+  entityScore?: number | null;
+  schemaScore?: number | null;
+  authorityScore?: number | null;
+  citationScore?: number | null;
+  simulationScore?: number | null;
+  difference?: number | null;
+  ranking?: number | null;
+  coverage?: number | null;
+  confidence?: number | null;
+  scoreBasis?: string | null;
+  metadata?: Record<string, unknown>;
+};
 
 export type BenchmarkGap = {
   metric: BenchmarkMetricKey;

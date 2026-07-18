@@ -31,6 +31,11 @@ enum BenchmarkRunStatus {
   FAILED
 }
 
+enum BenchmarkTargetType {
+  OWN
+  COMPETITOR
+}
+
 enum SimulationTargetType {
   OWN
   COMPETITOR
@@ -494,15 +499,22 @@ model CompetitorSnapshot {
 
   @@unique([competitorId, methodVersion, sourceId])
   @@index([competitorId, createdAt])
+  @@index([competitorId, methodVersion, createdAt])
 }
 
 model BenchmarkRun {
   id            String             @id @default(cuid())
   projectId     String
   campaignId    String?
+  runKey        String
+  scopeHash     String
   provider      String
   methodVersion String
+  windowStart   DateTime?
+  windowEnd     DateTime?
+  queryCount    Int                @default(0)
   status        BenchmarkRunStatus @default(PENDING)
+  completedAt   DateTime?
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
@@ -510,24 +522,37 @@ model BenchmarkRun {
   campaign GeoCampaign?      @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   results  BenchmarkResult[]
 
-  @@index([projectId, createdAt])
+  @@unique([projectId, runKey])
+  @@index([projectId, provider, createdAt])
   @@index([campaignId])
 }
 
 model BenchmarkResult {
-  id             String   @id @default(cuid())
-  benchmarkRunId String
-  competitorId   String
-  overallScore   Int?
-  difference     Int?
-  ranking        Int?
-  metadata       Json     @default("{}")
-  createdAt      DateTime @default(now())
+  id              String              @id @default(cuid())
+  benchmarkRunId  String
+  targetType      BenchmarkTargetType
+  targetKey       String
+  competitorId    String?
+  overallScore    Int?
+  visibilityScore Int?
+  entityScore     Int?
+  schemaScore     Int?
+  authorityScore  Int?
+  citationScore   Int?
+  simulationScore Int?
+  difference      Int?
+  ranking         Int?
+  coverage        Int?
+  confidence      Int?
+  scoreBasis      String?
+  metadata        Json                @default("{}")
+  createdAt       DateTime            @default(now())
 
-  benchmarkRun BenchmarkRun      @relation(fields: [benchmarkRunId], references: [id], onDelete: Cascade)
-  competitor   CompetitorProfile @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+  benchmarkRun BenchmarkRun       @relation(fields: [benchmarkRunId], references: [id], onDelete: Cascade)
+  competitor   CompetitorProfile? @relation(fields: [competitorId], references: [id], onDelete: Cascade)
 
-  @@unique([benchmarkRunId, competitorId])
+  @@unique([benchmarkRunId, targetKey])
+  @@index([benchmarkRunId, ranking])
   @@index([competitorId, createdAt])
 }
 
@@ -546,6 +571,7 @@ model VisibilityMention {
   competitor CompetitorProfile?   @relation(fields: [competitorId], references: [id], onDelete: SetNull)
   citations  VisibilityCitation[]
 
+  @@unique([checkId, normalizedName])
   @@index([checkId, position])
   @@index([competitorId])
 }
@@ -563,6 +589,7 @@ model VisibilityCitation {
   check   VisibilityCheck    @relation(fields: [checkId], references: [id], onDelete: Cascade)
   mention VisibilityMention? @relation(fields: [mentionId], references: [id], onDelete: SetNull)
 
+  @@unique([checkId, url])
   @@index([checkId])
   @@index([mentionId])
   @@index([domain])
