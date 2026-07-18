@@ -4,6 +4,7 @@
   }
 
   return new Intl.DateTimeFormat("en", {
+    timeZone: "UTC",
     month: "short",
     day: "2-digit",
     year: "numeric",
@@ -16,6 +17,7 @@ export function formatDateTime(value: string | null) {
   }
 
   return new Intl.DateTimeFormat("en", {
+    timeZone: "UTC",
     month: "short",
     day: "2-digit",
     year: "numeric",
