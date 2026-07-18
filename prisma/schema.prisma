@@ -47,6 +47,26 @@ enum VisibilityEntityType {
   UNKNOWN
 }
 
+enum KnowledgeStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum KnowledgeSourceType {
+  USER_INPUT
+  FILE_UPLOAD
+  WEBSITE_CRAWL
+  AI_GENERATED
+}
+
+enum KnowledgeProcessingStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -166,6 +186,14 @@ model Project {
   growthSnapshots     GrowthSnapshot[]
   competitorProfiles  CompetitorProfile[]
   benchmarkRuns       BenchmarkRun[]
+  knowledgeBase        CompanyKnowledgeBase?
+  knowledgeSources     KnowledgeSource[]
+  knowledgeDocuments   KnowledgeDocument[]
+  productEntities      ProductEntity[]
+  serviceEntities      ServiceEntity[]
+  customerCases        CustomerCase[]
+  technicalDocuments   TechnicalDocument[]
+  knowledgeChunks      KnowledgeChunk[]
 
   @@index([userId])
 }
@@ -297,6 +325,194 @@ model EntityAttribute {
   entity EntityProfile @relation(fields: [entityId], references: [id], onDelete: Cascade)
 
   @@index([entityId])
+}
+
+model CompanyKnowledgeBase {
+  id                 String          @id @default(cuid())
+  projectId          String          @unique
+  status             KnowledgeStatus @default(DRAFT)
+  version            Int             @default(1)
+  completenessScore  Int?
+  understandingScore Int?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  project            Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sources            KnowledgeSource[]
+  documents          KnowledgeDocument[]
+  products           ProductEntity[]
+  services           ServiceEntity[]
+  customerCases      CustomerCase[]
+  technicalDocuments TechnicalDocument[]
+
+  @@unique([id, projectId])
+  @@index([projectId, status])
+}
+
+model KnowledgeSource {
+  id              String              @id @default(cuid())
+  projectId       String
+  knowledgeBaseId String
+  type            KnowledgeSourceType
+  sourceName      String
+  sourceKey       String
+  url             String?
+  checksum        String?
+  confidence      Int?
+  status          KnowledgeStatus     @default(DRAFT)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  project            Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  knowledgeBase      CompanyKnowledgeBase @relation(fields: [knowledgeBaseId, projectId], references: [id, projectId], onDelete: Cascade)
+  document           KnowledgeDocument?
+  products           ProductEntity[]
+  services           ServiceEntity[]
+  customerCases      CustomerCase[]
+  technicalDocuments TechnicalDocument[]
+
+  @@unique([id, projectId])
+  @@unique([projectId, sourceKey])
+  @@index([projectId, type, status])
+  @@index([knowledgeBaseId])
+}
+
+model KnowledgeDocument {
+  id                  String                    @id @default(cuid())
+  projectId           String
+  knowledgeBaseId     String
+  sourceId            String                    @unique
+  name                String
+  mimeType            String
+  size                Int
+  processingStatus    KnowledgeProcessingStatus @default(PENDING)
+  extractedTextStatus KnowledgeProcessingStatus @default(PENDING)
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+
+  project       Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  knowledgeBase CompanyKnowledgeBase @relation(fields: [knowledgeBaseId, projectId], references: [id, projectId], onDelete: Cascade)
+  source        KnowledgeSource      @relation(fields: [sourceId, projectId], references: [id, projectId], onDelete: Cascade)
+  chunks        KnowledgeChunk[]
+
+  @@unique([id, projectId])
+  @@unique([sourceId, projectId])
+  @@index([projectId, processingStatus, createdAt])
+  @@index([knowledgeBaseId])
+}
+
+model ProductEntity {
+  id              String          @id @default(cuid())
+  projectId       String
+  knowledgeBaseId String
+  sourceId        String
+  name            String
+  category        String
+  description     String
+  features        Json            @default("[]")
+  applications    Json            @default("[]")
+  targetCustomers Json            @default("[]")
+  confidence      Int?
+  status          KnowledgeStatus @default(ACTIVE)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  project       Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  knowledgeBase CompanyKnowledgeBase @relation(fields: [knowledgeBaseId, projectId], references: [id, projectId], onDelete: Cascade)
+  source        KnowledgeSource      @relation(fields: [sourceId, projectId], references: [id, projectId], onDelete: Cascade)
+
+  @@index([projectId, status, updatedAt])
+  @@index([knowledgeBaseId])
+  @@index([sourceId])
+}
+
+model ServiceEntity {
+  id              String          @id @default(cuid())
+  projectId       String
+  knowledgeBaseId String
+  sourceId        String
+  name            String
+  description     String
+  industries      Json            @default("[]")
+  confidence      Int?
+  status          KnowledgeStatus @default(ACTIVE)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  project       Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  knowledgeBase CompanyKnowledgeBase @relation(fields: [knowledgeBaseId, projectId], references: [id, projectId], onDelete: Cascade)
+  source        KnowledgeSource      @relation(fields: [sourceId, projectId], references: [id, projectId], onDelete: Cascade)
+
+  @@index([projectId, status, updatedAt])
+  @@index([knowledgeBaseId])
+  @@index([sourceId])
+}
+
+model CustomerCase {
+  id              String          @id @default(cuid())
+  projectId       String
+  knowledgeBaseId String
+  sourceId        String
+  customerName    String
+  industry        String
+  problem         String
+  solution        String
+  result          String
+  metrics         Json            @default("{}")
+  confidence      Int?
+  status          KnowledgeStatus @default(ACTIVE)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  project       Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  knowledgeBase CompanyKnowledgeBase @relation(fields: [knowledgeBaseId, projectId], references: [id, projectId], onDelete: Cascade)
+  source        KnowledgeSource      @relation(fields: [sourceId, projectId], references: [id, projectId], onDelete: Cascade)
+
+  @@index([projectId, status, updatedAt])
+  @@index([knowledgeBaseId])
+  @@index([sourceId])
+}
+
+model TechnicalDocument {
+  id              String          @id @default(cuid())
+  projectId       String
+  knowledgeBaseId String
+  sourceId        String
+  title           String
+  type            String
+  summary         String
+  technicalFields Json            @default("{}")
+  confidence      Int?
+  status          KnowledgeStatus @default(ACTIVE)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  project       Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  knowledgeBase CompanyKnowledgeBase @relation(fields: [knowledgeBaseId, projectId], references: [id, projectId], onDelete: Cascade)
+  source        KnowledgeSource      @relation(fields: [sourceId, projectId], references: [id, projectId], onDelete: Cascade)
+
+  @@index([projectId, status, updatedAt])
+  @@index([knowledgeBaseId])
+  @@index([sourceId])
+}
+
+model KnowledgeChunk {
+  id         String   @id @default(cuid())
+  projectId  String
+  documentId String
+  content    String
+  hash       String
+  order      Int
+  tokenCount Int
+  confidence Int?
+  createdAt  DateTime @default(now())
+
+  project  Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  document KnowledgeDocument @relation(fields: [documentId, projectId], references: [id, projectId], onDelete: Cascade)
+
+  @@unique([documentId, order])
+  @@index([projectId, hash])
+  @@index([documentId])
 }
 
 model GeoCampaign {

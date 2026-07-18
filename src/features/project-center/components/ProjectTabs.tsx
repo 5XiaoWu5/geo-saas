@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 
 const tabs = [
   { labelKey: "projects.overview", segment: "overview" },
+  { labelKey: "nav.knowledge", segment: "knowledge" },
   { labelKey: "nav.competitors", segment: "competitors" },
 ];
 

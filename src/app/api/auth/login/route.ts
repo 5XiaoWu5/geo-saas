@@ -44,6 +44,7 @@ export async function POST(request: Request) {
       passwordPresent: typeof payload?.password === "string" && payload.password.length > 0,
       turnstileTokenPresent: typeof payload?.turnstileToken === "string" && payload.turnstileToken.length > 0,
       turnstileTokenLength: typeof payload?.turnstileToken === "string" ? payload.turnstileToken.length : 0,
+      rememberMe: payload?.rememberMe === true,
     });
 
     const body = loginSchema.parse(payload);
@@ -54,6 +55,7 @@ export async function POST(request: Request) {
       turnstileTokenPresent: Boolean(body.turnstileToken),
       turnstileTokenLength: body.turnstileToken.length,
       ipPresent: Boolean(ip),
+      rememberMe: body.rememberMe,
     });
 
     const limited = rateLimit({ key: `login:${ip}:${body.email}`, limit: 5, windowMs: 15 * 60 * 1000 });
@@ -114,16 +116,16 @@ export async function POST(request: Request) {
 
     let token;
     try {
-      token = await createSession(user.id, request);
-      logLoginInfo("session creation completed", { requestId, userId: user.id, sessionCreated: Boolean(token) });
+      token = await createSession(user.id, request, body.rememberMe);
+      logLoginInfo("session creation completed", { requestId, userId: user.id, sessionCreated: Boolean(token), rememberMe: body.rememberMe });
     } catch (error) {
       logLoginError("create session failed", error, requestId);
       return jsonError("登录会话创建失败，请稍后重试", 503);
     }
 
     const cookieStore = await cookies();
-    cookieStore.set(AUTH_COOKIE_NAME, token, sessionCookieOptions());
-    logLoginInfo("session cookie set", { requestId, userId: user.id, cookieName: AUTH_COOKIE_NAME });
+    cookieStore.set(AUTH_COOKIE_NAME, token, sessionCookieOptions(body.rememberMe));
+    logLoginInfo("session cookie set", { requestId, userId: user.id, cookieName: AUTH_COOKIE_NAME, rememberMe: body.rememberMe });
     logLoginInfo("request:success", { requestId, userId: user.id });
     return Response.json({ ok: true });
   } catch (error) {

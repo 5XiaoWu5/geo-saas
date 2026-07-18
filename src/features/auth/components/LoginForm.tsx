@@ -14,6 +14,7 @@ export function LoginForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,6 +35,7 @@ export function LoginForm() {
           email: String(formData.get("email") ?? "").trim().toLowerCase(),
           password: String(formData.get("password") ?? ""),
           turnstileToken,
+          rememberMe,
         }),
       });
       const result = await parseAuthResponse(response);
@@ -56,6 +58,7 @@ export function LoginForm() {
     <form onSubmit={onSubmit} className="grid gap-5">
       <AuthField id="email" name="email" label="工作邮箱" type="email" autoComplete="email" required icon={<Mail className="h-4 w-4" />} placeholder="you@company.com" />
       <PasswordField id="password" label="账户密码" action={<Link href="/forgot-password" className="text-xs text-primary transition hover:text-cyan-300">忘记密码？</Link>} />
+      <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm text-slate-300"><input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} className="h-4 w-4 accent-cyan-300" /><span>保持登录状态</span></label>
       {AUTH_TURNSTILE_ENABLED ? <Turnstile onVerify={setTurnstileToken} /> : null}
       {error ? <AuthAlert type="error">{error}</AuthAlert> : null}
       <AuthSubmitButton loading={loading} loadingText="正在进入工作空间...">进入 GeoPilot AI</AuthSubmitButton>

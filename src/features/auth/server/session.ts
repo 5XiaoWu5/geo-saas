@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { AUTH_COOKIE_NAME, SESSION_MAX_AGE_SECONDS } from "@/features/auth/server/constants";
+import { AUTH_COOKIE_NAME, REMEMBERED_SESSION_MAX_AGE_SECONDS, SESSION_MAX_AGE_SECONDS } from "@/features/auth/server/constants";
 import { prisma } from "@/features/auth/server/prisma";
 import { createToken } from "@/features/auth/server/tokens";
 
@@ -12,9 +12,10 @@ export type AuthUser = {
   image: string | null;
 };
 
-export async function createSession(userId: string, request: Request): Promise<string> {
+export async function createSession(userId: string, request: Request, rememberMe = false): Promise<string> {
   const token = createToken(48);
-  const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000);
+  const maxAge = rememberMe ? REMEMBERED_SESSION_MAX_AGE_SECONDS : SESSION_MAX_AGE_SECONDS;
+  const expiresAt = new Date(Date.now() + maxAge * 1000);
 
   await prisma.session.create({
     data: {
@@ -29,14 +30,14 @@ export async function createSession(userId: string, request: Request): Promise<s
   return token;
 }
 
-export function sessionCookieOptions() {
-  return {
+export function sessionCookieOptions(rememberMe = false) {
+  const options = {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax" as const,
     path: "/",
-    maxAge: SESSION_MAX_AGE_SECONDS,
   };
+  return rememberMe ? { ...options, maxAge: REMEMBERED_SESSION_MAX_AGE_SECONDS } : options;
 }
 
 export async function getCurrentUser(): Promise<AuthUser | null> {

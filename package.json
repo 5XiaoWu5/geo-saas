@@ -11,6 +11,7 @@
     "check:competitor-foundation": "node scripts/check-competitor-foundation.mjs",
     "check:benchmark-repository": "node scripts/check-benchmark-repository.mjs",
     "test:benchmark-engine": "tsx --test src/features/competitor-benchmark/benchmark-engine.test.ts",
+    "check:knowledge-foundation": "node scripts/check-knowledge-foundation.mjs",
     "preview": "opennextjs-cloudflare preview",
     "start": "next start",
     "lint": "eslint",

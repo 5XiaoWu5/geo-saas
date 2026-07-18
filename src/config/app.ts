@@ -1,5 +1,5 @@
 ﻿import type { LucideIcon } from "lucide-react";
-import { Activity, BarChart3, Boxes, BrainCircuit, Building2, ClipboardList, CreditCard, Eye, FileText, FlaskConical, Gauge, HelpCircle, KeyRound, Layers3, LineChart, MessagesSquare, ScanSearch, Settings, Sparkles, UserCircle } from "lucide-react";
+import { Activity, BarChart3, BookOpen, Boxes, BrainCircuit, Building2, ClipboardList, CreditCard, Eye, FileText, FlaskConical, Gauge, HelpCircle, KeyRound, Layers3, LineChart, MessagesSquare, ScanSearch, Settings, Sparkles, UserCircle } from "lucide-react";
 
 export type NavItem = {
   titleKey: string;
@@ -20,6 +20,7 @@ export const mainNavItems: NavItem[] = [
   { titleKey: "nav.siteInventory", href: "/inventory", icon: Boxes },
   { titleKey: "nav.analyzer", href: "/analyzer", icon: Sparkles },
   { titleKey: "nav.entity", href: "/entity", icon: Building2 },
+  { titleKey: "nav.knowledge", href: "/knowledge", icon: BookOpen },
   { titleKey: "nav.campaigns", href: "/campaigns", icon: MessagesSquare },
   { titleKey: "nav.simulator", href: "/simulator", icon: FlaskConical },
   { titleKey: "nav.growth", href: "/growth", icon: LineChart },

@@ -15,6 +15,7 @@ export const loginSchema = z.object({
   email: emailSchema,
   password: z.string({ required_error: "请输入密码", invalid_type_error: "请输入密码" }).min(1, "请输入密码"),
   turnstileToken: turnstileTokenSchema,
+  rememberMe: z.boolean().optional().default(false),
 });
 
 export const forgotPasswordSchema = z.object({
