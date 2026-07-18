@@ -1,4 +1,5 @@
 import type { OptimizationTask } from "@/features/optimization/types";
+import type { KnowledgeGap } from "@/features/knowledge/types";
 
 export const INSIGHT_SIGNAL_KEYS = [
   "entity_strength",
@@ -70,6 +71,14 @@ export type ProjectInsight = {
   missingSignals: InsightSignal[];
   unavailableSources: InsightUnavailableSource[];
   recommendations: InsightRecommendation[];
+  knowledgeInsight: {
+    type: "KNOWLEDGE_GAP";
+    profileId: string;
+    confidence: number | null;
+    gaps: KnowledgeGap[];
+    targetModule: "knowledge";
+    deepLink: string;
+  } | null;
 };
 
 export type InsightsResponse = {
@@ -84,4 +93,3 @@ export type CreateInsightTaskResponse = {
   created: boolean;
   deepLink: string;
 };
-

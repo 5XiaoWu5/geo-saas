@@ -1,13 +1,15 @@
-import { isoDate, jsonArray, jsonRecord, knowledgeDatabase, nullableNumber, type KnowledgeDatabaseRow } from "./database";
+import { isoDate, jsonArray, jsonRecord, jsonValueArray, knowledgeDatabase, nullableNumber, type KnowledgeDatabaseRow } from "./database";
 import {
   KNOWLEDGE_PROCESSING_STATUSES,
   KNOWLEDGE_STATUSES,
   type CompanyKnowledgeBase,
+  type CompanyKnowledgeProfile,
   type CreateCustomerCaseInput,
   type CreateProductInput,
   type CreateServiceInput,
   type CustomerCase,
   type KnowledgeDocument,
+  type KnowledgeChunk,
   type KnowledgeProcessingStatus,
   type KnowledgeProjectSummary,
   type KnowledgeStatus,
@@ -15,6 +17,7 @@ import {
   type ServiceEntity,
   type TechnicalDocument,
 } from "./types";
+import type { KnowledgeProfileDraft } from "./knowledge-provider";
 
 function knowledgeStatus(value: unknown): KnowledgeStatus {
   const status = String(value ?? "DRAFT");
@@ -59,6 +62,58 @@ function toTechnicalDocument(row: KnowledgeDatabaseRow): TechnicalDocument {
   return { id: String(row.id), projectId: String(row.projectId), sourceId: String(row.sourceId), title: String(row.title ?? ""), type: String(row.type ?? ""), summary: String(row.summary ?? ""), technicalFields: jsonRecord(row.technicalFields), confidence: nullableNumber(row.confidence), status: knowledgeStatus(row.status), createdAt: isoDate(row.createdAt), updatedAt: isoDate(row.updatedAt) };
 }
 
+function evidenceRef(value: unknown) {
+  const record = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  return { sourceType: String(record.sourceType ?? "KnowledgeChunk") as CompanyKnowledgeProfile["mainProducts"][number]["sourceType"], sourceId: String(record.sourceId ?? "") };
+}
+
+function profileItems(value: unknown): CompanyKnowledgeProfile["mainProducts"] {
+  return jsonValueArray(value).map((item) => {
+    const record = item && typeof item === "object" && !Array.isArray(item) ? item as Record<string, unknown> : {};
+    return { ...evidenceRef(record), name: String(record.name ?? ""), ...(record.description ? { description: String(record.description) } : {}), ...(Array.isArray(record.details) ? { details: record.details.map(String) } : {}) };
+  }).filter((item) => item.sourceId && item.name);
+}
+
+function certifications(value: unknown): CompanyKnowledgeProfile["certifications"] {
+  return jsonValueArray(value).map((item) => {
+    const record = item && typeof item === "object" && !Array.isArray(item) ? item as Record<string, unknown> : {};
+    return { ...evidenceRef(record), name: String(record.name ?? ""), ...(record.identifier ? { identifier: String(record.identifier) } : {}), ...(record.issuer ? { issuer: String(record.issuer) } : {}), excerpt: String(record.excerpt ?? "") };
+  }).filter((item) => item.sourceId && item.name && item.excerpt);
+}
+
+function faqTopics(value: unknown): CompanyKnowledgeProfile["faqTopics"] {
+  return jsonValueArray(value).map((item) => {
+    const record = item && typeof item === "object" && !Array.isArray(item) ? item as Record<string, unknown> : {};
+    return { ...evidenceRef(record), question: String(record.question ?? ""), answer: String(record.answer ?? "") };
+  }).filter((item) => item.sourceId && item.question && item.answer);
+}
+
+function missingKnowledge(value: unknown): CompanyKnowledgeProfile["missingKnowledge"] {
+  return jsonValueArray(value).flatMap((item) => {
+    const record = item && typeof item === "object" && !Array.isArray(item) ? item as Record<string, unknown> : {};
+    const type = String(record.type ?? "");
+    if (!["COMPANY_INFO", "PRODUCT_DETAIL", "SERVICE_DETAIL", "CUSTOMER_CASE", "TECHNICAL_PROOF", "CERTIFICATION", "FAQ"].includes(type)) return [];
+    return [{ type, severity: String(record.severity ?? "MEDIUM"), reason: String(record.reason ?? `knowledge.intelligence.gapReasons.${type}`), sourceCount: Number(record.sourceCount ?? 0) } as CompanyKnowledgeProfile["missingKnowledge"][number]];
+  });
+}
+
+export function toKnowledgeProfile(row: KnowledgeDatabaseRow): CompanyKnowledgeProfile {
+  const businessType = String(row.businessType ?? "");
+  return {
+    id: String(row.id), projectId: String(row.projectId), companySummary: row.companySummary ? String(row.companySummary) : null,
+    industry: row.industry ? String(row.industry) : null,
+    businessType: businessType === "PRODUCT" || businessType === "SERVICE" || businessType === "HYBRID" ? businessType : null,
+    mainProducts: profileItems(row.mainProducts), mainServices: profileItems(row.mainServices), targetCustomers: profileItems(row.targetCustomers),
+    competitiveAdvantages: profileItems(row.competitiveAdvantages), certifications: certifications(row.certifications), customerProof: profileItems(row.customerProof),
+    faqTopics: faqTopics(row.faqTopics), missingKnowledge: missingKnowledge(row.missingKnowledge), confidence: nullableNumber(row.confidence),
+    status: knowledgeStatus(row.status), methodVersion: String(row.methodVersion ?? "rules-v1"), createdAt: isoDate(row.createdAt), updatedAt: isoDate(row.updatedAt),
+  };
+}
+
+function toChunk(row: KnowledgeDatabaseRow): KnowledgeChunk {
+  return { id: String(row.id), projectId: String(row.projectId), documentId: String(row.documentId), content: String(row.content ?? ""), hash: String(row.hash ?? ""), order: Number(row.order ?? 0), tokenCount: Number(row.tokenCount ?? 0), confidence: nullableNumber(row.confidence), createdAt: isoDate(row.createdAt) };
+}
+
 export const knowledgeRepository = {
   async projectOwned(userId: string, projectId: string) {
     const rows = await knowledgeDatabase().query('SELECT p."id" FROM "Project" p WHERE p."id" = $1 AND p."userId" = $2 LIMIT 1', [projectId, userId]);
@@ -83,7 +138,7 @@ export const knowledgeRepository = {
   },
 
   async projectIdentity(userId: string, projectId: string) {
-    return (await knowledgeDatabase().query('SELECT p."id", p."name", p."domain", p."industry" FROM "Project" p WHERE p."id" = $1 AND p."userId" = $2 LIMIT 1', [projectId, userId]))[0] ?? null;
+    return (await knowledgeDatabase().query('SELECT p."id", p."name", p."domain", p."industry", p."description" FROM "Project" p WHERE p."id" = $1 AND p."userId" = $2 LIMIT 1', [projectId, userId]))[0] ?? null;
   },
 
   async updateStatusForUser(userId: string, projectId: string, status: KnowledgeStatus) {
@@ -114,6 +169,26 @@ export const knowledgeRepository = {
   async listTechnicalDocuments(userId: string, projectId: string) {
     const rows = await knowledgeDatabase().query('SELECT technical.* FROM "TechnicalDocument" technical INNER JOIN "Project" p ON p."id" = technical."projectId" WHERE technical."projectId" = $1 AND p."userId" = $2 AND technical."status" <> \'ARCHIVED\' ORDER BY technical."updatedAt" DESC', [projectId, userId]);
     return rows.map(toTechnicalDocument);
+  },
+
+  async listChunks(userId: string, projectId: string) {
+    const rows = await knowledgeDatabase().query('SELECT chunk.* FROM "KnowledgeChunk" chunk INNER JOIN "Project" p ON p."id" = chunk."projectId" WHERE chunk."projectId" = $1 AND p."userId" = $2 ORDER BY chunk."documentId", chunk."order"', [projectId, userId]);
+    return rows.map(toChunk);
+  },
+
+  async findProfileForProject(userId: string, projectId: string) {
+    const row = (await knowledgeDatabase().query('SELECT profile.* FROM "CompanyKnowledgeProfile" profile INNER JOIN "Project" p ON p."id" = profile."projectId" WHERE profile."projectId" = $1 AND p."userId" = $2 LIMIT 1', [projectId, userId]))[0];
+    return row ? toKnowledgeProfile(row) : null;
+  },
+
+  async upsertProfileForUser(userId: string, profile: KnowledgeProfileDraft) {
+    const id = crypto.randomUUID();
+    const now = new Date();
+    const row = (await knowledgeDatabase().query(
+      'WITH owned_project AS (SELECT p."id" FROM "Project" p WHERE p."id" = $1 AND p."userId" = $2), upserted AS (INSERT INTO "CompanyKnowledgeProfile" ("id", "projectId", "companySummary", "industry", "businessType", "mainProducts", "mainServices", "targetCustomers", "competitiveAdvantages", "certifications", "customerProof", "faqTopics", "missingKnowledge", "confidence", "status", "methodVersion", "createdAt", "updatedAt") SELECT $3, owned_project."id", $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb, $14::jsonb, $15, $16::"KnowledgeStatus", $17, $18, $18 FROM owned_project ON CONFLICT ("projectId") DO UPDATE SET "companySummary" = EXCLUDED."companySummary", "industry" = EXCLUDED."industry", "businessType" = EXCLUDED."businessType", "mainProducts" = EXCLUDED."mainProducts", "mainServices" = EXCLUDED."mainServices", "targetCustomers" = EXCLUDED."targetCustomers", "competitiveAdvantages" = EXCLUDED."competitiveAdvantages", "certifications" = EXCLUDED."certifications", "customerProof" = EXCLUDED."customerProof", "faqTopics" = EXCLUDED."faqTopics", "missingKnowledge" = EXCLUDED."missingKnowledge", "confidence" = EXCLUDED."confidence", "status" = EXCLUDED."status", "methodVersion" = EXCLUDED."methodVersion", "updatedAt" = EXCLUDED."updatedAt" RETURNING *) SELECT * FROM upserted',
+      [profile.projectId, userId, id, profile.companySummary, profile.industry, profile.businessType, JSON.stringify(profile.mainProducts), JSON.stringify(profile.mainServices), JSON.stringify(profile.targetCustomers), JSON.stringify(profile.competitiveAdvantages), JSON.stringify(profile.certifications), JSON.stringify(profile.customerProof), JSON.stringify(profile.faqTopics), JSON.stringify(profile.missingKnowledge), profile.confidence, profile.status, profile.methodVersion, now],
+    ))[0];
+    return row ? toKnowledgeProfile(row) : null;
   },
 
   async createProductForUser(userId: string, input: CreateProductInput) {

@@ -23,6 +23,7 @@ import {
 } from "./types";
 import { calculateSimulationTrend } from "./visibility-engine";
 import { captureGrowthSnapshot } from "@/features/growth/snapshot.service";
+import { getKnowledgeEvidenceForSimulation } from "@/features/knowledge";
 
 export class SimulatorServiceError extends Error {
   constructor(message: string, readonly status: number) {
@@ -107,12 +108,13 @@ async function loadEvidence(userId: string, input: RunSimulationInput) {
   const projectRow = await prisma.project.findFirst({ where: { id: input.projectId, userId } });
   if (!projectRow) throw new SimulatorServiceError("PROJECT_FORBIDDEN", 403);
 
-  const [scanRow, analysisRow, brainRow, entityRow, visibilityCampaignRows] = await Promise.all([
+  const [scanRow, analysisRow, brainRow, entityRow, visibilityCampaignRows, knowledgeEvidence] = await Promise.all([
     prisma.websiteScan.findLatest({ where: { projectId: input.projectId } }),
     prisma.geoAnalysis.findLatest({ where: { projectId: input.projectId } }),
     prisma.geoBrainAnalysis.findLatestForProject({ where: { projectId: input.projectId, userId } }),
     prisma.entityProfile.findFirstForProject({ where: { projectId: input.projectId, userId } }),
     prisma.visibilityCampaign.findManyForUser({ where: { projectId: input.projectId, userId } }),
+    getKnowledgeEvidenceForSimulation(userId, input.projectId).catch(() => null),
   ]);
   if (!scanRow || !analysisRow) throw new SimulatorServiceError("ANALYSIS_REQUIRED", 409);
 
@@ -155,6 +157,7 @@ async function loadEvidence(userId: string, input: RunSimulationInput) {
     visibility,
     campaign,
     geoQuery,
+    knowledgeEvidence,
   };
 }
 

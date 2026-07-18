@@ -14,6 +14,8 @@ import type { GeoAnalysis } from "@/features/geo-analysis/types";
 import type { GrowthSnapshot } from "@/features/growth/types";
 import type { OptimizationTask } from "@/features/optimization/types";
 import type { VisibilityCheck } from "@/features/visibility/types";
+import { getCompanyKnowledgeProfile } from "@/features/knowledge";
+import type { KnowledgeIntelligenceResponse } from "@/features/knowledge/types";
 import { loadOptionalInsightSource } from "./optional-source";
 import { analyzeSignals } from "./signal-analyzer";
 import type { InsightRecommendation, InsightScoreAnchor, InsightSourceType, InsightsResponse, ProjectInsight } from "./types";
@@ -59,7 +61,7 @@ export async function buildProjectInsight(userId: string, projectId: string): Pr
   if (!projectRow) throw new InsightEngineError("PROJECT_FORBIDDEN", 403);
   const project = toProject(projectRow);
 
-  const [tasks, growthSnapshots, analysis, entityProfile, visibilityCampaignRows, campaigns, tasksForOptimization] = await Promise.all([
+  const [tasks, growthSnapshots, analysis, entityProfile, visibilityCampaignRows, campaigns, tasksForOptimization, knowledgeResponse] = await Promise.all([
     loadOptionalInsightSource<SimulationTask[]>("SimulationTask", async () => (await prisma.insightSource.simulationTasksForProject({ where: { userId, projectId, limit: 200 } })).map(toSimulationTask), []),
     loadOptionalInsightSource<GrowthSnapshot[]>("GrowthSnapshot", async () => (await prisma.insightSource.growthSnapshotsForProject({ where: { userId, projectId, limit: 500 } })).map(toGrowthSnapshot), []),
     loadOptionalInsightSource<GeoAnalysis | null>("GeoAnalysis", async () => {
@@ -73,7 +75,17 @@ export async function buildProjectInsight(userId: string, projectId: string): Pr
     loadOptionalInsightSource<Record<string, unknown>[]>("VisibilityCampaign", () => prisma.insightSource.visibilityCampaignsForProject({ where: { projectId, userId } }), []),
     loadOptionalInsightSource<GeoCampaign[]>("GeoCampaign", async () => (await prisma.insightSource.geoCampaignsForProject({ where: { projectId, userId } })).map(toGeoCampaign), []),
     loadOptionalInsightSource<OptimizationTask[]>("OptimizationTask", async () => (await prisma.insightSource.optimizationTasksForProject({ where: { projectId, userId } })).map(toOptimizationTask), []),
+    loadOptionalInsightSource<KnowledgeIntelligenceResponse | null>("CompanyKnowledgeProfile", () => getCompanyKnowledgeProfile(userId, projectId), null),
   ]);
+  const knowledgeProfile = knowledgeResponse?.profile ?? null;
+  const knowledgeInsight = knowledgeProfile && knowledgeProfile.missingKnowledge.length ? {
+    type: "KNOWLEDGE_GAP" as const,
+    profileId: knowledgeProfile.id,
+    confidence: knowledgeProfile.confidence,
+    gaps: knowledgeProfile.missingKnowledge,
+    targetModule: "knowledge" as const,
+    deepLink: `/projects/${encodeURIComponent(projectId)}/knowledge/intelligence`,
+  } : null;
   const results = await loadOptionalInsightSource<SimulationResult[]>("SimulationResult", async () => (await prisma.insightSource.simulationResultsForTasks({ where: { taskIds: tasks.map((task) => task.id) } })).map(toSimulationResult), []);
   const resultByTaskId = new Map(results.map((result) => [result.taskId, result]));
   const latestSimulationTask = tasks.find((task) => task.status === "COMPLETED" && resultByTaskId.has(task.id)) ?? null;
@@ -97,12 +109,12 @@ export async function buildProjectInsight(userId: string, projectId: string): Pr
   ]);
 
   if (!anchor) {
-    return { projectId, projectName: project.name, websiteUrl: project.websiteUrl, status: "unavailable", anchor: null, score: null, confidence: null, positiveSignals: [], negativeSignals: [], missingSignals: [], unavailableSources: unavailable, recommendations: [] };
+    return { projectId, projectName: project.name, websiteUrl: project.websiteUrl, status: "unavailable", anchor: null, score: null, confidence: null, positiveSignals: [], negativeSignals: [], missingSignals: [], unavailableSources: unavailable, recommendations: [], knowledgeInsight };
   }
 
   const ledger = analyzeSignals({ anchor, simulation, growth, analysis, entityProfile, visibilityChecks, campaigns, simulationCampaignId: latestSimulationTask?.campaignId ?? null });
   if (!ledger.reconciled) {
-    return { projectId, projectName: project.name, websiteUrl: project.websiteUrl, status: "unavailable", anchor, score: anchor.score, confidence: null, positiveSignals: [], negativeSignals: [], missingSignals: [], unavailableSources: unavailable, recommendations: [] };
+    return { projectId, projectName: project.name, websiteUrl: project.websiteUrl, status: "unavailable", anchor, score: anchor.score, confidence: null, positiveSignals: [], negativeSignals: [], missingSignals: [], unavailableSources: unavailable, recommendations: [], knowledgeInsight };
   }
 
   const actionable = [...ledger.negativeSignals, ...ledger.missingSignals].filter((signal) => signal.targetModule === "optimization" || ["entity_gap", "schema_gap", "authority_gap", "citation_gap", "visibility_gap", "content_gap"].includes(signal.signalKey));
@@ -119,6 +131,7 @@ export async function buildProjectInsight(userId: string, projectId: string): Pr
     missingSignals: ledger.missingSignals,
     unavailableSources: unavailable,
     recommendations: actionable.map((signal) => recommendationFor(projectId, signal, tasksForOptimization)),
+    knowledgeInsight,
   };
 }
 

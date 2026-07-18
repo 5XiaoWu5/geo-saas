@@ -4,6 +4,7 @@ import { toEntityAttribute, toEntityProfile } from "@/features/entity/mapper";
 import { toGeoAnalysis } from "@/features/geo-analysis/server/analysis-mapper";
 import { toProject } from "@/features/projects/project-mapper";
 import { toWebsiteScan } from "@/features/website-crawl/server/scan-mapper";
+import { getCompanyKnowledgeProfile } from "@/features/knowledge";
 
 type EntityPrisma = {
   project: {
@@ -27,11 +28,12 @@ export async function buildEntityProjectReport(prisma: EntityPrisma, projectId: 
   const projectRow = await prisma.project.findFirst({ where: { id: projectId, userId } });
   if (!projectRow) return null;
 
-  const [scanRow, analysisRow, profileRow, attributeRows] = await Promise.all([
+  const [scanRow, analysisRow, profileRow, attributeRows, knowledgeResponse] = await Promise.all([
     prisma.websiteScan.findLatest({ where: { projectId } }),
     prisma.geoAnalysis.findLatest({ where: { projectId } }),
     prisma.entityProfile.findFirstForProject({ where: { projectId, userId } }),
     prisma.entityAttribute.findManyForUser({ where: { userId, projectId } }),
+    getCompanyKnowledgeProfile(userId, projectId).catch(() => null),
   ]);
 
   const project = toProject(projectRow);
@@ -39,6 +41,7 @@ export async function buildEntityProjectReport(prisma: EntityPrisma, projectId: 
   const analysis = analysisRow ? toGeoAnalysis(analysisRow) : null;
   const profile = profileRow ? toEntityProfile(profileRow) : null;
   const attributes = attributeRows.map(toEntityAttribute);
+  const knowledgeProfile = knowledgeResponse?.profile ?? null;
 
   return {
     project,
@@ -47,5 +50,14 @@ export async function buildEntityProjectReport(prisma: EntityPrisma, projectId: 
     profile,
     attributes,
     score: buildEntityScore({ project, scan, analysis, profile, attributes }),
+    knowledgeEnhancement: knowledgeProfile ? {
+      profileId: knowledgeProfile.id,
+      knowledgeCompleteness: knowledgeResponse?.assessment.completeness ?? null,
+      knowledgeConfidence: knowledgeProfile.confidence,
+      products: knowledgeProfile.mainProducts,
+      services: knowledgeProfile.mainServices,
+      advantages: knowledgeProfile.competitiveAdvantages,
+      missingKnowledge: knowledgeProfile.missingKnowledge,
+    } : null,
   };
 }

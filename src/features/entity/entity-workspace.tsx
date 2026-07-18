@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { FormEvent, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, ArrowRight, Building2, CheckCircle2, ClipboardList, FileText, Globe2, Loader2, Save, ShieldCheck, Sparkles, Target } from "lucide-react";
+import { AlertCircle, ArrowRight, BookOpen, Building2, CheckCircle2, ClipboardList, FileText, Globe2, Loader2, Save, ShieldCheck, Sparkles, Target } from "lucide-react";
 import { PageHeader } from "@/components/shared/page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import type { EntityProjectReport, EntityResponse } from "@/features/entity/types";
 import { formatDateTime, getHostname } from "@/lib/format";
+import { useI18n } from "@/i18n/provider";
 
 type AttributeDraft = {
   key: string;
@@ -44,6 +45,7 @@ function getAttribute(report: EntityProjectReport | null, key: string) {
 }
 
 export function EntityWorkspace({ initialProjectId }: { initialProjectId?: string }) {
+  const { t } = useI18n();
   const [data, setData] = useState<EntityResponse | null>(null);
   const [projectId, setProjectId] = useState(initialProjectId ?? "");
   const [brandName, setBrandName] = useState("");
@@ -205,6 +207,7 @@ export function EntityWorkspace({ initialProjectId }: { initialProjectId?: strin
         description="企业实体中心会整合真实 Project、WebsiteScan、GeoAnalysis 和用户补充信息，形成可被 AI 理解的企业身份。"
         action={
           <div className="flex flex-wrap gap-2">
+            {projectId ? <Button asChild variant="outline"><Link href={`/projects/${projectId}/knowledge/intelligence`}><BookOpen className="h-4 w-4" />{t("knowledge.intelligence.open")}</Link></Button> : null}
             <Button asChild variant="outline">
               <Link href="/optimization">
                 <ClipboardList className="h-4 w-4" /> 优化中心

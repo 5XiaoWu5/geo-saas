@@ -2,6 +2,7 @@ import type { GeoAnalysis } from "@/features/geo-analysis/types";
 import type { OptimizationTask } from "@/features/optimization/types";
 import type { WebsiteScan } from "@/features/website-crawl/types";
 import type { Project } from "@/types/project";
+import type { KnowledgeGap, KnowledgeProfileItem } from "@/features/knowledge/types";
 
 export type EntityProfile = {
   id: string;
@@ -59,6 +60,15 @@ export type EntityProjectReport = {
   attributes: EntityAttribute[];
   score: EntityScore;
   optimizationTasks?: OptimizationTask[];
+  knowledgeEnhancement?: {
+    profileId: string;
+    knowledgeCompleteness: number | null;
+    knowledgeConfidence: number | null;
+    products: KnowledgeProfileItem[];
+    services: KnowledgeProfileItem[];
+    advantages: KnowledgeProfileItem[];
+    missingKnowledge: KnowledgeGap[];
+  } | null;
 };
 
 export type EntityResponse = {

@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { BookOpen, BriefcaseBusiness, FileText, FolderOpen, Loader2, Package, Plus, Trophy } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, BookOpen, BrainCircuit, BriefcaseBusiness, FileText, FolderOpen, Loader2, Package, Plus, Trophy } from "lucide-react";
 import { PageHeader } from "@/components/shared/page";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -58,7 +59,7 @@ export function KnowledgeWorkspace({ projectId }: { projectId: string }) {
 
   return (
     <div className="min-w-0 space-y-6 overflow-x-hidden">
-      <PageHeader title={t("knowledge.projectTitle")} description={`${data.project.name} · ${data.project.websiteUrl}`} />
+      <PageHeader title={t("knowledge.projectTitle")} description={`${data.project.name} · ${data.project.websiteUrl}`} action={<Button asChild variant="outline" className="min-h-11 w-full sm:w-auto"><Link href={`/projects/${projectId}/knowledge/intelligence`}><BrainCircuit className="h-4 w-4" />{t("knowledge.intelligence.open")}<ArrowRight className="h-4 w-4" /></Link></Button>} />
       <div className="grid gap-5 border-y border-white/10 py-5 sm:grid-cols-2 xl:grid-cols-5"><Metric label={t("knowledge.completeness")} value={`${data.knowledgeBase.completenessScore ?? 0}/100`} icon={<BookOpen className="h-4 w-4" />} /><Metric label={t("knowledge.understanding")} value={data.knowledgeBase.understandingScore === null ? "--" : `${data.knowledgeBase.understandingScore}/100`} icon={<FolderOpen className="h-4 w-4" />} /><Metric label={t("knowledge.products")} value={data.products.length} icon={<Package className="h-4 w-4" />} /><Metric label={t("knowledge.cases")} value={data.cases.length} icon={<Trophy className="h-4 w-4" />} /><Metric label={t("knowledge.documents")} value={data.documents.length} icon={<FileText className="h-4 w-4" />} /></div>
       <Tabs defaultValue="products" className="min-w-0"><TabsList className="flex h-auto w-full justify-start gap-1 overflow-x-auto bg-white/[0.03] p-1"><TabsTrigger value="products" className="min-h-11 shrink-0">{t("knowledge.products")}</TabsTrigger><TabsTrigger value="services" className="min-h-11 shrink-0">{t("knowledge.services")}</TabsTrigger><TabsTrigger value="cases" className="min-h-11 shrink-0">{t("knowledge.cases")}</TabsTrigger><TabsTrigger value="technical" className="min-h-11 shrink-0">{t("knowledge.technical")}</TabsTrigger></TabsList>
         <TabsContent value="products"><AssetSection title={t("knowledge.products")} addLabel={t("knowledge.addProduct")} icon={<Package className="h-5 w-5" />} onAdd={() => setFormKind("product")} empty={data.products.length === 0}><ProductList items={data.products} /></AssetSection></TabsContent>

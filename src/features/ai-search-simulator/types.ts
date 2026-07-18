@@ -5,6 +5,7 @@ import type { EntityProfile } from "@/features/entity/types";
 import type { VisibilityAnalytics } from "@/features/visibility/types";
 import type { WebsiteScan } from "@/features/website-crawl/types";
 import type { SimulationTargetType } from "@/features/competitor-benchmark/types";
+import type { getKnowledgeEvidenceForSimulation } from "@/features/knowledge";
 
 export const SIMULATION_PROVIDERS = ["ChatGPT", "Gemini", "Claude", "Perplexity", "DeepSeek", "Doubao"] as const;
 export type SimulationProviderName = (typeof SIMULATION_PROVIDERS)[number];
@@ -73,6 +74,7 @@ export type SimulationEvidence = {
   visibility: VisibilityAnalytics;
   campaign: GeoCampaign | null;
   geoQuery: GeoQuery | null;
+  knowledgeEvidence: Awaited<ReturnType<typeof getKnowledgeEvidenceForSimulation>>;
 };
 
 export type SimulationInput = {

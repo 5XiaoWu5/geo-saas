@@ -103,6 +103,99 @@ export type TechnicalDocument = {
   updatedAt: string;
 };
 
+export type KnowledgeChunk = {
+  id: string;
+  projectId: string;
+  documentId: string;
+  content: string;
+  hash: string;
+  order: number;
+  tokenCount: number;
+  confidence: number | null;
+  createdAt: string;
+};
+
+export const KNOWLEDGE_GAP_TYPES = [
+  "COMPANY_INFO",
+  "PRODUCT_DETAIL",
+  "SERVICE_DETAIL",
+  "CUSTOMER_CASE",
+  "TECHNICAL_PROOF",
+  "CERTIFICATION",
+  "FAQ",
+] as const;
+export type KnowledgeGapType = (typeof KNOWLEDGE_GAP_TYPES)[number];
+export type KnowledgeGapSeverity = "HIGH" | "MEDIUM" | "LOW";
+export type KnowledgeProfileStatus = "available" | "unavailable";
+export type KnowledgeEvidenceSourceType = "Project" | "ProductEntity" | "ServiceEntity" | "CustomerCase" | "TechnicalDocument" | "KnowledgeDocument" | "KnowledgeChunk";
+
+export type KnowledgeEvidenceRef = {
+  sourceType: KnowledgeEvidenceSourceType;
+  sourceId: string;
+};
+
+export type KnowledgeProfileItem = KnowledgeEvidenceRef & {
+  name: string;
+  description?: string;
+  details?: string[];
+};
+
+export type KnowledgeCertification = KnowledgeEvidenceRef & {
+  name: string;
+  identifier?: string;
+  issuer?: string;
+  excerpt: string;
+};
+
+export type KnowledgeFaqTopic = KnowledgeEvidenceRef & {
+  question: string;
+  answer: string;
+};
+
+export type KnowledgeGap = {
+  type: KnowledgeGapType;
+  severity: KnowledgeGapSeverity;
+  reason: `knowledge.intelligence.gapReasons.${KnowledgeGapType}`;
+  sourceCount: number;
+};
+
+export type CompanyKnowledgeProfile = {
+  id: string;
+  projectId: string;
+  companySummary: string | null;
+  industry: string | null;
+  businessType: "PRODUCT" | "SERVICE" | "HYBRID" | null;
+  mainProducts: KnowledgeProfileItem[];
+  mainServices: KnowledgeProfileItem[];
+  targetCustomers: KnowledgeProfileItem[];
+  competitiveAdvantages: KnowledgeProfileItem[];
+  certifications: KnowledgeCertification[];
+  customerProof: KnowledgeProfileItem[];
+  faqTopics: KnowledgeFaqTopic[];
+  missingKnowledge: KnowledgeGap[];
+  confidence: number | null;
+  status: KnowledgeStatus;
+  methodVersion: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type KnowledgeAssessment = {
+  projectId: string;
+  status: KnowledgeProfileStatus;
+  completeness: number | null;
+  confidence: number | null;
+  evidenceCount: number;
+  missing: KnowledgeGap[];
+};
+
+export type KnowledgeIntelligenceResponse = {
+  project: { id: string; name: string; websiteUrl: string; industry: string };
+  status: KnowledgeProfileStatus;
+  profile: CompanyKnowledgeProfile | null;
+  assessment: KnowledgeAssessment;
+};
+
 export type CreateProductInput = Pick<ProductEntity, "projectId" | "name" | "category" | "description" | "features" | "applications" | "targetCustomers">;
 export type CreateServiceInput = Pick<ServiceEntity, "projectId" | "name" | "description" | "industries">;
 export type CreateCustomerCaseInput = Pick<CustomerCase, "projectId" | "customerName" | "industry" | "problem" | "solution" | "result" | "metrics">;

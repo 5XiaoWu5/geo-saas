@@ -50,3 +50,16 @@ export function jsonRecord(value: unknown): Record<string, unknown> {
   }
   return {};
 }
+
+export function jsonValueArray(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
