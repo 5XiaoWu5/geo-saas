@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { assessKnowledge } from "./knowledge-assessment";
 import { RuleKnowledgeIntelligenceProvider } from "./knowledge-rule-provider";
+import { toKnowledgeProjectSummary } from "./knowledge.repository";
 import type { KnowledgeIntelligenceInput } from "./knowledge-provider";
 
 const emptyInput: KnowledgeIntelligenceInput = {
@@ -15,6 +16,12 @@ test("assessment reports unavailable instead of a fabricated score when evidence
   assert.equal(result.completeness, null);
   assert.equal(result.confidence, null);
   assert.equal(result.missing.find((gap) => gap.type === "CERTIFICATION")?.sourceCount, 0);
+});
+
+test("project summary preserves the owned project id when no knowledge base exists", () => {
+  const result = toKnowledgeProjectSummary({ projectId: "project-real", projectName: "Project", websiteUrl: "https://example.com", industry: "SaaS", knowledgeBaseId: null });
+  assert.equal(result.projectId, "project-real");
+  assert.equal(result.knowledgeBase, null);
 });
 
 test("strict provider only extracts explicit certification and Q&A evidence", async () => {

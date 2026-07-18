@@ -114,6 +114,21 @@ function toChunk(row: KnowledgeDatabaseRow): KnowledgeChunk {
   return { id: String(row.id), projectId: String(row.projectId), documentId: String(row.documentId), content: String(row.content ?? ""), hash: String(row.hash ?? ""), order: Number(row.order ?? 0), tokenCount: Number(row.tokenCount ?? 0), confidence: nullableNumber(row.confidence), createdAt: isoDate(row.createdAt) };
 }
 
+export function toKnowledgeProjectSummary(row: KnowledgeDatabaseRow): KnowledgeProjectSummary {
+  return {
+    projectId: String(row.projectId),
+    projectName: String(row.projectName ?? ""),
+    websiteUrl: String(row.websiteUrl ?? ""),
+    industry: String(row.industry ?? ""),
+    knowledgeBase: row.knowledgeBaseId ? toKnowledgeBase({ ...row, id: row.knowledgeBaseId }) : null,
+    productCount: Number(row.productCount ?? 0),
+    serviceCount: Number(row.serviceCount ?? 0),
+    caseCount: Number(row.caseCount ?? 0),
+    documentCount: Number(row.documentCount ?? 0),
+    technicalDocumentCount: Number(row.technicalDocumentCount ?? 0),
+  };
+}
+
 export const knowledgeRepository = {
   async projectOwned(userId: string, projectId: string) {
     const rows = await knowledgeDatabase().query('SELECT p."id" FROM "Project" p WHERE p."id" = $1 AND p."userId" = $2 LIMIT 1', [projectId, userId]);
@@ -121,8 +136,8 @@ export const knowledgeRepository = {
   },
 
   async listProjectsForUser(userId: string): Promise<KnowledgeProjectSummary[]> {
-    const rows = await knowledgeDatabase().query('SELECT p."id" AS "projectId", p."name" AS "projectName", p."domain" AS "websiteUrl", p."industry", kb.*, (SELECT COUNT(*)::int FROM "ProductEntity" product WHERE product."projectId" = p."id" AND product."status" <> \'ARCHIVED\') AS "productCount", (SELECT COUNT(*)::int FROM "ServiceEntity" service WHERE service."projectId" = p."id" AND service."status" <> \'ARCHIVED\') AS "serviceCount", (SELECT COUNT(*)::int FROM "CustomerCase" customer_case WHERE customer_case."projectId" = p."id" AND customer_case."status" <> \'ARCHIVED\') AS "caseCount", (SELECT COUNT(*)::int FROM "KnowledgeDocument" document WHERE document."projectId" = p."id") AS "documentCount", (SELECT COUNT(*)::int FROM "TechnicalDocument" technical WHERE technical."projectId" = p."id" AND technical."status" <> \'ARCHIVED\') AS "technicalDocumentCount" FROM "Project" p LEFT JOIN "CompanyKnowledgeBase" kb ON kb."projectId" = p."id" WHERE p."userId" = $1 ORDER BY p."updatedAt" DESC', [userId]);
-    return rows.map((row) => ({ projectId: String(row.projectId), projectName: String(row.projectName ?? ""), websiteUrl: String(row.websiteUrl ?? ""), industry: String(row.industry ?? ""), knowledgeBase: row.id ? toKnowledgeBase(row) : null, productCount: Number(row.productCount ?? 0), serviceCount: Number(row.serviceCount ?? 0), caseCount: Number(row.caseCount ?? 0), documentCount: Number(row.documentCount ?? 0), technicalDocumentCount: Number(row.technicalDocumentCount ?? 0) }));
+    const rows = await knowledgeDatabase().query('SELECT p."id" AS "projectId", p."name" AS "projectName", p."domain" AS "websiteUrl", p."industry", kb."id" AS "knowledgeBaseId", kb."status", kb."version", kb."completenessScore", kb."understandingScore", kb."createdAt", kb."updatedAt", (SELECT COUNT(*)::int FROM "ProductEntity" product WHERE product."projectId" = p."id" AND product."status" <> \'ARCHIVED\') AS "productCount", (SELECT COUNT(*)::int FROM "ServiceEntity" service WHERE service."projectId" = p."id" AND service."status" <> \'ARCHIVED\') AS "serviceCount", (SELECT COUNT(*)::int FROM "CustomerCase" customer_case WHERE customer_case."projectId" = p."id" AND customer_case."status" <> \'ARCHIVED\') AS "caseCount", (SELECT COUNT(*)::int FROM "KnowledgeDocument" document WHERE document."projectId" = p."id") AS "documentCount", (SELECT COUNT(*)::int FROM "TechnicalDocument" technical WHERE technical."projectId" = p."id" AND technical."status" <> \'ARCHIVED\') AS "technicalDocumentCount" FROM "Project" p LEFT JOIN "CompanyKnowledgeBase" kb ON kb."projectId" = p."id" WHERE p."userId" = $1 ORDER BY p."updatedAt" DESC', [userId]);
+    return rows.map(toKnowledgeProjectSummary);
   },
 
   async createForUser(userId: string, projectId: string) {
