@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 
 if (process.env.DATABASE_URL && process.env.OPENNEXT_INNER_NEXT_BUILD !== "1") {
-  const migration = spawnSync("prisma", ["migrate", "deploy"], {
+  const migration = spawnSync("node", ["scripts/deploy-migrations.mjs"], {
     stdio: "inherit",
     shell: true,
     env: process.env,

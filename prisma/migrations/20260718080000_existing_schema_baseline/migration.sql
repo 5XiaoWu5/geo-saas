@@ -1,0 +1,1 @@
+-- Baseline for the existing production schema that predates Prisma Migrate.

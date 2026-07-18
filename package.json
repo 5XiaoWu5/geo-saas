@@ -7,7 +7,7 @@
     "build": "node scripts/cloudflare-build.mjs",
     "build:next": "next build",
     "build:cloudflare": "node scripts/cloudflare-build.mjs",
-    "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:deploy": "node scripts/deploy-migrations.mjs",
     "check:competitor-foundation": "node scripts/check-competitor-foundation.mjs",
     "preview": "opennextjs-cloudflare preview",
     "start": "next start",
