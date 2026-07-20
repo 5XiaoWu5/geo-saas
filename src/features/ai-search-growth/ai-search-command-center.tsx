@@ -24,7 +24,7 @@ export function AISearchCommandCenter({ projectId }: { projectId: string }) {
   async function calculate() { setCalculating(true); setError(""); try { setData(await readJson<AISearchGrowthResponse>(await fetch(`/api/ai-search-growth/${projectId}`, { method: "POST" }))); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "评分计算失败"); } finally { setCalculating(false); } }
   if (loading) return <div className="flex min-h-72 items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />正在汇总企业 AI 搜索增长证据…</div>;
   if (!data) return <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-5 text-sm text-destructive">AI 搜索增长驾驶舱加载失败：{error || "暂无数据"}</div>;
-  return <div className="min-w-0 space-y-6 overflow-x-hidden">
+  return <div data-testid="ai-command-center" className="min-w-0 space-y-6 overflow-x-hidden">
     <PageHeader title="AI 搜索增长驾驶舱" description={`把 ${data.project.name} 在 AI 平台中的出现、引用、排名、竞争差距与下一步行动放在同一个商业视图中。`} action={<Button asChild variant="outline" className="min-h-11 w-full sm:w-auto"><Link href={`/projects/${projectId}/geo/monitoring`}>真实 AI 检测 <ArrowRight className="h-4 w-4" /></Link></Button>} />
     {error ? <div className="flex gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive"><AlertCircle className="h-4 w-4 shrink-0" />{error}</div> : null}
     <GrowthScoreHero data={data} calculating={calculating} onCalculate={() => void calculate()} />
