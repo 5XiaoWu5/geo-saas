@@ -231,6 +231,18 @@ export type BenchmarkEngineOutput = {
   gaps: BenchmarkGapAnalysis[];
 };
 
+export type BenchmarkOverviewResult = BenchmarkResult & {
+  name: string;
+};
+
+export type BenchmarkOverviewResponse = {
+  projectId: string;
+  status: "available" | "unavailable";
+  run: BenchmarkRun | null;
+  results: BenchmarkOverviewResult[];
+  gaps: BenchmarkGapAnalysis[];
+};
+
 export type CompetitorEntityEvidence = {
   targetType: SimulationTargetType;
   targetId: string;

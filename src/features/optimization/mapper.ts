@@ -1,6 +1,7 @@
 import type { GeoIssue } from "@/features/geo-analysis/types";
 import { recommendForIssue } from "@/features/geo-analysis/recommendations";
 import type { OptimizationSeverity, OptimizationTask } from "@/features/optimization/types";
+import type { GrowthOpportunityTaskInput } from "@/features/growth-engine/types";
 
 // GeoIssue severity → 优化任务严重程度（High / Medium / Low）
 export function toOptimizationSeverity(severity: GeoIssue["severity"]): OptimizationSeverity {
@@ -45,5 +46,22 @@ export function buildTaskInputFromIssue(projectId: string, issue: GeoIssue) {
     recommendation: recommendForIssue(issue),
     severity: toOptimizationSeverity(issue.severity),
     category: issue.category,
+  };
+}
+
+export function buildTaskInputFromOpportunity(projectId: string, opportunity: GrowthOpportunityTaskInput) {
+  const category = opportunity.source === "KNOWLEDGE_GAP"
+    ? "knowledge"
+    : opportunity.source === "BENCHMARK_GAP"
+      ? "benchmark"
+      : opportunity.issueCategory;
+  return {
+    projectId,
+    issueId: opportunity.optimizationIssueId,
+    title: opportunity.title,
+    description: opportunity.problem,
+    recommendation: opportunity.recommendation,
+    severity: toOptimizationSeverity(opportunity.severity),
+    category,
   };
 }

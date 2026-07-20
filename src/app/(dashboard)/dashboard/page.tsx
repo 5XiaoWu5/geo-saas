@@ -2,26 +2,30 @@
 
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowRight, BookOpen, CheckCircle2, ClipboardList, Eye, FileSearch, LineChart, SearchCheck, Sparkles, Target } from "lucide-react";
+import { ArrowRight, CheckCircle2, CircleDashed, Gauge, Medal, SearchCheck, Sparkles, Target } from "lucide-react";
+import { PageHeader } from "@/components/shared/page";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { PageHeader } from "@/components/shared/page";
 import type { ReportsResponse, ProjectReport } from "@/features/reports/types";
-import type { KnowledgeOverviewResponse, KnowledgeProjectSummary } from "@/features/knowledge/types";
-import type { GeoIssue } from "@/features/geo-analysis/types";
-import { useI18n } from "@/i18n/provider";
+import type { KnowledgeAssessment, KnowledgeOverviewResponse } from "@/features/knowledge/types";
+import type { BenchmarkOverviewResponse, CompetitorWorkspaceResponse } from "@/features/competitor-benchmark/types";
+import { buildGrowthOpportunities } from "@/features/growth-engine/opportunities";
+import type { GrowthOpportunity } from "@/features/growth-engine/types";
 import { getHostname } from "@/lib/format";
 
 type DashboardData = {
   reports: ReportsResponse;
   knowledge: KnowledgeOverviewResponse;
+  assessment: KnowledgeAssessment | null;
+  benchmark: BenchmarkOverviewResponse | null;
+  competitors: CompetitorWorkspaceResponse | null;
 };
 
 async function readJson<T>(response: Response): Promise<T> {
   const text = await response.text();
   const body = text ? JSON.parse(text) as T & { error?: string } : {} as T & { error?: string };
-  if (!response.ok) throw new Error(body.error ?? "REQUEST_FAILED");
+  if (!response.ok) throw new Error(body.error ?? "请求失败");
   return body;
 }
 
@@ -30,159 +34,124 @@ async function loadDashboard(): Promise<DashboardData> {
     fetch("/api/reports", { cache: "no-store" }).then(readJson<ReportsResponse>),
     fetch("/api/knowledge", { cache: "no-store" }).then(readJson<KnowledgeOverviewResponse>),
   ]);
-  return { reports, knowledge };
+  const projectId = reports.reports[0]?.projectId;
+  if (!projectId) return { reports, knowledge, assessment: null, benchmark: null, competitors: null };
+  const [assessment, benchmark, competitors] = await Promise.all([
+    fetch(`/api/knowledge/${projectId}/assessment`, { cache: "no-store" }).then(readJson<KnowledgeAssessment>),
+    fetch(`/api/benchmark?projectId=${encodeURIComponent(projectId)}`, { cache: "no-store" }).then(readJson<BenchmarkOverviewResponse>),
+    fetch(`/api/competitors?projectId=${encodeURIComponent(projectId)}`, { cache: "no-store" }).then(readJson<CompetitorWorkspaceResponse>),
+  ]);
+  return { reports, knowledge, assessment, benchmark, competitors };
 }
 
 export default function DashboardPage() {
-  const { t } = useI18n();
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let active = true;
-    void loadDashboard().then((result) => {
-      if (active) setData(result);
-    }).catch((requestError) => {
-      if (active) setError(requestError instanceof Error ? requestError.message : "REQUEST_FAILED");
-    });
+    void loadDashboard().then((result) => { if (active) setData(result); }).catch((requestError) => { if (active) setError(requestError instanceof Error ? requestError.message : "数据加载失败"); });
     return () => { active = false; };
   }, []);
 
   const report = data?.reports.reports[0] ?? null;
-  const knowledge = report ? data?.knowledge.projects.find((item) => item.projectId === report.projectId) ?? null : null;
+  const knowledgeSummary = report ? data?.knowledge.projects.find((item) => item.projectId === report.projectId) ?? null : null;
+  const opportunities = report ? buildGrowthOpportunities({ projectId: report.projectId, analysisIssues: report.analysis?.issues, knowledgeGaps: data?.assessment?.missing, benchmarkGaps: data?.benchmark?.gaps }) : [];
 
   return (
-    <div className="min-w-0 overflow-x-hidden">
-      <PageHeader title="增长驾驶舱" description="统一查看 SEO 健康、AI 搜索可见性、企业知识、优化任务与持续增长。" action={<Button asChild><Link href="/projects">{t("dashboard.newProject")}</Link></Button>} />
-
-      {error ? <div className="mb-6 rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4 text-sm text-rose-200">Dashboard 数据加载失败：{error}</div> : null}
-
+    <div className="min-w-0 space-y-6 overflow-x-hidden">
+      <PageHeader title="增长驾驶舱" description="用真实项目数据统一查看 SEO、AI 搜索、企业知识、竞争位置与下一步行动。" action={<Button asChild className="min-h-11"><Link href="/growth">进入企业增长中心 <ArrowRight className="h-4 w-4" /></Link></Button>} />
+      {error ? <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">Dashboard 数据加载失败：{error}</div> : null}
       {!data && !error ? <DashboardLoading /> : data && !report ? <EmptyDashboard /> : report ? <>
-        <GrowthScoreStrip report={report} knowledge={knowledge} />
-        <div className="mt-6 grid gap-6 xl:grid-cols-[1.35fr_0.85fr]">
-          <OpportunityBoard report={report} knowledge={knowledge} />
-          <GrowthRoute report={report} knowledge={knowledge} />
-        </div>
+        <ProjectPulse report={report} knowledgeScore={data?.assessment?.completeness ?? knowledgeSummary?.knowledgeBase?.completenessScore ?? null} opportunityCount={opportunities.filter((item) => !item.trackedTaskId).length} />
+        <section className="grid gap-5 xl:grid-cols-3">
+          <SeoStatus report={report} />
+          <AiSearchStatus report={report} knowledgeScore={data?.assessment?.completeness ?? null} benchmark={data?.benchmark ?? null} />
+          <CompetitiveStatus report={report} benchmark={data?.benchmark ?? null} competitorCount={data?.competitors?.competitors.length ?? 0} />
+        </section>
+        <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+          <PriorityActions report={report} opportunities={opportunities} />
+          <GrowthFlow report={report} hasKnowledge={Boolean(knowledgeSummary?.knowledgeBase)} hasCompetitors={Boolean(data?.competitors?.competitors.length)} />
+        </section>
         <RecentProjects reports={data?.reports.reports ?? []} />
       </> : null}
     </div>
   );
 }
 
-function GrowthScoreStrip({ report, knowledge }: { report: ProjectReport; knowledge: KnowledgeProjectSummary | null }) {
-  const analysis = report.analysis;
-  const seoHealth = analysis ? Math.min(100, Math.round(((analysis.technicalScore + analysis.schemaScore + analysis.contentScore) / 70) * 100)) : null;
-  const visibility = report.scan ? report.project.visibilityScore : null;
-  const knowledgeScore = knowledge?.knowledgeBase?.completenessScore ?? null;
-  const overallDelta = report.growthTrend.deltas.find((item) => item.key === "overallScore")?.change ?? null;
-
-  return (
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-      <ScoreCard icon={<SearchCheck className="h-4 w-4" />} label="SEO 健康度" value={scoreValue(seoHealth)} detail={seoHealth === null ? "等待网站审计" : "技术、Schema 与内容"} tone="seo" progress={seoHealth} />
-      <ScoreCard icon={<Eye className="h-4 w-4" />} label="AI 可见性" value={scoreValue(visibility)} detail={visibility === null ? "等待分析" : "当前为网站信号估算"} tone="geo" progress={visibility} />
-      <ScoreCard icon={<BookOpen className="h-4 w-4" />} label="知识完整度" value={scoreValue(knowledgeScore)} detail={knowledge?.knowledgeBase ? "严格证据完整度" : "尚未建立知识库"} tone="knowledge" progress={knowledgeScore} />
-      <ScoreCard icon={<ClipboardList className="h-4 w-4" />} label="待优化任务" value={String(report.optimization.incompleteTasks)} detail={`${report.optimization.completedTasks} 已完成 · ${report.optimization.totalTasks} 总计`} tone="tasks" />
-      <ScoreCard icon={<LineChart className="h-4 w-4" />} label="增长趋势" value={overallDelta === null ? "—" : `${overallDelta > 0 ? "+" : ""}${overallDelta}`} detail="最近 30 天总分变化" tone="growth" />
-    </section>
-  );
-}
-
-function ScoreCard({ icon, label, value, detail, tone, progress }: { icon: ReactNode; label: string; value: string; detail: string; tone: "seo" | "geo" | "knowledge" | "tasks" | "growth"; progress?: number | null }) {
-  const tones = {
-    seo: "border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-300",
-    geo: "border-violet-400/20 bg-violet-400/[0.06] text-violet-300",
-    knowledge: "border-cyan-400/20 bg-cyan-400/[0.06] text-cyan-300",
-    tasks: "border-amber-400/20 bg-amber-400/[0.06] text-amber-300",
-    growth: "border-blue-400/20 bg-blue-400/[0.06] text-blue-300",
-  } as const;
-  return (
-    <div className={`min-w-0 rounded-2xl border p-4 ${tones[tone]}`}>
-      <div className="flex items-center gap-2 text-xs font-medium">{icon}<span>{label}</span></div>
-      <p className="mt-4 text-3xl font-semibold tracking-tight text-foreground">{value}</p>
-      {typeof progress === "number" ? <Progress value={progress} className="mt-3" /> : null}
-      <p className="mt-3 truncate text-xs text-muted-foreground" title={detail}>{detail}</p>
-    </div>
-  );
-}
-
-function OpportunityBoard({ report, knowledge }: { report: ProjectReport; knowledge: KnowledgeProjectSummary | null }) {
-  const issues = report.analysis?.issues ?? [];
-  const seoIssues = issues.filter((issue) => issue.category !== "entity").slice(0, 3);
-  const geoIssues = issues.filter((issue) => issue.category === "entity").slice(0, 2);
-  const knowledgeGaps = knowledge ? buildKnowledgeGaps(knowledge) : ["尚未建立企业知识库"];
-
-  return (
-    <Card className="glass-panel min-w-0 border-white/10">
-      <CardHeader className="flex-row items-start justify-between gap-4">
-        <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">优先信号</p><CardTitle className="mt-2 flex items-center gap-2 text-xl"><Target className="h-5 w-5 text-primary" />主要增长机会</CardTitle></div>
-        <Button asChild variant="outline" size="sm"><Link href={`/projects/${report.projectId}/optimization`}>查看任务</Link></Button>
-      </CardHeader>
-      <CardContent className="grid gap-4 lg:grid-cols-2">
-        <OpportunityColumn title="SEO 增长" accent="bg-emerald-400" empty="最新网站分析未发现 SEO 结构问题。" issues={seoIssues} href={`/projects/${report.projectId}/seo`} />
-        <div className="space-y-4">
-          <OpportunityColumn title="AI 搜索增长" accent="bg-violet-400" empty="最新分析未发现实体理解问题。" issues={geoIssues} href={`/projects/${report.projectId}/geo`} />
-          <div className="rounded-2xl border border-cyan-400/15 bg-cyan-400/[0.04] p-4">
-            <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">知识准备度</h3><Link href={`/projects/${report.projectId}/knowledge`} className="text-xs font-medium text-primary">完善资料</Link></div>
-            <ul className="mt-3 space-y-2">{knowledgeGaps.slice(0, 3).map((gap) => <li key={gap} className="flex items-start gap-2 text-sm text-muted-foreground"><span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-300" />{gap}</li>)}</ul>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function OpportunityColumn({ title, accent, empty, issues, href }: { title: string; accent: string; empty: string; issues: GeoIssue[]; href: string }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
-      <div className="flex items-center justify-between gap-3"><h3 className="flex items-center gap-2 text-sm font-semibold"><span className={`h-2 w-2 rounded-full ${accent}`} />{title}</h3><Link href={href} className="text-xs font-medium text-primary">进入 <ArrowRight className="ml-1 inline h-3 w-3" /></Link></div>
-      {issues.length ? <ul className="mt-4 space-y-3">{issues.map((issue) => <li key={`${issue.category}-${issue.title}`} className="rounded-xl border border-white/10 bg-black/10 p-3"><p className="text-sm font-medium">{issue.title}</p><p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{issue.description}</p></li>)}</ul> : <p className="mt-4 text-sm text-muted-foreground">{empty}</p>}
-    </div>
-  );
-}
-
-function GrowthRoute({ report, knowledge }: { report: ProjectReport; knowledge: KnowledgeProjectSummary | null }) {
-  const steps = [
-    { label: "网站证据", ready: Boolean(report.scan), href: `/projects/${report.projectId}/overview`, icon: FileSearch },
-    { label: "企业知识", ready: Boolean(knowledge?.knowledgeBase), href: `/projects/${report.projectId}/knowledge`, icon: BookOpen },
-    { label: "AI 推荐", ready: Boolean(report.latestSimulation), href: `/projects/${report.projectId}/geo`, icon: Sparkles },
-    { label: "优化任务", ready: report.optimization.totalTasks > 0, href: `/projects/${report.projectId}/optimization`, icon: ClipboardList },
+function ProjectPulse({ report, knowledgeScore, opportunityCount }: { report: ProjectReport; knowledgeScore: number | null; opportunityCount: number }) {
+  const seoHealth = seoHealthScore(report);
+  const recommendation = report.latestSimulation?.result?.probability ?? null;
+  const items = [
+    { label: "SEO 健康度", value: score(seoHealth), detail: "技术、Schema 与内容", tone: "text-emerald-300" },
+    { label: "AI 可见性", value: score(report.project.visibilityScore), detail: "项目当前可见性信号", tone: "text-violet-300" },
+    { label: "知识完整度", value: score(knowledgeScore), detail: "严格证据模式", tone: "text-cyan-300" },
+    { label: "AI 推荐概率", value: score(recommendation), detail: recommendation === null ? "尚无模拟结果" : "规则模拟结果", tone: "text-fuchsia-300" },
+    { label: "优先行动", value: `${opportunityCount}`, detail: `${report.optimization.incompleteTasks} 个任务待完成`, tone: "text-amber-300" },
   ];
-  return (
-    <Card className="glass-panel min-w-0 border-white/10">
-      <CardHeader><p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">当前项目</p><CardTitle className="mt-2 truncate text-xl">{report.projectName}</CardTitle><p className="truncate text-sm text-muted-foreground">{getHostname(report.websiteUrl)}</p></CardHeader>
-      <CardContent className="space-y-3">
-        {steps.map((step, index) => { const Icon = step.icon; return <Link href={step.href} key={step.label} className="group flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.025] p-3 transition hover:border-primary/30 hover:bg-white/[0.05]"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.05] text-primary"><Icon className="h-4 w-4" /></span><div className="min-w-0 flex-1"><p className="text-xs text-muted-foreground">第 {index + 1} 步</p><p className="truncate text-sm font-medium">{step.label}</p></div>{step.ready ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" /> : <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition group-hover:translate-x-1 group-hover:text-primary" />}</Link>; })}
-      </CardContent>
-    </Card>
-  );
+  return <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{items.map((item) => <Card key={item.label} className="glass-panel min-w-0 border-white/10"><CardContent className="p-4"><p className="text-xs text-muted-foreground">{item.label}</p><p className={`mt-3 text-3xl font-semibold ${item.tone}`}>{item.value}</p><p className="mt-2 truncate text-xs text-muted-foreground" title={item.detail}>{item.detail}</p></CardContent></Card>)}</section>;
+}
+
+function SeoStatus({ report }: { report: ProjectReport }) {
+  const issues = report.analysis?.issues ?? [];
+  const pageIssues = issues.filter((issue) => issue.category === "technical" || issue.category === "content").length;
+  const schemaScore = report.analysis ? Math.round((report.analysis.schemaScore / 25) * 100) : null;
+  return <StatusPanel icon={<SearchCheck className="h-5 w-5" />} title="SEO 状态" accent="text-emerald-300" href={`/projects/${report.projectId}/seo`}><StatusMetric label="网站健康度" value={score(seoHealthScore(report))} progress={seoHealthScore(report)} /><StatusMetric label="页面优化问题" value={`${pageIssues} 项`} /><StatusMetric label="Schema 状态" value={score(schemaScore)} progress={schemaScore} /></StatusPanel>;
+}
+
+function AiSearchStatus({ report, knowledgeScore, benchmark }: { report: ProjectReport; knowledgeScore: number | null; benchmark: BenchmarkOverviewResponse | null }) {
+  const entityScore = report.analysis ? Math.round((report.analysis.entityScore / 30) * 100) : null;
+  const recommendation = report.latestSimulation?.result?.probability ?? null;
+  const latestCitation = [...report.growthTrend.points].reverse().find((point) => point.citationScore !== null)?.citationScore ?? benchmark?.results.find((item) => item.targetType === "OWN")?.citationScore ?? null;
+  return <StatusPanel icon={<Sparkles className="h-5 w-5" />} title="AI 搜索状态" accent="text-violet-300" href={`/projects/${report.projectId}/geo`}><StatusMetric label="AI 理解程度" value={score(entityScore)} progress={entityScore} /><StatusMetric label="知识完整度" value={score(knowledgeScore)} progress={knowledgeScore} /><StatusMetric label="AI 推荐概率" value={score(recommendation)} /><StatusMetric label="Citation 情况" value={score(latestCitation)} /></StatusPanel>;
+}
+
+function CompetitiveStatus({ report, benchmark, competitorCount }: { report: ProjectReport; benchmark: BenchmarkOverviewResponse | null; competitorCount: number }) {
+  const own = benchmark?.results.find((result) => result.targetType === "OWN") ?? null;
+  const gap = benchmark?.gaps.find((item) => item.actionable) ?? null;
+  return <StatusPanel icon={<Medal className="h-5 w-5" />} title="竞争状态" accent="text-amber-300" href={`/projects/${report.projectId}/competitors`}><StatusMetric label="Benchmark 排名" value={own?.ranking ? `第 ${own.ranking} 名` : "暂无结果"} /><StatusMetric label="已管理竞品" value={`${competitorCount} 家`} /><div className="rounded-2xl border border-white/10 bg-white/[0.025] p-3"><p className="text-xs text-muted-foreground">主要差距</p><p className="mt-2 text-sm font-medium">{gap ? `${gap.leadingCompetitor ?? "领先竞品"}在${benchmarkMetricLabel(gap.metric)}领先${Math.abs(gap.difference ?? 0)}分` : "暂无可用的竞争差距"}</p></div></StatusPanel>;
+}
+
+function StatusPanel({ icon, title, accent, href, children }: { icon: ReactNode; title: string; accent: string; href: string; children: ReactNode }) {
+  return <Card className="glass-panel min-w-0 border-white/10"><CardHeader className="flex-row items-center justify-between gap-3"><CardTitle className={`flex items-center gap-2 text-lg ${accent}`}>{icon}{title}</CardTitle><Button asChild variant="ghost" size="sm" className="min-h-11"><Link href={href}>查看 <ArrowRight className="h-4 w-4" /></Link></Button></CardHeader><CardContent className="space-y-3">{children}</CardContent></Card>;
+}
+
+function StatusMetric({ label, value, progress }: { label: string; value: string; progress?: number | null }) {
+  return <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-3"><div className="flex items-center justify-between gap-3 text-sm"><span className="text-muted-foreground">{label}</span><strong>{value}</strong></div>{typeof progress === "number" ? <Progress value={progress} className="mt-3" /> : null}</div>;
+}
+
+function PriorityActions({ report, opportunities }: { report: ProjectReport; opportunities: GrowthOpportunity[] }) {
+  return <Card className="glass-panel min-w-0 border-white/10"><CardHeader className="flex-row items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">下一步行动</p><CardTitle className="mt-2 flex items-center gap-2 text-xl"><Target className="h-5 w-5 text-primary" />优先增长机会</CardTitle></div><Button asChild variant="outline" className="min-h-11"><Link href={`/projects/${report.projectId}/optimization`}>进入优化中心</Link></Button></CardHeader><CardContent className="space-y-3">{opportunities.length ? opportunities.slice(0, 5).map((opportunity) => <Link key={`${opportunity.source}-${opportunity.id}`} href={`/projects/${report.projectId}/optimization`} className="flex min-h-16 min-w-0 items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.025] p-3 transition hover:border-primary/30"><span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${opportunity.dimension === "SEO" ? "bg-emerald-400" : opportunity.dimension === "GEO" ? "bg-violet-400" : opportunity.dimension === "KNOWLEDGE" ? "bg-cyan-400" : "bg-amber-400"}`} /><span className="min-w-0 flex-1"><span className="block text-xs text-muted-foreground">{opportunity.sourceLabel} · {opportunity.impact}</span><span className="mt-1 block break-words text-sm font-medium">{opportunity.title}</span></span><ArrowRight className="mt-2 h-4 w-4 shrink-0 text-muted-foreground" /></Link>) : <p className="text-sm text-muted-foreground">当前没有真实数据支持的待处理增长机会。</p>}</CardContent></Card>;
+}
+
+function GrowthFlow({ report, hasKnowledge, hasCompetitors }: { report: ProjectReport; hasKnowledge: boolean; hasCompetitors: boolean }) {
+  const steps = [
+    ["企业网站", Boolean(report.scan)], ["SEO 分析", Boolean(report.analysis)], ["GEO AI 理解", Boolean(report.analysis)], ["企业知识画像", hasKnowledge],
+    ["AI 搜索模拟", Boolean(report.latestSimulation)], ["竞品比较", hasCompetitors], ["增长机会", Boolean(report.analysis)], ["优化与追踪", report.optimization.totalTasks > 0 || report.growthTrend.points.length > 0],
+  ] as const;
+  return <Card className="glass-panel min-w-0 border-white/10"><CardHeader><CardTitle className="text-lg">增长数据流</CardTitle><p className="text-sm text-muted-foreground">底层模块保持独立，企业增长中心统一呈现状态。</p></CardHeader><CardContent className="grid gap-2 sm:grid-cols-2">{steps.map(([label, ready], index) => <div key={label} className="flex min-h-12 items-center gap-3 rounded-xl border border-white/10 bg-white/[0.025] px-3"><span className="font-mono text-xs text-muted-foreground">{String(index + 1).padStart(2, "0")}</span>{ready ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" /> : <CircleDashed className="h-4 w-4 shrink-0 text-muted-foreground" />}<span className="text-sm">{label}</span></div>)}</CardContent></Card>;
 }
 
 function RecentProjects({ reports }: { reports: ProjectReport[] }) {
-  return (
-    <section className="mt-6">
-      <div className="mb-3 flex items-center justify-between"><h2 className="text-base font-semibold">项目增长概览</h2><Button asChild variant="ghost" size="sm"><Link href="/projects">全部项目 <ArrowRight className="h-4 w-4" /></Link></Button></div>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{reports.slice(0, 6).map((report) => <Link href={`/projects/${report.projectId}/overview`} key={report.projectId} className="glass-panel min-w-0 rounded-2xl p-4 transition hover:border-primary/30 hover:bg-white/[0.06]"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-medium">{report.projectName}</p><p className="mt-1 truncate text-xs text-muted-foreground">{getHostname(report.websiteUrl)}</p></div><span className="shrink-0 font-mono text-lg text-primary">{report.analysis?.totalScore ?? "—"}</span></div><div className="mt-4 flex items-center justify-between text-xs text-muted-foreground"><span>{report.optimization.incompleteTasks} 待优化</span><span>{report.growthTrend.points.length} 增长记录</span></div></Link>)}</div>
-    </section>
-  );
+  return <section><div className="mb-3 flex items-center justify-between"><h2 className="text-base font-semibold">项目增长概览</h2><Button asChild variant="ghost" className="min-h-11"><Link href="/projects">全部项目 <ArrowRight className="h-4 w-4" /></Link></Button></div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{reports.slice(0, 6).map((report) => <Link href={`/projects/${report.projectId}/overview`} key={report.projectId} className="glass-panel min-h-28 min-w-0 rounded-2xl p-4 transition hover:border-primary/30"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-medium">{report.projectName}</p><p className="mt-1 truncate text-xs text-muted-foreground">{getHostname(report.websiteUrl)}</p></div><span className="shrink-0 font-mono text-lg text-primary">{report.analysis?.totalScore ?? "—"}</span></div><div className="mt-4 flex items-center justify-between text-xs text-muted-foreground"><span>{report.optimization.incompleteTasks} 项待优化</span><span>{report.growthTrend.points.length} 条增长记录</span></div></Link>)}</div></section>;
 }
 
 function DashboardLoading() {
-  return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{Array.from({ length: 5 }, (_, index) => <div key={index} className="h-36 animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />)}</div>;
+  return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{Array.from({ length: 5 }, (_, index) => <div key={index} className="h-32 animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />)}</div>;
 }
 
 function EmptyDashboard() {
-  return <div className="glass-panel flex min-h-96 flex-col items-center justify-center rounded-3xl p-8 text-center"><Sparkles className="h-8 w-8 text-primary" /><h2 className="mt-4 text-xl font-semibold">创建第一个增长项目</h2><p className="mt-2 max-w-md text-sm text-muted-foreground">添加企业网站后，GeoPilot AI 会建立 SEO、AI 搜索、知识与优化基线。</p><Button asChild className="mt-6"><Link href="/projects">创建项目</Link></Button></div>;
+  return <Card className="glass-panel border-white/10"><CardContent className="flex min-h-96 flex-col items-center justify-center p-8 text-center"><Gauge className="h-8 w-8 text-primary" /><h2 className="mt-4 text-xl font-semibold">创建第一个企业增长项目</h2><p className="mt-2 max-w-md text-sm text-muted-foreground">添加企业网站后，GeoPilot AI 会逐步建立 SEO、AI 搜索、知识、竞争与优化基线。</p><Button asChild className="mt-6 min-h-11"><Link href="/projects">创建项目</Link></Button></CardContent></Card>;
 }
 
-function buildKnowledgeGaps(summary: KnowledgeProjectSummary) {
-  const gaps: string[] = [];
-  if (!summary.productCount) gaps.push("缺少产品资料");
-  if (!summary.serviceCount) gaps.push("缺少服务资料");
-  if (!summary.caseCount) gaps.push("缺少客户案例");
-  if (!summary.documentCount && !summary.technicalDocumentCount) gaps.push("缺少技术文档或认证证据");
-  return gaps.length ? gaps : ["核心企业知识资产已经建立"];
+function seoHealthScore(report: ProjectReport) {
+  return report.analysis ? Math.min(100, Math.round(((report.analysis.technicalScore + report.analysis.schemaScore + report.analysis.contentScore) / 70) * 100)) : null;
 }
 
-function scoreValue(value: number | null) {
-  return value === null ? "—" : `${value}`;
+function score(value: number | null) {
+  return value === null ? "暂无" : `${Math.round(value)}`;
+}
+
+function benchmarkMetricLabel(metric: string) {
+  return ({ overall: "综合评分", visibility: "AI 可见性", entity: "实体理解", schema: "Schema", authority: "权威性", citation: "引用能力", simulation: "推荐概率" } as Record<string, string>)[metric] ?? metric;
 }

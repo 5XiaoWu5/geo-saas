@@ -1,5 +1,7 @@
 import { BENCHMARK_DIMENSIONS, BENCHMARK_METRICS, type BenchmarkDimension, type BenchmarkGap, type BenchmarkGapAnalysis, type BenchmarkGapMetric, type BenchmarkMetricKey, type RankedBenchmarkResult } from "./types";
 
+type BenchmarkGapCandidate = Pick<RankedBenchmarkResult, "competitorId" | "confidence" | "name" | "targetKey" | "overallScore" | "visibilityScore" | "entityScore" | "schemaScore" | "authorityScore" | "citationScore" | "simulationScore">;
+
 type MetricSource = Partial<Record<BenchmarkMetricKey, number | null>>;
 
 export function buildBenchmarkGaps(own: MetricSource, competitor: MetricSource): BenchmarkGap[] {
@@ -26,8 +28,8 @@ function reasonFor(metric: BenchmarkGapMetric, actionable: boolean) {
 }
 
 export function analyzeBenchmarkGaps(
-  own: RankedBenchmarkResult | null,
-  competitors: RankedBenchmarkResult[],
+  own: BenchmarkGapCandidate | null,
+  competitors: BenchmarkGapCandidate[],
   actionableThreshold = 5,
 ): BenchmarkGapAnalysis[] {
   const metrics: BenchmarkGapMetric[] = ["overall", ...BENCHMARK_DIMENSIONS];
