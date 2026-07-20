@@ -136,7 +136,7 @@ export const knowledgeRepository = {
   },
 
   async listProjectsForUser(userId: string): Promise<KnowledgeProjectSummary[]> {
-    const rows = await knowledgeDatabase().query('SELECT p."id" AS "projectId", p."name" AS "projectName", p."domain" AS "websiteUrl", p."industry", kb."id" AS "knowledgeBaseId", kb."status", kb."version", kb."completenessScore", kb."understandingScore", kb."createdAt", kb."updatedAt", (SELECT COUNT(*)::int FROM "ProductEntity" product WHERE product."projectId" = p."id" AND product."status" <> \'ARCHIVED\') AS "productCount", (SELECT COUNT(*)::int FROM "ServiceEntity" service WHERE service."projectId" = p."id" AND service."status" <> \'ARCHIVED\') AS "serviceCount", (SELECT COUNT(*)::int FROM "CustomerCase" customer_case WHERE customer_case."projectId" = p."id" AND customer_case."status" <> \'ARCHIVED\') AS "caseCount", (SELECT COUNT(*)::int FROM "KnowledgeDocument" document WHERE document."projectId" = p."id") AS "documentCount", (SELECT COUNT(*)::int FROM "TechnicalDocument" technical WHERE technical."projectId" = p."id" AND technical."status" <> \'ARCHIVED\') AS "technicalDocumentCount" FROM "Project" p LEFT JOIN "CompanyKnowledgeBase" kb ON kb."projectId" = p."id" WHERE p."userId" = $1 ORDER BY p."updatedAt" DESC', [userId]);
+    const rows = await knowledgeDatabase().query('SELECT p."id" AS "projectId", p."name" AS "projectName", p."domain" AS "websiteUrl", p."industry", kb."id" AS "knowledgeBaseId", kb."status", kb."version", kb."completenessScore", kb."understandingScore", kb."createdAt", kb."updatedAt", (SELECT COUNT(*)::int FROM "ProductEntity" product WHERE product."projectId" = p."id" AND product."status" = \'ACTIVE\') AS "productCount", (SELECT COUNT(*)::int FROM "ServiceEntity" service WHERE service."projectId" = p."id" AND service."status" = \'ACTIVE\') AS "serviceCount", (SELECT COUNT(*)::int FROM "CustomerCase" customer_case WHERE customer_case."projectId" = p."id" AND customer_case."status" = \'ACTIVE\') AS "caseCount", (SELECT COUNT(*)::int FROM "KnowledgeDocument" document WHERE document."projectId" = p."id") AS "documentCount", (SELECT COUNT(*)::int FROM "TechnicalDocument" technical WHERE technical."projectId" = p."id" AND technical."status" = \'ACTIVE\') AS "technicalDocumentCount" FROM "Project" p LEFT JOIN "CompanyKnowledgeBase" kb ON kb."projectId" = p."id" WHERE p."userId" = $1 ORDER BY p."updatedAt" DESC', [userId]);
     return rows.map(toKnowledgeProjectSummary);
   },
 
@@ -161,8 +161,9 @@ export const knowledgeRepository = {
     return row ? toKnowledgeBase(row) : null;
   },
 
-  async listProducts(userId: string, projectId: string) {
-    const rows = await knowledgeDatabase().query('SELECT product.* FROM "ProductEntity" product INNER JOIN "Project" p ON p."id" = product."projectId" WHERE product."projectId" = $1 AND p."userId" = $2 AND product."status" <> \'ARCHIVED\' ORDER BY product."updatedAt" DESC', [projectId, userId]);
+  async listProducts(userId: string, projectId: string, activeOnly = false) {
+    const statusClause = activeOnly ? 'product."status" = \'ACTIVE\'' : 'product."status" <> \'ARCHIVED\'';
+    const rows = await knowledgeDatabase().query(`SELECT product.* FROM "ProductEntity" product INNER JOIN "Project" p ON p."id" = product."projectId" WHERE product."projectId" = $1 AND p."userId" = $2 AND ${statusClause} ORDER BY product."updatedAt" DESC`, [projectId, userId]);
     return rows.map(toProduct);
   },
 
@@ -214,6 +215,12 @@ export const knowledgeRepository = {
     return row ? toProduct(row) : null;
   },
 
+  async confirmDraftProductForUser(userId: string, projectId: string, productId: string) {
+    const now = new Date();
+    const row = (await knowledgeDatabase().query(`WITH confirmed AS (UPDATE "ProductEntity" product SET "status" = 'ACTIVE', "updatedAt" = $1 FROM "Project" p WHERE product."id" = $2 AND product."projectId" = $3 AND product."projectId" = p."id" AND p."userId" = $4 AND product."status" = 'DRAFT' RETURNING product.*), activated_source AS (UPDATE "KnowledgeSource" source SET "status" = 'ACTIVE', "updatedAt" = $1 FROM confirmed WHERE source."id" = confirmed."sourceId" RETURNING source."id") SELECT * FROM confirmed`, [now, productId, projectId, userId]))[0];
+    return row ? toProduct(row) : null;
+  },
+
   async createServiceForUser(userId: string, input: CreateServiceInput) {
     const sourceId = crypto.randomUUID();
     const serviceId = crypto.randomUUID();
@@ -231,7 +238,7 @@ export const knowledgeRepository = {
   },
 
   async refreshCompletenessForUser(userId: string, projectId: string) {
-    const row = (await knowledgeDatabase().query('UPDATE "CompanyKnowledgeBase" kb SET "completenessScore" = (CASE WHEN EXISTS (SELECT 1 FROM "ProductEntity" product WHERE product."projectId" = kb."projectId" AND product."status" <> \'ARCHIVED\') THEN 30 ELSE 0 END) + (CASE WHEN EXISTS (SELECT 1 FROM "ServiceEntity" service WHERE service."projectId" = kb."projectId" AND service."status" <> \'ARCHIVED\') THEN 25 ELSE 0 END) + (CASE WHEN EXISTS (SELECT 1 FROM "CustomerCase" customer_case WHERE customer_case."projectId" = kb."projectId" AND customer_case."status" <> \'ARCHIVED\') THEN 25 ELSE 0 END) + (CASE WHEN EXISTS (SELECT 1 FROM "KnowledgeDocument" document WHERE document."projectId" = kb."projectId") THEN 20 ELSE 0 END), "version" = kb."version" + 1, "updatedAt" = $1 FROM "Project" p WHERE kb."projectId" = $2 AND kb."projectId" = p."id" AND p."userId" = $3 RETURNING kb.*', [new Date(), projectId, userId]))[0];
+    const row = (await knowledgeDatabase().query('UPDATE "CompanyKnowledgeBase" kb SET "completenessScore" = (CASE WHEN EXISTS (SELECT 1 FROM "ProductEntity" product WHERE product."projectId" = kb."projectId" AND product."status" = \'ACTIVE\') THEN 30 ELSE 0 END) + (CASE WHEN EXISTS (SELECT 1 FROM "ServiceEntity" service WHERE service."projectId" = kb."projectId" AND service."status" = \'ACTIVE\') THEN 25 ELSE 0 END) + (CASE WHEN EXISTS (SELECT 1 FROM "CustomerCase" customer_case WHERE customer_case."projectId" = kb."projectId" AND customer_case."status" = \'ACTIVE\') THEN 25 ELSE 0 END) + (CASE WHEN EXISTS (SELECT 1 FROM "KnowledgeDocument" document WHERE document."projectId" = kb."projectId") THEN 20 ELSE 0 END), "version" = kb."version" + 1, "updatedAt" = $1 FROM "Project" p WHERE kb."projectId" = $2 AND kb."projectId" = p."id" AND p."userId" = $3 RETURNING kb.*', [new Date(), projectId, userId]))[0];
     return row ? toKnowledgeBase(row) : null;
   },
 };

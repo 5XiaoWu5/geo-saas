@@ -2,7 +2,7 @@ import { assessKnowledge } from "./knowledge-assessment";
 import type { KnowledgeIntelligenceInput, KnowledgeIntelligenceProvider, KnowledgeProfileDraft } from "./knowledge-provider";
 import type { KnowledgeCertification, KnowledgeEvidenceRef, KnowledgeFaqTopic, KnowledgeProfileItem } from "./types";
 
-const METHOD_VERSION = "strict-evidence-rules-v1";
+const METHOD_VERSION = "strict-evidence-rules-v2-active-assets";
 const standardPattern = /(?:ISO(?:\/IEC)?\s*\d{3,6}(?::\d{4})?|GB\/T\s*\d{3,6}(?:-\d{4})?|\bCE\b|\bFCC\b|\bRoHS\b|\bUL\b)/i;
 const certificationContext = /(?:ISO(?:\/IEC)?\s*\d{3,6}(?::\d{4})?|GB\/T\s*\d{3,6}(?:-\d{4})?|\bCE\b\s*(?:认证|certification|certificate)?|\bFCC\b\s*(?:认证|certification|certificate)?|\bRoHS\b\s*(?:认证|compliance|certificate)?|\bUL\b\s*(?:认证|listed|certificate)?|认证证书|资质证书|认证机构|发证机构|\bcertificate\b|\bcertification\b|\bcertified\b)/i;
 const identifierPattern = /\b(?:ISO(?:\/IEC)?\s*\d{3,6}(?::\d{4})?|GB\/T\s*\d{3,6}(?:-\d{4})?|(?:certificate|certification|证书|认证)(?:\s*(?:no\.?|number|编号))?\s*[:：#]?\s*(?=[A-Z0-9./-]*\d)[A-Z0-9][A-Z0-9./-]{3,})\b/i;

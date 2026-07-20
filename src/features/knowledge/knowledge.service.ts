@@ -59,6 +59,14 @@ export async function createProduct(userId: string, input: CreateProductInput) {
   return product;
 }
 
+export async function confirmDraftProduct(userId: string, projectId: string, productId: string) {
+  await requireKnowledgeBase(userId, projectId);
+  const product = await knowledgeRepository.confirmDraftProductForUser(userId, projectId, productId);
+  if (!product) throw new KnowledgeServiceError("PRODUCT_DRAFT_NOT_FOUND", 404);
+  await knowledgeRepository.refreshCompletenessForUser(userId, projectId);
+  return product;
+}
+
 export async function createService(userId: string, input: CreateServiceInput) {
   await requireKnowledgeBase(userId, input.projectId);
   const service = await knowledgeRepository.createServiceForUser(userId, input);

@@ -1,4 +1,4 @@
-import { BarChart3, Boxes, FileSearch, FileText, Gauge, Search, Tags } from "lucide-react";
+import { BarChart3, Boxes, FileSearch, FileText, Gauge, ListChecks, Search, Tags, TrendingUp } from "lucide-react";
 import { GrowthEngineHub, type GrowthEngineModule } from "@/features/product-architecture/growth-engine-hub";
 
 const modules: GrowthEngineModule[] = [
@@ -8,6 +8,8 @@ const modules: GrowthEngineModule[] = [
   { title: "Schema 分析", description: "检查 JSON-LD 覆盖情况，并将缺失的结构化数据转化为优化任务。", href: "/analyzer", icon: Tags },
   { title: "关键词研究", description: "复用 Campaign 与查询能力，作为关键词和搜索意图研究的当前基础。", href: "/campaigns", icon: Search, status: "foundation" },
   { title: "内容优化", description: "在统一优化中心管理内容与技术建议，不建立重复的任务系统。", href: "/optimization", icon: FileText, status: "foundation" },
+  { title: "索引状态", description: "复用抓取结果检查可访问性、robots.txt 与站点地图，为后续索引覆盖数据保留入口。", href: "/crawl", icon: ListChecks, status: "foundation" },
+  { title: "排名追踪", description: "通过已有 Growth 与监控数据查看趋势，后续接入真实关键词排名数据。", href: "/growth/overview", icon: TrendingUp, status: "planned" },
   { title: "网站资产库", description: "保留统一页面资产入口，作为后续多页面 SEO 能力的承载层。", href: "/inventory", icon: Boxes, status: "planned" },
 ];
 

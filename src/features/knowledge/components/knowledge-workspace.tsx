@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { ArrowRight, BookOpen, BrainCircuit, BriefcaseBusiness, FileText, FolderOpen, Loader2, Package, Plus, Trophy, UploadCloud } from "lucide-react";
+import { ArrowRight, BookOpen, BrainCircuit, BriefcaseBusiness, CheckCircle2, FileText, FolderOpen, Loader2, Package, Plus, Trophy, UploadCloud } from "lucide-react";
 import { PageHeader } from "@/components/shared/page";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useI18n } from "@/i18n/provider";
@@ -29,6 +30,7 @@ export function KnowledgeWorkspace({ projectId }: { projectId: string }) {
   const [loading, setLoading] = useState(true);
   const [formKind, setFormKind] = useState<FormKind>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmingProductId, setConfirmingProductId] = useState("");
   const [error, setError] = useState("");
 
   const load = useCallback(async () => setData(await responseJson<Workspace>(await fetch(`/api/knowledge/${projectId}`, { cache: "no-store" }))), [projectId]);
@@ -54,6 +56,19 @@ export function KnowledgeWorkspace({ projectId }: { projectId: string }) {
     }
   }
 
+  async function confirmProduct(productId: string) {
+    setConfirmingProductId(productId);
+    setError("");
+    try {
+      await responseJson(await fetch(`/api/knowledge/${projectId}/products/${productId}/confirm`, { method: "POST" }));
+      await load();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "REQUEST_FAILED");
+    } finally {
+      setConfirmingProductId("");
+    }
+  }
+
   if (loading) return <div className="flex items-center gap-2 py-12 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />{t("knowledge.loading")}</div>;
   if (!data) return <p className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">{t(`knowledge.errors.${error}`) === `knowledge.errors.${error}` ? t("knowledge.errors.REQUEST_FAILED") : t(`knowledge.errors.${error}`)}</p>;
 
@@ -62,7 +77,7 @@ export function KnowledgeWorkspace({ projectId }: { projectId: string }) {
       <PageHeader title={t("knowledge.projectTitle")} description={`${data.project.name} · ${data.project.websiteUrl}`} action={<div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row"><Button asChild className="min-h-11 w-full sm:w-auto"><Link href={`/projects/${projectId}/knowledge/import`}><UploadCloud className="h-4 w-4" />资料导入</Link></Button><Button asChild variant="outline" className="min-h-11 w-full sm:w-auto"><Link href={`/projects/${projectId}/knowledge/intelligence`}><BrainCircuit className="h-4 w-4" />{t("knowledge.intelligence.open")}<ArrowRight className="h-4 w-4" /></Link></Button></div>} />
       <div className="grid gap-5 border-y border-white/10 py-5 sm:grid-cols-2 xl:grid-cols-5"><Metric label={t("knowledge.completeness")} value={`${data.knowledgeBase.completenessScore ?? 0}/100`} icon={<BookOpen className="h-4 w-4" />} /><Metric label={t("knowledge.understanding")} value={data.knowledgeBase.understandingScore === null ? "--" : `${data.knowledgeBase.understandingScore}/100`} icon={<FolderOpen className="h-4 w-4" />} /><Metric label={t("knowledge.products")} value={data.products.length} icon={<Package className="h-4 w-4" />} /><Metric label={t("knowledge.cases")} value={data.cases.length} icon={<Trophy className="h-4 w-4" />} /><Metric label={t("knowledge.documents")} value={data.documents.length} icon={<FileText className="h-4 w-4" />} /></div>
       <Tabs defaultValue="products" className="min-w-0"><TabsList className="flex h-auto w-full justify-start gap-1 overflow-x-auto bg-white/[0.03] p-1"><TabsTrigger value="products" className="min-h-11 shrink-0">{t("knowledge.products")}</TabsTrigger><TabsTrigger value="services" className="min-h-11 shrink-0">{t("knowledge.services")}</TabsTrigger><TabsTrigger value="cases" className="min-h-11 shrink-0">{t("knowledge.cases")}</TabsTrigger><TabsTrigger value="technical" className="min-h-11 shrink-0">{t("knowledge.technical")}</TabsTrigger></TabsList>
-        <TabsContent value="products"><AssetSection title={t("knowledge.products")} addLabel={t("knowledge.addProduct")} icon={<Package className="h-5 w-5" />} onAdd={() => setFormKind("product")} empty={data.products.length === 0}><ProductList items={data.products} /></AssetSection></TabsContent>
+        <TabsContent value="products"><AssetSection title={t("knowledge.products")} addLabel={t("knowledge.addProduct")} icon={<Package className="h-5 w-5" />} onAdd={() => setFormKind("product")} empty={data.products.length === 0}><ProductList items={data.products} confirmingId={confirmingProductId} onConfirm={confirmProduct} /></AssetSection></TabsContent>
         <TabsContent value="services"><AssetSection title={t("knowledge.services")} addLabel={t("knowledge.addService")} icon={<BriefcaseBusiness className="h-5 w-5" />} onAdd={() => setFormKind("service")} empty={data.services.length === 0}><ServiceList items={data.services} /></AssetSection></TabsContent>
         <TabsContent value="cases"><AssetSection title={t("knowledge.cases")} addLabel={t("knowledge.addCase")} icon={<Trophy className="h-5 w-5" />} onAdd={() => setFormKind("case")} empty={data.cases.length === 0}><CaseList items={data.cases} /></AssetSection></TabsContent>
         <TabsContent value="technical"><AssetSection title={t("knowledge.technical")} icon={<FileText className="h-5 w-5" />} empty={data.documents.length + data.technicalDocuments.length === 0}><DocumentList data={data} /></AssetSection></TabsContent>
@@ -77,7 +92,11 @@ function AssetSection({ title, addLabel, icon, onAdd, empty, children }: { title
   return <section className="min-w-0 py-4"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h2 className="flex items-center gap-2 text-base font-semibold">{icon}{title}</h2>{onAdd ? <Button type="button" className="min-h-11" onClick={onAdd}><Plus className="h-4 w-4" />{addLabel}</Button> : null}</div>{empty ? <Card className="border-white/10 bg-white/[0.03]"><CardContent className="p-8 text-center text-sm text-muted-foreground">{t("knowledge.emptyAssets")}</CardContent></Card> : children}</section>;
 }
 
-function ProductList({ items }: { items: ProductEntity[] }) { const { t } = useI18n(); return <ResponsiveList headers={[t("knowledge.fields.name"), t("knowledge.fields.category"), t("knowledge.fields.description"), t("knowledge.fields.applications")]} rows={items.map((item) => ({ id: item.id, cells: [item.name, item.category || "--", item.description || "--", item.applications.join("、") || "--"] }))} />; }
+function ProductList({ items, confirmingId, onConfirm }: { items: ProductEntity[]; confirmingId: string; onConfirm: (productId: string) => Promise<void> }) {
+  const { t } = useI18n();
+  return <div className="grid gap-3 lg:grid-cols-2">{items.map((item) => <Card key={item.id} className="min-w-0 border-white/10 bg-white/[0.03]"><CardContent className="flex h-full min-w-0 flex-col p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="break-words font-medium">{item.name}</p><p className="mt-1 text-xs text-muted-foreground">{item.category || t("knowledge.fields.category")}</p></div><Badge variant={item.status === "ACTIVE" ? "success" : "secondary"}>{item.status}</Badge></div><p className="mt-3 break-words text-sm text-muted-foreground">{item.description || "暂无产品描述"}</p><div className="mt-4 grid gap-3 sm:grid-cols-2"><ProductField label="功能、参数与优势" value={item.features.join("、")} /><ProductField label={t("knowledge.fields.applications")} value={item.applications.join("、")} /><ProductField label={t("knowledge.fields.targetCustomers")} value={item.targetCustomers.join("、")} /></div>{item.status === "DRAFT" ? <div className="mt-auto border-t border-white/10 pt-4"><p className="mb-3 text-xs text-muted-foreground">该内容由文档规则提取，确认后才会进入正式 Company Knowledge Profile。</p><Button type="button" className="min-h-11 w-full" disabled={confirmingId === item.id} onClick={() => void onConfirm(item.id)}>{confirmingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}确认并加入企业画像</Button></div> : <p className="mt-auto pt-4 text-xs text-emerald-300">已进入企业知识画像</p>}</CardContent></Card>)}</div>;
+}
+function ProductField({ label, value }: { label: string; value: string }) { return <div className="min-w-0 rounded-xl border border-white/10 p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-2 break-words text-sm">{value || "--"}</p></div>; }
 function ServiceList({ items }: { items: ServiceEntity[] }) { const { t } = useI18n(); return <ResponsiveList headers={[t("knowledge.fields.name"), t("knowledge.fields.description"), t("knowledge.fields.industries")]} rows={items.map((item) => ({ id: item.id, cells: [item.name, item.description || "--", item.industries.join("、") || "--"] }))} />; }
 function CaseList({ items }: { items: CustomerCase[] }) { const { t } = useI18n(); return <ResponsiveList headers={[t("knowledge.fields.customer"), t("knowledge.fields.industry"), t("knowledge.fields.problem"), t("knowledge.fields.result")]} rows={items.map((item) => ({ id: item.id, cells: [item.customerName, item.industry || "--", item.problem || "--", item.result || "--"] }))} />; }
 function DocumentList({ data }: { data: Workspace }) { const { t } = useI18n(); return <ResponsiveList headers={[t("knowledge.fields.technicalName"), t("knowledge.fields.type"), t("knowledge.fields.status")]} rows={[...data.documents.map((item) => ({ id: item.id, cells: [item.name, item.mimeType, item.processingStatus] })), ...data.technicalDocuments.map((item) => ({ id: item.id, cells: [item.title, item.type, item.status] }))]} />; }

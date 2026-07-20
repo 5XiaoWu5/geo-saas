@@ -15,7 +15,7 @@ async function loadInput(userId: string, projectId: string) {
   const knowledgeBase = await knowledgeRepository.findForProject(userId, projectId);
   if (!knowledgeBase) throw new KnowledgeServiceError("KNOWLEDGE_BASE_REQUIRED", 409);
   const [products, services, cases, documents, technicalDocuments, chunks] = await Promise.all([
-    knowledgeRepository.listProducts(userId, projectId),
+    knowledgeRepository.listProducts(userId, projectId, true),
     knowledgeRepository.listServices(userId, projectId),
     knowledgeRepository.listCases(userId, projectId),
     knowledgeRepository.listDocuments(userId, projectId),
@@ -45,6 +45,7 @@ export async function getCompanyKnowledgeProfile(userId: string, projectId: stri
   const project = await requireProject(userId, projectId);
   const profile = await knowledgeRepository.findProfileForProject(userId, projectId);
   if (!profile) return unavailableKnowledgeResponse(project);
+  if (profile.methodVersion !== ruleKnowledgeIntelligenceProvider.methodVersion) return analyzeCompanyKnowledge(userId, projectId);
   const assessment = assessmentFromProfile(profile);
   return { project, status: assessment.status, profile, assessment };
 }
@@ -57,7 +58,9 @@ export async function getCompanyKnowledgeAssessment(userId: string, projectId: s
 }
 
 export async function getKnowledgeEvidenceForSimulation(userId: string, projectId: string) {
-  const profile = await knowledgeRepository.findProfileForProject(userId, projectId);
+  let profile = await knowledgeRepository.findProfileForProject(userId, projectId);
+  if (!profile) return null;
+  if (profile.methodVersion !== ruleKnowledgeIntelligenceProvider.methodVersion) profile = (await analyzeCompanyKnowledge(userId, projectId)).profile;
   if (!profile) return null;
   return {
     profileId: profile.id,

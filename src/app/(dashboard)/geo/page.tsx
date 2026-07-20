@@ -1,8 +1,9 @@
-import { BookOpen, Bot, BrainCircuit, Building2, Eye, FlaskConical, MessagesSquare, Swords } from "lucide-react";
+import { BookOpen, Bot, BrainCircuit, Building2, Eye, FlaskConical, Link2, MessagesSquare, Swords } from "lucide-react";
 import { GrowthEngineHub, type GrowthEngineModule } from "@/features/product-architecture/growth-engine-hub";
 
 const modules: GrowthEngineModule[] = [
   { title: "AI 可见性", description: "按项目追踪已保存的提示词、平台检查、品牌提及、推荐位置与来源链接。", href: "/visibility", icon: Eye },
+  { title: "Citation 引用", description: "统一查看 AI 可见性检查与增长快照中已保存的来源链接和引用能力信号。", href: "/visibility", icon: Link2 },
   { title: "实体智能", description: "建立 AI 理解企业、产品与权威性所需的实体证据。", href: "/entity", icon: Building2 },
   { title: "AI 推荐模拟器", description: "使用真实项目证据运行明确标注的规则推荐预测。", href: "/simulator", icon: FlaskConical },
   { title: "Campaign 与查询", description: "将商业问题和平台覆盖整理为可衡量的 AI 搜索 Campaign。", href: "/campaigns", icon: MessagesSquare },
