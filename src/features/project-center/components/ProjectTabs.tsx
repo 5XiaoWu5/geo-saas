@@ -30,7 +30,7 @@ export function ProjectTabs() {
           const href = `/projects/${project.id}/${tab.segment}`;
           const active = pathname === href || pathname.startsWith(`${href}/`) || (tab.segment === "overview" && pathname === `/projects/${project.id}`);
           return (
-            <Link key={tab.segment} href={href} className={cn("min-h-10 shrink-0 whitespace-nowrap rounded-xl px-4 py-2 text-sm text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground", active && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground")}>
+            <Link key={tab.segment} href={href} className={cn("min-h-11 shrink-0 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground", active && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground")}>
               {t(tab.labelKey)}
             </Link>
           );

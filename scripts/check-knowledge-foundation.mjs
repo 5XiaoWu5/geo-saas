@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 
-const repositoryPath = "src/features/knowledge/knowledge.repository.ts";
-const repository = readFileSync(repositoryPath, "utf8");
-const queryLines = repository.split(/\r?\n/).filter((line) => line.includes("knowledgeDatabase().query("));
+const repositoryPaths = ["src/features/knowledge/knowledge.repository.ts", "src/features/knowledge/knowledge-import.repository.ts"];
+const repositories = repositoryPaths.map((path) => readFileSync(path, "utf8"));
+const queryLines = repositories.flatMap((repository) => [...repository.matchAll(/knowledgeDatabase\(\)\.query\(\s*(['`])([\s\S]*?)\1\s*,/g)].map((match) => match[2]));
 
 if (!queryLines.length) throw new Error("Knowledge repository has no queries to verify.");
 for (const line of queryLines) {
@@ -10,7 +10,7 @@ for (const line of queryLines) {
 }
 
 const runtimeFiles = [
-  repository,
+  ...repositories,
   readFileSync("src/features/knowledge/knowledge.service.ts", "utf8"),
   readFileSync("src/features/knowledge/database.ts", "utf8"),
 ];
@@ -21,7 +21,7 @@ for (const source of runtimeFiles) {
 }
 
 const schema = readFileSync("prisma/schema.prisma", "utf8");
-for (const model of ["CompanyKnowledgeBase", "KnowledgeSource", "KnowledgeDocument", "ProductEntity", "ServiceEntity", "CustomerCase", "TechnicalDocument", "KnowledgeChunk"]) {
+for (const model of ["CompanyKnowledgeBase", "KnowledgeSource", "KnowledgeDocument", "ProductEntity", "ServiceEntity", "CustomerCase", "TechnicalDocument", "KnowledgeChunk", "KnowledgeImportJob", "KnowledgeExtractionResult"]) {
   if (!schema.includes(`model ${model} {`)) throw new Error(`Missing Prisma model: ${model}`);
 }
 
