@@ -9,6 +9,7 @@ for (const query of queries) {
 for (const forbidden of ["CREATE TABLE", "ALTER TABLE", "ensureSchema"]) {
   if (repository.includes(forbidden)) throw new Error(`Runtime repository contains forbidden DDL: ${forbidden}`);
 }
+if (/FROM\s+"VisibilityCheck"\s+check\b/i.test(repository)) throw new Error("Repository uses reserved SQL keyword CHECK as an alias.");
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 for (const item of ["model SimulationEvaluationProfile {", "enum AISearchPlatform {", "enum AISearchIntent {", "enum AISearchEvaluationStatus {"]) {
   if (!schema.includes(item)) throw new Error(`Missing Prisma definition: ${item}`);
