@@ -1,11 +1,17 @@
 ﻿import type { LucideIcon } from "lucide-react";
-import { Activity, BarChart3, BookOpen, Boxes, BrainCircuit, Building2, ClipboardList, CreditCard, Eye, FileText, FlaskConical, Gauge, HelpCircle, KeyRound, Layers3, LineChart, MessagesSquare, ScanSearch, Settings, Sparkles, UserCircle } from "lucide-react";
+import { BookOpen, ClipboardList, CreditCard, FileText, Gauge, HelpCircle, KeyRound, Layers3, LineChart, SearchCheck, Sparkles, UserCircle } from "lucide-react";
 
 export type NavItem = {
   titleKey: string;
   href: string;
   icon: LucideIcon;
   badge?: string;
+  activePrefixes?: string[];
+};
+
+export type NavSection = {
+  titleKey: string;
+  items: NavItem[];
 };
 
 export const appConfig = {
@@ -13,25 +19,33 @@ export const appConfig = {
   taglineKey: "common.tagline",
 };
 
-export const mainNavItems: NavItem[] = [
-  { titleKey: "nav.dashboard", href: "/dashboard", icon: Gauge },
-  { titleKey: "nav.projects", href: "/projects", icon: Layers3 },
-  { titleKey: "nav.websiteCrawl", href: "/crawl", icon: ScanSearch },
-  { titleKey: "nav.siteInventory", href: "/inventory", icon: Boxes },
-  { titleKey: "nav.analyzer", href: "/analyzer", icon: Sparkles },
-  { titleKey: "nav.entity", href: "/entity", icon: Building2 },
-  { titleKey: "nav.knowledge", href: "/knowledge", icon: BookOpen },
-  { titleKey: "nav.campaigns", href: "/campaigns", icon: MessagesSquare },
-  { titleKey: "nav.simulator", href: "/simulator", icon: FlaskConical },
-  { titleKey: "nav.growth", href: "/growth", icon: LineChart },
-  { titleKey: "nav.insights", href: "/insights", icon: BrainCircuit },
-  { titleKey: "nav.optimization", href: "/optimization", icon: ClipboardList },
-  { titleKey: "nav.visibility", href: "/visibility", icon: Eye },
-  { titleKey: "nav.monitoring", href: "/monitoring", icon: Activity },
-  { titleKey: "nav.analysis", href: "/analysis", icon: BarChart3 },
-  { titleKey: "nav.reports", href: "/reports", icon: FileText },
-  { titleKey: "nav.settings", href: "/settings", icon: Settings },
+export const mainNavSections: NavSection[] = [
+  {
+    titleKey: "nav.overviewGroup",
+    items: [
+      { titleKey: "nav.dashboard", href: "/dashboard", icon: Gauge },
+      { titleKey: "nav.projects", href: "/projects", icon: Layers3 },
+    ],
+  },
+  {
+    titleKey: "nav.growthEngines",
+    items: [
+      { titleKey: "nav.seoGrowth", href: "/seo", icon: SearchCheck, activePrefixes: ["/crawl", "/inventory", "/analyzer", "/query-generator"] },
+      { titleKey: "nav.geoGrowth", href: "/geo", icon: Sparkles, activePrefixes: ["/entity", "/simulator", "/visibility", "/campaigns", "/insights"] },
+    ],
+  },
+  {
+    titleKey: "nav.operationCenters",
+    items: [
+      { titleKey: "nav.knowledgeCenter", href: "/knowledge", icon: BookOpen },
+      { titleKey: "nav.optimizationCenter", href: "/optimization", icon: ClipboardList },
+      { titleKey: "nav.growthCenter", href: "/growth", icon: LineChart },
+      { titleKey: "nav.reports", href: "/reports", icon: FileText },
+    ],
+  },
 ];
+
+export const mainNavItems = mainNavSections.flatMap((section) => section.items);
 
 export const accountNavItems: NavItem[] = [
   { titleKey: "nav.profile", href: "/profile", icon: UserCircle },

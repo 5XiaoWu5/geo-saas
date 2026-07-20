@@ -1,135 +1,188 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, Target } from "lucide-react";
-import type { Project } from "@/types/project";
-import type { GeoAnalysis } from "@/features/geo-analysis/types";
-import { useI18n } from "@/i18n/provider";
+import { useEffect, useState, type ReactNode } from "react";
+import { ArrowRight, BookOpen, CheckCircle2, ClipboardList, Eye, FileSearch, LineChart, SearchCheck, Sparkles, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { MetricCard, PageHeader } from "@/components/shared/page";
-import { formatDate, formatDateTime, getHostname } from "@/lib/format";
+import { PageHeader } from "@/components/shared/page";
+import type { ReportsResponse, ProjectReport } from "@/features/reports/types";
+import type { KnowledgeOverviewResponse, KnowledgeProjectSummary } from "@/features/knowledge/types";
+import type { GeoIssue } from "@/features/geo-analysis/types";
+import { useI18n } from "@/i18n/provider";
+import { getHostname } from "@/lib/format";
 
-async function loadCurrentUserProjects() {
-  const response = await fetch("/api/projects", { cache: "no-store" });
-  const data = await response.json() as { projects?: Project[] };
-  if (!response.ok) return [];
-  return data.projects ?? [];
+type DashboardData = {
+  reports: ReportsResponse;
+  knowledge: KnowledgeOverviewResponse;
+};
+
+async function readJson<T>(response: Response): Promise<T> {
+  const text = await response.text();
+  const body = text ? JSON.parse(text) as T & { error?: string } : {} as T & { error?: string };
+  if (!response.ok) throw new Error(body.error ?? "REQUEST_FAILED");
+  return body;
 }
 
-async function loadLatestAnalysis(projectId: string) {
-  const response = await fetch(`/api/projects/${projectId}/scan`, { cache: "no-store" });
-  const data = await response.json() as { analysis?: GeoAnalysis | null };
-  if (!response.ok) return null;
-  return data.analysis ?? null;
+async function loadDashboard(): Promise<DashboardData> {
+  const [reports, knowledge] = await Promise.all([
+    fetch("/api/reports", { cache: "no-store" }).then(readJson<ReportsResponse>),
+    fetch("/api/knowledge", { cache: "no-store" }).then(readJson<KnowledgeOverviewResponse>),
+  ]);
+  return { reports, knowledge };
 }
 
 export default function DashboardPage() {
   const { t } = useI18n();
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [analysis, setAnalysis] = useState<GeoAnalysis | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [featuredProject, setFeaturedProject] = useState<Project | null>(null);
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    let mounted = true;
-    void loadCurrentUserProjects().then(async (data) => {
-      if (!mounted) return;
-      setProjects(data);
-
-      const analyzed = data
-        .filter((project) => Boolean(project.lastAnalysisAt))
-        .sort((left, right) => new Date(right.lastAnalysisAt ?? 0).getTime() - new Date(left.lastAnalysisAt ?? 0).getTime());
-      const target = analyzed[0] ?? null;
-      setFeaturedProject(target);
-
-      if (target) {
-        const latest = await loadLatestAnalysis(target.id);
-        if (mounted) setAnalysis(latest);
-      }
-      if (mounted) setLoading(false);
+    let active = true;
+    void loadDashboard().then((result) => {
+      if (active) setData(result);
+    }).catch((requestError) => {
+      if (active) setError(requestError instanceof Error ? requestError.message : "REQUEST_FAILED");
     });
-
-    return () => {
-      mounted = false;
-    };
+    return () => { active = false; };
   }, []);
 
-  const stats = useMemo(() => {
-    const analyzedCount = projects.filter((project) => Boolean(project.lastScan)).length;
-    const lastAnalysis = projects.map((project) => project.lastAnalysisAt).filter((value): value is string => Boolean(value)).sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0] ?? null;
-    const averageGeoScore = analyzedCount ? Math.round(projects.filter((project) => Boolean(project.lastScan)).reduce((total, project) => total + project.geoScore, 0) / analyzedCount) : 0;
-    return { analyzedCount, lastAnalysis, averageGeoScore };
-  }, [projects]);
+  const report = data?.reports.reports[0] ?? null;
+  const knowledge = report ? data?.knowledge.projects.find((item) => item.projectId === report.projectId) ?? null : null;
 
   return (
-    <div>
-      <PageHeader title={t("dashboard.title")} description={t("dashboard.description")} action={<Button asChild><Link href="/projects">{t("dashboard.newProject")}</Link></Button>} />
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label={t("dashboard.totalProjects")} value={String(projects.length)} delta="当前账号" />
-        <MetricCard label="已分析项目" value={`${stats.analyzedCount} / ${projects.length}`} delta="完成首次扫描" />
-        <MetricCard label={t("dashboard.lastAnalysis")} value={formatDate(stats.lastAnalysis)} delta={t("common.latest")} />
-        <MetricCard label={t("dashboard.averageGeoScore")} value={stats.analyzedCount ? `${stats.averageGeoScore}%` : "—"} delta="已分析项目均值" />
-      </section>
-      <section className="mt-6 grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
-        <Card className="glass-panel border-white/10">
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle className="flex items-center gap-2"><Target className="h-5 w-5 text-primary" /> 最新 GEO 分析</CardTitle>
-            {featuredProject ? <Button asChild variant="ghost" size="sm"><Link href={`/projects/${featuredProject.id}`}>查看详情 <ArrowUpRight className="h-4 w-4" /></Link></Button> : null}
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <p className="py-12 text-center text-sm text-muted-foreground">正在加载...</p>
-            ) : !featuredProject || !analysis ? (
-              <div className="flex min-h-[220px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/[0.02] p-6 text-center">
-                <p className="text-sm font-medium text-foreground">暂无 GEO 分析数据</p>
-                <p className="mt-2 max-w-sm text-sm text-muted-foreground">创建项目并在项目详情页运行一次「开始分析」，这里会展示真实的 GEO 评分与分类得分。</p>
-                <Button asChild className="mt-5"><Link href="/projects">前往项目</Link></Button>
-              </div>
-            ) : (
-              <div className="space-y-5">
-                <div className="flex flex-col gap-4 rounded-2xl border border-primary/20 bg-primary/[0.05] p-5 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm text-muted-foreground">{featuredProject.name} · {getHostname(featuredProject.url)}</p>
-                    <p className="mt-1 text-5xl font-semibold tracking-tight text-foreground">{analysis.totalScore}<span className="ml-1 text-lg text-muted-foreground">/100</span></p>
-                  </div>
-                  <div className="w-full max-w-[220px] shrink-0">
-                    <Progress value={analysis.totalScore} />
-                    <p className="mt-2 text-xs text-muted-foreground">分析时间：{formatDateTime(analysis.createdAt)}</p>
-                  </div>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <CategoryScore label="实体智能" value={analysis.entityScore} max={30} />
-                  <CategoryScore label="结构化数据" value={analysis.schemaScore} max={25} />
-                  <CategoryScore label="技术 GEO" value={analysis.technicalScore} max={25} />
-                  <CategoryScore label="内容结构" value={analysis.contentScore} max={20} />
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        <Card className="glass-panel border-white/10">
-          <CardHeader><CardTitle>{t("dashboard.recentProjects")}</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            {!loading && projects.length === 0 ? <p className="text-sm text-muted-foreground">当前账号暂无项目。</p> : null}
-            {projects.slice(0, 5).map((project) => <Link href={`/projects/${project.id}`} key={project.id} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-primary/30 hover:bg-white/[0.06]"><div className="min-w-0"><p className="truncate font-medium">{project.name}</p><p className="truncate text-xs text-muted-foreground">{getHostname(project.url)}</p></div><span className="ml-3 shrink-0 text-sm font-semibold text-primary">{project.lastScan ? `${project.geoScore}%` : "待分析"}</span></Link>)}
-          </CardContent>
-        </Card>
-      </section>
+    <div className="min-w-0 overflow-x-hidden">
+      <PageHeader title="增长驾驶舱" description="统一查看 SEO 健康、AI 搜索可见性、企业知识、优化任务与持续增长。" action={<Button asChild><Link href="/projects">{t("dashboard.newProject")}</Link></Button>} />
+
+      {error ? <div className="mb-6 rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4 text-sm text-rose-200">Dashboard 数据加载失败：{error}</div> : null}
+
+      {!data && !error ? <DashboardLoading /> : data && !report ? <EmptyDashboard /> : report ? <>
+        <GrowthScoreStrip report={report} knowledge={knowledge} />
+        <div className="mt-6 grid gap-6 xl:grid-cols-[1.35fr_0.85fr]">
+          <OpportunityBoard report={report} knowledge={knowledge} />
+          <GrowthRoute report={report} knowledge={knowledge} />
+        </div>
+        <RecentProjects reports={data?.reports.reports ?? []} />
+      </> : null}
     </div>
   );
 }
 
-function CategoryScore({ label, value, max }: { label: string; value: number; max: number }) {
+function GrowthScoreStrip({ report, knowledge }: { report: ProjectReport; knowledge: KnowledgeProjectSummary | null }) {
+  const analysis = report.analysis;
+  const seoHealth = analysis ? Math.min(100, Math.round(((analysis.technicalScore + analysis.schemaScore + analysis.contentScore) / 70) * 100)) : null;
+  const visibility = report.scan ? report.project.visibilityScore : null;
+  const knowledgeScore = knowledge?.knowledgeBase?.completenessScore ?? null;
+  const overallDelta = report.growthTrend.deltas.find((item) => item.key === "overallScore")?.change ?? null;
+
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span>{label}</span>
-        <span>{value}/{max}</span>
-      </div>
-      <Progress value={(value / max) * 100} className="mt-3" />
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <ScoreCard icon={<SearchCheck className="h-4 w-4" />} label="SEO 健康度" value={scoreValue(seoHealth)} detail={seoHealth === null ? "等待网站审计" : "技术、Schema 与内容"} tone="seo" progress={seoHealth} />
+      <ScoreCard icon={<Eye className="h-4 w-4" />} label="AI 可见性" value={scoreValue(visibility)} detail={visibility === null ? "等待分析" : "当前为网站信号估算"} tone="geo" progress={visibility} />
+      <ScoreCard icon={<BookOpen className="h-4 w-4" />} label="知识完整度" value={scoreValue(knowledgeScore)} detail={knowledge?.knowledgeBase ? "严格证据完整度" : "尚未建立知识库"} tone="knowledge" progress={knowledgeScore} />
+      <ScoreCard icon={<ClipboardList className="h-4 w-4" />} label="待优化任务" value={String(report.optimization.incompleteTasks)} detail={`${report.optimization.completedTasks} 已完成 · ${report.optimization.totalTasks} 总计`} tone="tasks" />
+      <ScoreCard icon={<LineChart className="h-4 w-4" />} label="增长趋势" value={overallDelta === null ? "—" : `${overallDelta > 0 ? "+" : ""}${overallDelta}`} detail="最近 30 天总分变化" tone="growth" />
+    </section>
+  );
+}
+
+function ScoreCard({ icon, label, value, detail, tone, progress }: { icon: ReactNode; label: string; value: string; detail: string; tone: "seo" | "geo" | "knowledge" | "tasks" | "growth"; progress?: number | null }) {
+  const tones = {
+    seo: "border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-300",
+    geo: "border-violet-400/20 bg-violet-400/[0.06] text-violet-300",
+    knowledge: "border-cyan-400/20 bg-cyan-400/[0.06] text-cyan-300",
+    tasks: "border-amber-400/20 bg-amber-400/[0.06] text-amber-300",
+    growth: "border-blue-400/20 bg-blue-400/[0.06] text-blue-300",
+  } as const;
+  return (
+    <div className={`min-w-0 rounded-2xl border p-4 ${tones[tone]}`}>
+      <div className="flex items-center gap-2 text-xs font-medium">{icon}<span>{label}</span></div>
+      <p className="mt-4 text-3xl font-semibold tracking-tight text-foreground">{value}</p>
+      {typeof progress === "number" ? <Progress value={progress} className="mt-3" /> : null}
+      <p className="mt-3 truncate text-xs text-muted-foreground" title={detail}>{detail}</p>
     </div>
   );
+}
+
+function OpportunityBoard({ report, knowledge }: { report: ProjectReport; knowledge: KnowledgeProjectSummary | null }) {
+  const issues = report.analysis?.issues ?? [];
+  const seoIssues = issues.filter((issue) => issue.category !== "entity").slice(0, 3);
+  const geoIssues = issues.filter((issue) => issue.category === "entity").slice(0, 2);
+  const knowledgeGaps = knowledge ? buildKnowledgeGaps(knowledge) : ["尚未建立企业知识库"];
+
+  return (
+    <Card className="glass-panel min-w-0 border-white/10">
+      <CardHeader className="flex-row items-start justify-between gap-4">
+        <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">优先信号</p><CardTitle className="mt-2 flex items-center gap-2 text-xl"><Target className="h-5 w-5 text-primary" />主要增长机会</CardTitle></div>
+        <Button asChild variant="outline" size="sm"><Link href={`/projects/${report.projectId}/optimization`}>查看任务</Link></Button>
+      </CardHeader>
+      <CardContent className="grid gap-4 lg:grid-cols-2">
+        <OpportunityColumn title="SEO 增长" accent="bg-emerald-400" empty="最新网站分析未发现 SEO 结构问题。" issues={seoIssues} href={`/projects/${report.projectId}/seo`} />
+        <div className="space-y-4">
+          <OpportunityColumn title="AI 搜索增长" accent="bg-violet-400" empty="最新分析未发现实体理解问题。" issues={geoIssues} href={`/projects/${report.projectId}/geo`} />
+          <div className="rounded-2xl border border-cyan-400/15 bg-cyan-400/[0.04] p-4">
+            <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">知识准备度</h3><Link href={`/projects/${report.projectId}/knowledge`} className="text-xs font-medium text-primary">完善资料</Link></div>
+            <ul className="mt-3 space-y-2">{knowledgeGaps.slice(0, 3).map((gap) => <li key={gap} className="flex items-start gap-2 text-sm text-muted-foreground"><span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-300" />{gap}</li>)}</ul>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function OpportunityColumn({ title, accent, empty, issues, href }: { title: string; accent: string; empty: string; issues: GeoIssue[]; href: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+      <div className="flex items-center justify-between gap-3"><h3 className="flex items-center gap-2 text-sm font-semibold"><span className={`h-2 w-2 rounded-full ${accent}`} />{title}</h3><Link href={href} className="text-xs font-medium text-primary">进入 <ArrowRight className="ml-1 inline h-3 w-3" /></Link></div>
+      {issues.length ? <ul className="mt-4 space-y-3">{issues.map((issue) => <li key={`${issue.category}-${issue.title}`} className="rounded-xl border border-white/10 bg-black/10 p-3"><p className="text-sm font-medium">{issue.title}</p><p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{issue.description}</p></li>)}</ul> : <p className="mt-4 text-sm text-muted-foreground">{empty}</p>}
+    </div>
+  );
+}
+
+function GrowthRoute({ report, knowledge }: { report: ProjectReport; knowledge: KnowledgeProjectSummary | null }) {
+  const steps = [
+    { label: "网站证据", ready: Boolean(report.scan), href: `/projects/${report.projectId}/overview`, icon: FileSearch },
+    { label: "企业知识", ready: Boolean(knowledge?.knowledgeBase), href: `/projects/${report.projectId}/knowledge`, icon: BookOpen },
+    { label: "AI 推荐", ready: Boolean(report.latestSimulation), href: `/projects/${report.projectId}/geo`, icon: Sparkles },
+    { label: "优化任务", ready: report.optimization.totalTasks > 0, href: `/projects/${report.projectId}/optimization`, icon: ClipboardList },
+  ];
+  return (
+    <Card className="glass-panel min-w-0 border-white/10">
+      <CardHeader><p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">当前项目</p><CardTitle className="mt-2 truncate text-xl">{report.projectName}</CardTitle><p className="truncate text-sm text-muted-foreground">{getHostname(report.websiteUrl)}</p></CardHeader>
+      <CardContent className="space-y-3">
+        {steps.map((step, index) => { const Icon = step.icon; return <Link href={step.href} key={step.label} className="group flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.025] p-3 transition hover:border-primary/30 hover:bg-white/[0.05]"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.05] text-primary"><Icon className="h-4 w-4" /></span><div className="min-w-0 flex-1"><p className="text-xs text-muted-foreground">第 {index + 1} 步</p><p className="truncate text-sm font-medium">{step.label}</p></div>{step.ready ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" /> : <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition group-hover:translate-x-1 group-hover:text-primary" />}</Link>; })}
+      </CardContent>
+    </Card>
+  );
+}
+
+function RecentProjects({ reports }: { reports: ProjectReport[] }) {
+  return (
+    <section className="mt-6">
+      <div className="mb-3 flex items-center justify-between"><h2 className="text-base font-semibold">项目增长概览</h2><Button asChild variant="ghost" size="sm"><Link href="/projects">全部项目 <ArrowRight className="h-4 w-4" /></Link></Button></div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{reports.slice(0, 6).map((report) => <Link href={`/projects/${report.projectId}/overview`} key={report.projectId} className="glass-panel min-w-0 rounded-2xl p-4 transition hover:border-primary/30 hover:bg-white/[0.06]"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-medium">{report.projectName}</p><p className="mt-1 truncate text-xs text-muted-foreground">{getHostname(report.websiteUrl)}</p></div><span className="shrink-0 font-mono text-lg text-primary">{report.analysis?.totalScore ?? "—"}</span></div><div className="mt-4 flex items-center justify-between text-xs text-muted-foreground"><span>{report.optimization.incompleteTasks} 待优化</span><span>{report.growthTrend.points.length} 增长记录</span></div></Link>)}</div>
+    </section>
+  );
+}
+
+function DashboardLoading() {
+  return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{Array.from({ length: 5 }, (_, index) => <div key={index} className="h-36 animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />)}</div>;
+}
+
+function EmptyDashboard() {
+  return <div className="glass-panel flex min-h-96 flex-col items-center justify-center rounded-3xl p-8 text-center"><Sparkles className="h-8 w-8 text-primary" /><h2 className="mt-4 text-xl font-semibold">创建第一个增长项目</h2><p className="mt-2 max-w-md text-sm text-muted-foreground">添加企业网站后，GeoPilot AI 会建立 SEO、AI 搜索、知识与优化基线。</p><Button asChild className="mt-6"><Link href="/projects">创建项目</Link></Button></div>;
+}
+
+function buildKnowledgeGaps(summary: KnowledgeProjectSummary) {
+  const gaps: string[] = [];
+  if (!summary.productCount) gaps.push("缺少产品资料");
+  if (!summary.serviceCount) gaps.push("缺少服务资料");
+  if (!summary.caseCount) gaps.push("缺少客户案例");
+  if (!summary.documentCount && !summary.technicalDocumentCount) gaps.push("缺少技术文档或认证证据");
+  return gaps.length ? gaps : ["核心企业知识资产已经建立"];
+}
+
+function scoreValue(value: number | null) {
+  return value === null ? "—" : `${value}`;
 }

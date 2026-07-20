@@ -4,12 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Menu, Sparkles, X } from "lucide-react";
-import { accountNavItems, appConfig, mainNavItems } from "@/config/app";
+import { accountNavItems, appConfig, mainNavSections, type NavItem } from "@/config/app";
 import { useI18n } from "@/i18n/provider";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
-function NavGroup({ items }: { items: typeof mainNavItems }) {
+function NavGroup({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
   const { t } = useI18n();
 
@@ -17,7 +17,7 @@ function NavGroup({ items }: { items: typeof mainNavItems }) {
     <nav className="grid gap-1">
       {items.map((item) => {
         const Icon = item.icon;
-        const active = pathname === item.href || (item.href.includes("/analyzer") && pathname.includes("/analyzer"));
+        const active = pathname === item.href || pathname.startsWith(`${item.href}/`) || item.activePrefixes?.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 
         return (
           <Link
@@ -56,11 +56,13 @@ export function Sidebar() {
           </div>
         </Link>
 
-        <div className="space-y-6">
-          <div>
-            <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">{t("nav.workspace")}</p>
-            <NavGroup items={mainNavItems} />
-          </div>
+        <div className="space-y-5">
+          {mainNavSections.map((section) => (
+            <div key={section.titleKey}>
+              <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/65">{t(section.titleKey)}</p>
+              <NavGroup items={section.items} />
+            </div>
+          ))}
           <div>
             <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">{t("nav.account")}</p>
             <NavGroup items={accountNavItems} />
@@ -120,11 +122,13 @@ export function MobileNav() {
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            <div className="space-y-6 overflow-y-auto">
-              <div>
-                <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">{t("nav.workspace")}</p>
-                <NavGroup items={mainNavItems} />
-              </div>
+            <div className="space-y-5 overflow-y-auto">
+              {mainNavSections.map((section) => (
+                <div key={section.titleKey}>
+                  <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/65">{t(section.titleKey)}</p>
+                  <NavGroup items={section.items} />
+                </div>
+              ))}
               <div>
                 <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">{t("nav.account")}</p>
                 <NavGroup items={accountNavItems} />

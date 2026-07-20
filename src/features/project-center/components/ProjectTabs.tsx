@@ -8,8 +8,12 @@ import { cn } from "@/lib/utils";
 
 const tabs = [
   { labelKey: "projects.overview", segment: "overview" },
+  { labelKey: "nav.seoGrowth", segment: "seo" },
+  { labelKey: "nav.geoGrowth", segment: "geo" },
   { labelKey: "nav.knowledge", segment: "knowledge" },
   { labelKey: "nav.competitors", segment: "competitors" },
+  { labelKey: "nav.optimization", segment: "optimization" },
+  { labelKey: "nav.growth", segment: "growth" },
 ];
 
 export function ProjectTabs() {
@@ -21,12 +25,12 @@ export function ProjectTabs() {
 
   return (
     <div className="max-w-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-1">
-      <div className="flex flex-wrap gap-1">
+      <div className="flex gap-1 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
         {tabs.map((tab) => {
           const href = `/projects/${project.id}/${tab.segment}`;
-          const active = pathname === href || (tab.segment === "overview" && pathname === `/projects/${project.id}`);
+          const active = pathname === href || pathname.startsWith(`${href}/`) || (tab.segment === "overview" && pathname === `/projects/${project.id}`);
           return (
-            <Link key={tab.segment} href={href} className={cn("rounded-xl px-4 py-2 text-sm text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground", active && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground")}>
+            <Link key={tab.segment} href={href} className={cn("min-h-10 shrink-0 whitespace-nowrap rounded-xl px-4 py-2 text-sm text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground", active && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground")}>
               {t(tab.labelKey)}
             </Link>
           );
