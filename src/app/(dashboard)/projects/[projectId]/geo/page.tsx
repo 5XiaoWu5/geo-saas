@@ -1,9 +1,10 @@
-import { BookOpen, BrainCircuit, Building2, Eye, FlaskConical, MessagesSquare, Radar, Swords } from "lucide-react";
+import { BookOpen, BrainCircuit, Building2, Eye, FlaskConical, LayoutDashboard, MessagesSquare, Radar, Swords } from "lucide-react";
 import { GrowthEngineHub, type GrowthEngineModule } from "@/features/product-architecture/growth-engine-hub";
 
 export default async function ProjectGeoPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
   const modules: GrowthEngineModule[] = [
+    { title: "AI 搜索增长驾驶舱", description: "面向企业管理者统一展示真实 AI 出现、引用、推荐排名、竞争差距、增长评分与行动路线图。", href: `/projects/${projectId}/geo/command-center`, icon: LayoutDashboard },
     { title: "真实 AI 搜索监控", description: "配置服务端 Provider，执行真实 AI 查询并跟踪品牌出现、排名、回答与引用来源。", href: `/projects/${projectId}/geo/monitoring`, icon: Radar },
     { title: "AI 搜索增长诊断", description: "汇总实体、知识、产品、客户证明、技术权威、引用和竞品信号，解释 AI 为什么可能不推荐企业。", href: `/projects/${projectId}/geo/intelligence`, icon: Radar },
     { title: "AI 可见性", description: "查看当前项目已保存的提示词、检查、品牌提及与来源证据。", href: `/projects/${projectId}/visibility`, icon: Eye },

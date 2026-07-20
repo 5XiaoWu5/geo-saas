@@ -14,6 +14,8 @@
     "check:knowledge-foundation": "node scripts/check-knowledge-foundation.mjs",
     "check:ai-search-intelligence": "node scripts/check-ai-search-intelligence.mjs",
     "check:real-ai-search-provider": "node scripts/check-real-ai-search-provider.mjs",
+    "check:ai-search-growth": "node scripts/check-ai-search-growth.mjs",
+    "test:ai-search-growth": "tsx --test src/features/ai-search-growth/*.test.ts",
     "preview": "opennextjs-cloudflare preview",
     "start": "next start",
     "lint": "eslint",

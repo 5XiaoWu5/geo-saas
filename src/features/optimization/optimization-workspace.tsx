@@ -100,6 +100,7 @@ export function OptimizationWorkspace({ initialProjectId, initialIssueId }: { in
     processing: tasks.filter((task) => task.status === "PROCESSING").length,
     completed: tasks.filter((task) => task.status === "COMPLETED").length,
   };
+  const aiRoadmap = tasks.filter((task) => task.issueId.startsWith("growth:REAL_AI_VISIBILITY_GAP") || task.issueId.startsWith("growth:AI_RECOMMENDATION_GAP") || task.issueId.startsWith("growth:KNOWLEDGE_GAP") || task.issueId.startsWith("growth:BENCHMARK_GAP") || task.issueId.startsWith("benchmark:")).sort((left, right) => severityRank(left.severity) - severityRank(right.severity) || statusRank(left.status) - statusRank(right.status)).slice(0, 10);
 
   useEffect(() => {
     if (!initialIssueId || !tasks.some((task) => task.issueId === initialIssueId)) return;
@@ -165,6 +166,11 @@ export function OptimizationWorkspace({ initialProjectId, initialIssueId }: { in
         <StatCard icon={<CheckCircle2 className="h-5 w-5" />} label="已完成" value={stats.completed} />
       </section>
 
+      <Card className="glass-panel min-w-0 border-amber-300/20">
+        <CardHeader className="flex-row items-start justify-between gap-3"><div><CardTitle className="flex items-center gap-2 text-lg"><Target className="h-5 w-5 text-amber-300" />AI Growth Roadmap</CardTitle><p className="mt-2 text-sm text-muted-foreground">从真实 AI 可见性、推荐诊断、知识缺口与竞品差距任务中提取 Top 10。</p></div>{projectId ? <Button asChild variant="outline" className="min-h-11 shrink-0"><Link href={`/projects/${projectId}/geo/command-center`}>增长驾驶舱</Link></Button> : null}</CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2">{aiRoadmap.length ? aiRoadmap.map((task, index) => <div key={task.id} className="flex min-h-20 min-w-0 items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.025] p-4"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-300/10 text-xs font-semibold text-amber-200">{index + 1}</span><span className="min-w-0"><span className="flex flex-wrap gap-2"><Badge variant={task.severity === "High" ? "warning" : "outline"}>{task.severity === "High" ? "HIGH" : task.severity === "Medium" ? "MEDIUM" : "LOW"}</Badge><Badge variant="muted">{taskSourceLabel(task)}</Badge></span><span className="mt-2 block break-words text-sm font-semibold">{task.title}</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">{task.recommendation || task.description}</span></span></div>) : <p className="text-sm text-muted-foreground">当前没有可追溯的 AI 增长路线图任务。</p>}</CardContent>
+      </Card>
+
       <div className="flex gap-2 overflow-x-auto pb-1" aria-label="优化机会分类">
         {filters.map((item) => <button key={item.key} onClick={() => setFilter(item.key)} className={`min-h-11 shrink-0 rounded-xl border px-4 text-sm transition ${filter === item.key ? "border-primary/40 bg-primary/15 text-primary" : "border-white/10 bg-white/[0.03] text-muted-foreground hover:text-foreground"}`}>{item.label}</button>)}
       </div>
@@ -222,3 +228,6 @@ function taskSourceLabel(task: OptimizationTask) {
 function severityVariant(severity: OptimizationSeverity) {
   return severity === "Low" ? "muted" as const : "warning" as const;
 }
+
+function severityRank(severity: OptimizationSeverity) { return severity === "High" ? 1 : severity === "Medium" ? 2 : 3; }
+function statusRank(status: OptimizationStatus) { return status === "PENDING" ? 1 : status === "PROCESSING" ? 2 : 3; }
