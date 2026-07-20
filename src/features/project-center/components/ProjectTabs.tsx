@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 
 const tabs = [
   { labelKey: "projects.overview", path: "overview" },
-  { labelKey: "nav.growthCenter", path: "growth/overview" },
+  { labelKey: "nav.growthDashboard", path: "growth/overview" },
   { labelKey: "nav.seoGrowth", path: "seo" },
   { labelKey: "nav.geoGrowth", path: "geo" },
   { labelKey: "nav.knowledge", path: "knowledge" },

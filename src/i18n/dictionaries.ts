@@ -7,7 +7,7 @@ export const defaultLocale: Locale = "zh";
 export const zh = {
   common: {
     appName: "GeoPilot AI",
-    tagline: "企业级 GEO 指挥中心",
+    tagline: "SEO + AI 搜索增长平台",
     search: "搜索",
     all: "全部",
     latest: "最新",
@@ -43,13 +43,14 @@ export const zh = {
     operationCenters: "运营中心",
     assetManagement: "资产管理",
     executionCenter: "执行中心",
-    dashboard: "增长驾驶舱",
+    dashboard: "增长指挥中心",
     projects: "项目",
     seoGrowth: "SEO 增长",
     geoGrowth: "AI 搜索增长",
     knowledgeCenter: "知识中心",
     optimizationCenter: "优化中心",
     growthCenter: "增长中心",
+    growthDashboard: "增长总览",
     competitorCenter: "竞品管理",
     websiteCrawl: "网站抓取",
     siteInventory: "网站资产库",
@@ -764,7 +765,7 @@ export const en: Dictionary = {
   ...zh,
   common: { ...zh.common, actions: "Actions" },
   projects: { ...zh.projects, overview: "Overview" },
-  nav: { ...zh.nav, overviewGroup: "Overview", growthEngines: "Growth engines", operationCenters: "Operations", assetManagement: "Assets", executionCenter: "Execution", dashboard: "Growth Dashboard", projects: "Projects", seoGrowth: "SEO Growth", geoGrowth: "AI Search Growth", knowledgeCenter: "Knowledge Center", competitorCenter: "Competitors", optimizationCenter: "Optimization Center", growthCenter: "Growth Center", reports: "Reports", simulator: "AI Search Simulator", growth: "GEO Growth Timeline", insights: "AI Recommendation Insights", competitors: "Competitors", knowledge: "Knowledge Base" },
+  nav: { ...zh.nav, overviewGroup: "Overview", growthEngines: "Growth engines", operationCenters: "Operations", assetManagement: "Assets", executionCenter: "Execution", dashboard: "Growth Command Center", projects: "Projects", seoGrowth: "SEO Growth", geoGrowth: "AI Search Growth", knowledgeCenter: "Knowledge Center", competitorCenter: "Competitors", optimizationCenter: "Optimization Center", growthCenter: "Growth Center", growthDashboard: "Growth Dashboard", reports: "Reports", simulator: "AI Search Simulator", growth: "GEO Growth Timeline", insights: "AI Recommendation Insights", competitors: "Competitors", knowledge: "Knowledge Base" },
   competitors: {
     title: "Competitor Management",
     description: "Maintain real competitor profiles for this project as the foundation for recommendation probability, visibility, and growth comparisons.",
