@@ -1,21 +1,9 @@
-import type { AISearchIntent, AISearchPlatform } from "./types";
-
-export type AISearchProviderRequest = {
-  query: string;
-  intent: AISearchIntent;
-  targetEntity: string;
-  industry: string;
-};
-
-export type AISearchProviderResult = {
-  providerRequestId: string;
-  rawResponse: string;
-  mentioned: boolean;
-  position: number | null;
-  citations: string[];
-};
+import type { AISearchProviderType, ParsedAISearchResponse, ProviderCheck, ProviderQueryRequest, ProviderRawResponse, ResponseAnalysisInput } from "@/features/real-ai-search/types";
 
 export interface AISearchProvider {
-  readonly platform: AISearchPlatform;
-  evaluate(request: AISearchProviderRequest): Promise<AISearchProviderResult>;
+  readonly provider: AISearchProviderType;
+  check(context: { apiKey: string | null; model: string }): Promise<ProviderCheck>;
+  query(request: ProviderQueryRequest, context: { apiKey: string; model: string; signal: AbortSignal }): Promise<ProviderRawResponse>;
+  analyzeResponse(response: ProviderRawResponse, input: ResponseAnalysisInput): ParsedAISearchResponse;
+  extractCitation(response: ProviderRawResponse): string[];
 }

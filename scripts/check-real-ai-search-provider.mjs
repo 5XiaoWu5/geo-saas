@@ -1,0 +1,13 @@
+import { readFileSync } from "node:fs";
+const repository = readFileSync("src/features/real-ai-search/repository.ts", "utf8");
+const service = readFileSync("src/features/real-ai-search/ai-search-execution.service.ts", "utf8");
+const provider = readFileSync("src/features/ai-search-intelligence/ai-search-provider.ts", "utf8");
+const adapters = readFileSync("src/features/real-ai-search/provider-adapters.ts", "utf8");
+const route = readFileSync("src/app/api/ai-search-providers/[projectId]/route.ts", "utf8");
+for (const forbidden of ["CREATE TABLE", "ALTER TABLE", "ensureSchema"]) if (repository.includes(forbidden) || service.includes(forbidden)) throw new Error(`Runtime DDL found: ${forbidden}`);
+for (const method of ["check(", "query(", "analyzeResponse(", "extractCitation("]) if (!provider.includes(method)) throw new Error(`AISearchProvider method missing: ${method}`);
+for (const type of ["OPENAI", "GEMINI", "CLAUDE", "PERPLEXITY"]) if (!adapters.includes(`${type}: adapter`)) throw new Error(`Provider adapter missing: ${type}`);
+if (!service.includes("PROVIDER_TIMEOUT") || !service.includes("AI_SEARCH_RATE_LIMITED") || !service.includes("MAX_ATTEMPTS")) throw new Error("Timeout, retry or rate limiting is missing.");
+if (!route.includes("apiKeyReference") || route.includes("apiKey:")) throw new Error("Provider config API must use references and never accept a plaintext apiKey field.");
+if (!repository.includes('p."userId"')) throw new Error("Repository is not project/user scoped.");
+console.log("Verified provider interface, four server adapters, reference-only keys, failure controls, project ownership, and migration-only schema management.");

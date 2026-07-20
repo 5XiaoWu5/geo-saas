@@ -99,6 +99,25 @@ enum AISearchEvaluationStatus {
   UNAVAILABLE
 }
 
+enum AISearchProviderType {
+  OPENAI
+  GEMINI
+  CLAUDE
+  PERPLEXITY
+}
+
+enum AISearchExecutionStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum AISearchCitationType {
+  OFFICIAL
+  THIRD_PARTY
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -230,6 +249,11 @@ model Project {
   knowledgeImportJobs  KnowledgeImportJob[]
   knowledgeExtractions KnowledgeExtractionResult[]
   simulationEvaluations SimulationEvaluationProfile[]
+  aiSearchProviderConfigs AISearchProviderConfig[]
+  aiSearchMonitors        AISearchMonitor[]
+  aiSearchQueries         AISearchQuery[]
+  aiSearchResults         AISearchResult[]
+  aiSearchCitations       AISearchCitation[]
 
   @@index([userId])
 }
@@ -734,6 +758,98 @@ model SimulationEvaluationProfile {
   @@index([projectId, createdAt])
   @@index([simulationResultId])
   @@index([projectId, platform, intent, createdAt])
+}
+
+model AISearchProviderConfig {
+  id              String               @id @default(cuid())
+  projectId       String
+  provider        AISearchProviderType
+  enabled         Boolean              @default(false)
+  apiKeyReference String?
+  model           String
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, provider])
+  @@index([projectId, enabled])
+}
+
+model AISearchMonitor {
+  id        String   @id @default(cuid())
+  projectId String
+  name      String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  queries AISearchQuery[]
+
+  @@index([projectId, enabled])
+}
+
+model AISearchQuery {
+  id           String         @id @default(cuid())
+  projectId    String
+  monitorId    String?
+  query        String
+  targetEntity String
+  industry     String
+  intent       AISearchIntent
+  createdAt    DateTime       @default(now())
+
+  project Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  monitor AISearchMonitor? @relation(fields: [monitorId], references: [id], onDelete: SetNull)
+  results AISearchResult[]
+
+  @@index([projectId, createdAt])
+  @@index([monitorId])
+}
+
+model AISearchResult {
+  id                String                  @id @default(cuid())
+  projectId         String
+  queryId           String
+  provider          AISearchProviderType
+  status            AISearchExecutionStatus @default(PENDING)
+  providerRequestId String?
+  rawResponse       String?
+  mentioned         Boolean?
+  rankPosition      Int?
+  productMentions   Json                    @default("[]")
+  competitorBrands  Json                    @default("[]")
+  errorCode         String?
+  durationMs        Int?
+  attemptCount      Int                     @default(0)
+  createdAt         DateTime                @default(now())
+  completedAt       DateTime?
+
+  project   Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  query     AISearchQuery      @relation(fields: [queryId], references: [id], onDelete: Cascade)
+  citations AISearchCitation[]
+
+  @@index([projectId, provider, createdAt])
+  @@index([queryId, status])
+}
+
+model AISearchCitation {
+  id            String               @id @default(cuid())
+  projectId     String
+  resultId      String
+  url           String
+  domain        String
+  citationType  AISearchCitationType
+  position      Int?
+  citationCount Int                  @default(1)
+  createdAt     DateTime             @default(now())
+
+  project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  result  AISearchResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
+
+  @@unique([resultId, url])
+  @@index([projectId, domain, createdAt])
 }
 
 model GrowthSnapshot {

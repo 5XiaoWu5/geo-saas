@@ -56,6 +56,8 @@ export function buildTaskInputFromOpportunity(projectId: string, opportunity: Gr
       ? "benchmark"
       : opportunity.source === "AI_RECOMMENDATION_GAP"
         ? "ai_recommendation"
+        : opportunity.source === "REAL_AI_VISIBILITY_GAP"
+          ? "real_ai_visibility"
       : opportunity.issueCategory;
   return {
     projectId,

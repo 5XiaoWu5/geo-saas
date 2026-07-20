@@ -211,6 +211,7 @@ function InfoBlock({ label, value }: { label: string; value: string }) {
 }
 
 function taskSourceLabel(task: OptimizationTask) {
+  if (task.issueId.startsWith("growth:REAL_AI_VISIBILITY_GAP") || task.category === "real_ai_visibility") return "真实 AI 可见性";
   if (task.issueId.startsWith("growth:AI_RECOMMENDATION_GAP") || task.category === "ai_recommendation") return "AI 推荐诊断";
   if (task.issueId.startsWith("growth:KNOWLEDGE_GAP") || task.category === "knowledge") return "知识评估";
   if (task.issueId.startsWith("growth:BENCHMARK_GAP") || task.issueId.startsWith("benchmark:") || task.category === "benchmark") return "竞品基准";

@@ -4,6 +4,7 @@ import { GrowthEngineHub, type GrowthEngineModule } from "@/features/product-arc
 export default async function ProjectGeoPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
   const modules: GrowthEngineModule[] = [
+    { title: "真实 AI 搜索监控", description: "配置服务端 Provider，执行真实 AI 查询并跟踪品牌出现、排名、回答与引用来源。", href: `/projects/${projectId}/geo/monitoring`, icon: Radar },
     { title: "AI 搜索增长诊断", description: "汇总实体、知识、产品、客户证明、技术权威、引用和竞品信号，解释 AI 为什么可能不推荐企业。", href: `/projects/${projectId}/geo/intelligence`, icon: Radar },
     { title: "AI 可见性", description: "查看当前项目已保存的提示词、检查、品牌提及与来源证据。", href: `/projects/${projectId}/visibility`, icon: Eye },
     { title: "实体智能", description: "管理企业实体画像并生成有证据支持的建议。", href: `/projects/${projectId}/entity`, icon: Building2 },

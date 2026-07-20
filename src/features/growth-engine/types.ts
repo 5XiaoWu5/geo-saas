@@ -1,7 +1,7 @@
 import type { GeoIssue, GeoIssueCategory, GeoIssueSeverity } from "@/features/geo-analysis/types";
 
 export type GrowthOpportunityDimension = "SEO" | "GEO" | "KNOWLEDGE" | "COMPETITIVE";
-export type GrowthOpportunitySource = "SEO_ANALYSIS" | "GEO_ANALYSIS" | "KNOWLEDGE_GAP" | "BENCHMARK_GAP" | "AI_RECOMMENDATION_GAP";
+export type GrowthOpportunitySource = "SEO_ANALYSIS" | "GEO_ANALYSIS" | "KNOWLEDGE_GAP" | "BENCHMARK_GAP" | "AI_RECOMMENDATION_GAP" | "REAL_AI_VISIBILITY_GAP";
 
 export type GrowthOpportunity = {
   id: string;
