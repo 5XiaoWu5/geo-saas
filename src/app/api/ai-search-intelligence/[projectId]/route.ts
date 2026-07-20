@@ -35,5 +35,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
 
 function intelligenceError(error: unknown) {
   if (error instanceof AISearchIntelligenceError) return NextResponse.json({ error: error.code }, { status: error.status });
+  if (error instanceof Error && /^AI_SEARCH_EVIDENCE_[A-Z_]+_FAILED$/.test(error.message)) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ error: "AI_SEARCH_INTELLIGENCE_FAILED" }, { status: 500 });
 }

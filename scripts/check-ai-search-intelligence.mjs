@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 
 const repository = readFileSync("src/features/ai-search-intelligence/ai-search-intelligence.repository.ts", "utf8");
-const queries = [...repository.matchAll(/aiSearchDatabase\(\)\.query\(\s*(['`])([\s\S]*?)\1\s*,/g)].map((match) => match[2]);
+const queries = [...repository.matchAll(/evidenceQuery\(\s*"[A-Z_]+"\s*,\s*(['`])([\s\S]*?)\1\s*,/g)].map((match) => match[2]);
 if (!queries.length) throw new Error("AI Search Intelligence repository has no queries to verify.");
 for (const query of queries) {
   if (!query.includes('"Project"') || !query.includes('"userId"')) throw new Error("Every AI Search Intelligence query must enforce Project.userId ownership.");
