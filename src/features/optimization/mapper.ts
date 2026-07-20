@@ -54,6 +54,8 @@ export function buildTaskInputFromOpportunity(projectId: string, opportunity: Gr
     ? "knowledge"
     : opportunity.source === "BENCHMARK_GAP"
       ? "benchmark"
+      : opportunity.source === "AI_RECOMMENDATION_GAP"
+        ? "ai_recommendation"
       : opportunity.issueCategory;
   return {
     projectId,

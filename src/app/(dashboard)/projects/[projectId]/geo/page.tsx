@@ -1,9 +1,10 @@
-import { BookOpen, BrainCircuit, Building2, Eye, FlaskConical, MessagesSquare, Swords } from "lucide-react";
+import { BookOpen, BrainCircuit, Building2, Eye, FlaskConical, MessagesSquare, Radar, Swords } from "lucide-react";
 import { GrowthEngineHub, type GrowthEngineModule } from "@/features/product-architecture/growth-engine-hub";
 
 export default async function ProjectGeoPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
   const modules: GrowthEngineModule[] = [
+    { title: "AI 搜索增长诊断", description: "汇总实体、知识、产品、客户证明、技术权威、引用和竞品信号，解释 AI 为什么可能不推荐企业。", href: `/projects/${projectId}/geo/intelligence`, icon: Radar },
     { title: "AI 可见性", description: "查看当前项目已保存的提示词、检查、品牌提及与来源证据。", href: `/projects/${projectId}/visibility`, icon: Eye },
     { title: "实体智能", description: "管理企业实体画像并生成有证据支持的建议。", href: `/projects/${projectId}/entity`, icon: Building2 },
     { title: "AI 推荐模拟器", description: "使用当前项目真实证据运行规则推荐预测。", href: `/projects/${projectId}/simulator`, icon: FlaskConical },

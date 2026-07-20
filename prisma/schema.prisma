@@ -79,6 +79,26 @@ enum KnowledgeImportStatus {
   FAILED
 }
 
+enum AISearchPlatform {
+  CHATGPT
+  GEMINI
+  CLAUDE
+  PERPLEXITY
+}
+
+enum AISearchIntent {
+  BUYING
+  RESEARCH
+  COMPARISON
+  LOCAL_SEARCH
+  TECHNICAL
+}
+
+enum AISearchEvaluationStatus {
+  AVAILABLE
+  UNAVAILABLE
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -209,6 +229,7 @@ model Project {
   knowledgeChunks      KnowledgeChunk[]
   knowledgeImportJobs  KnowledgeImportJob[]
   knowledgeExtractions KnowledgeExtractionResult[]
+  simulationEvaluations SimulationEvaluationProfile[]
 
   @@index([userId])
 }
@@ -683,8 +704,36 @@ model SimulationResult {
 
   task            SimulationTask   @relation(fields: [taskId], references: [id], onDelete: Cascade)
   growthSnapshots GrowthSnapshot[]
+  evaluationProfiles SimulationEvaluationProfile[]
 
   @@index([taskId])
+}
+
+model SimulationEvaluationProfile {
+  id                        String                   @id @default(cuid())
+  projectId                 String
+  simulationResultId        String?
+  query                     String
+  platform                  AISearchPlatform
+  industry                  String
+  intent                    AISearchIntent
+  targetEntity              String
+  knowledgeVersion          Int?
+  evaluationStatus          AISearchEvaluationStatus
+  healthScore               Int?
+  recommendationProbability Int?
+  confidence                Int?
+  signals                   Json                     @default("[]")
+  issues                    Json                     @default("[]")
+  methodVersion             String                   @default("ai-recommendation-rules-v1")
+  createdAt                 DateTime                 @default(now())
+
+  project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  simulationResult SimulationResult? @relation(fields: [simulationResultId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+  @@index([simulationResultId])
+  @@index([projectId, platform, intent, createdAt])
 }
 
 model GrowthSnapshot {

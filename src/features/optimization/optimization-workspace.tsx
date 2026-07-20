@@ -211,6 +211,7 @@ function InfoBlock({ label, value }: { label: string; value: string }) {
 }
 
 function taskSourceLabel(task: OptimizationTask) {
+  if (task.issueId.startsWith("growth:AI_RECOMMENDATION_GAP") || task.category === "ai_recommendation") return "AI 推荐诊断";
   if (task.issueId.startsWith("growth:KNOWLEDGE_GAP") || task.category === "knowledge") return "知识评估";
   if (task.issueId.startsWith("growth:BENCHMARK_GAP") || task.issueId.startsWith("benchmark:") || task.category === "benchmark") return "竞品基准";
   if (task.category === "entity") return "GEO 分析";

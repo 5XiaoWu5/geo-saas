@@ -70,7 +70,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
     && typeof opportunity.title === "string"
     && typeof opportunity.problem === "string"
     && typeof opportunity.recommendation === "string"
-    && ["SEO_ANALYSIS", "GEO_ANALYSIS", "KNOWLEDGE_GAP", "BENCHMARK_GAP"].includes(opportunity.source)
+    && ["SEO_ANALYSIS", "GEO_ANALYSIS", "KNOWLEDGE_GAP", "BENCHMARK_GAP", "AI_RECOMMENDATION_GAP"].includes(opportunity.source)
     && ["critical", "warning", "suggestion"].includes(opportunity.severity)
     && ["entity", "schema", "technical", "content"].includes(opportunity.issueCategory);
   if (!validIssue && !validOpportunity) {

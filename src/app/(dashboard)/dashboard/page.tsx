@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowRight, CheckCircle2, CircleDashed, Gauge, Medal, SearchCheck, Sparkles, Target } from "lucide-react";
+import { ArrowRight, BrainCircuit, CheckCircle2, CircleDashed, Gauge, Medal, SearchCheck, Sparkles, Target } from "lucide-react";
 import { PageHeader } from "@/components/shared/page";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,7 @@ import type { BenchmarkOverviewResponse, CompetitorWorkspaceResponse } from "@/f
 import { buildGrowthOpportunities } from "@/features/growth-engine/opportunities";
 import type { GrowthOpportunity } from "@/features/growth-engine/types";
 import { getHostname } from "@/lib/format";
+import type { AISearchIntelligenceResponse } from "@/features/ai-search-intelligence";
 
 type AnalysisSummary = { totalScore: number; entityScore: number; schemaScore: number; technicalScore: number; contentScore: number; createdAt: string };
 type OptimizationSummary = { tasks: OptimizationTask[]; issues: GeoIssue[]; analysis: AnalysisSummary | null };
@@ -27,6 +28,7 @@ type DashboardData = {
   assessment: KnowledgeAssessment | null;
   benchmark: BenchmarkOverviewResponse | null;
   competitors: CompetitorWorkspaceResponse | null;
+  aiIntelligence: AISearchIntelligenceResponse | null;
 };
 
 async function readJson<T>(response: Response): Promise<T> {
@@ -42,15 +44,16 @@ async function loadDashboard(): Promise<DashboardData> {
     fetch("/api/knowledge", { cache: "no-store" }).then(readJson<KnowledgeOverviewResponse>),
   ]);
   const projectId = projectResult.projects[0]?.id;
-  if (!projectId) return { projects: projectResult.projects, knowledge, optimization: null, growth: null, assessment: null, benchmark: null, competitors: null };
-  const [optimization, growth, assessment, benchmark, competitors] = await Promise.all([
+  if (!projectId) return { projects: projectResult.projects, knowledge, optimization: null, growth: null, assessment: null, benchmark: null, competitors: null, aiIntelligence: null };
+  const [optimization, growth, assessment, benchmark, competitors, aiIntelligence] = await Promise.all([
     fetch(`/api/projects/${projectId}/optimization`, { cache: "no-store" }).then(readJson<OptimizationSummary>),
     fetch(`/api/growth?projectId=${encodeURIComponent(projectId)}&range=30d`, { cache: "no-store" }).then(readJson<GrowthWorkspaceResponse>),
     fetch(`/api/knowledge/${projectId}/assessment`, { cache: "no-store" }).then(readJson<KnowledgeAssessment>),
     fetch(`/api/benchmark?projectId=${encodeURIComponent(projectId)}`, { cache: "no-store" }).then(readJson<BenchmarkOverviewResponse>),
     fetch(`/api/competitors?projectId=${encodeURIComponent(projectId)}`, { cache: "no-store" }).then(readJson<CompetitorWorkspaceResponse>),
+    fetch(`/api/ai-search-intelligence/${projectId}`, { cache: "no-store" }).then(readJson<AISearchIntelligenceResponse>),
   ]);
-  return { projects: projectResult.projects, knowledge, optimization, growth, assessment, benchmark, competitors };
+  return { projects: projectResult.projects, knowledge, optimization, growth, assessment, benchmark, competitors, aiIntelligence };
 }
 
 export default function DashboardPage() {
@@ -73,6 +76,7 @@ export default function DashboardPage() {
       {error ? <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">Dashboard 数据加载失败：{error}</div> : null}
       {!data && !error ? <DashboardLoading /> : data && !project ? <EmptyDashboard /> : data && project && data.optimization ? <>
         <ProjectPulse project={project} analysis={data.optimization.analysis} knowledgeScore={data.assessment?.completeness ?? knowledgeSummary?.knowledgeBase?.completenessScore ?? null} opportunityCount={opportunities.filter((item) => !item.trackedTaskId).length} tasks={data.optimization.tasks} benchmark={data.benchmark} />
+        <AIRecommendationReadiness project={project} intelligence={data.aiIntelligence} />
         <section className="grid gap-5 xl:grid-cols-3">
           <SeoStatus project={project} analysis={data.optimization.analysis} issues={data.optimization.issues} />
           <AiSearchStatus project={project} analysis={data.optimization.analysis} knowledgeScore={data.assessment?.completeness ?? null} benchmark={data.benchmark} growth={data.growth} />
@@ -86,6 +90,11 @@ export default function DashboardPage() {
       </> : null}
     </div>
   );
+}
+
+function AIRecommendationReadiness({ project, intelligence }: { project: Project; intelligence: AISearchIntelligenceResponse | null }) {
+  const suggestions = intelligence?.analysis.issues.slice(0, 3) ?? [];
+  return <Card className="glass-panel overflow-hidden border-violet-300/20"><CardContent className="grid gap-5 p-5 lg:grid-cols-[0.38fr_0.62fr]"><div className="rounded-2xl border border-violet-300/20 bg-violet-300/[0.04] p-5"><div className="flex items-center gap-2 text-sm font-medium text-violet-200"><BrainCircuit className="h-5 w-5" />AI 推荐准备度</div><p className="mt-4 text-5xl font-semibold text-violet-200">{intelligence?.analysis.healthScore ?? "--"}<span className="text-lg text-muted-foreground">%</span></p><p className="mt-2 text-xs text-muted-foreground">{intelligence?.analysis.status === "available" ? `证据覆盖置信度 ${intelligence.analysis.confidence ?? 0}%` : "unavailable · 尚无足够诊断证据"}</p><Button asChild variant="outline" className="mt-5 min-h-11 w-full"><Link href={`/projects/${project.id}/geo/intelligence`}>查看 AI 搜索诊断 <ArrowRight className="h-4 w-4" /></Link></Button></div><div className="min-w-0"><p className="text-sm font-medium">Top 3 提升建议</p><div className="mt-3 space-y-2">{suggestions.length ? suggestions.map((issue, index) => <Link key={issue.type} href={`/projects/${project.id}/geo/intelligence`} className="flex min-h-12 min-w-0 items-start gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-3 transition hover:border-violet-300/30"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-300/10 text-xs text-violet-200">{index + 1}</span><span className="min-w-0"><span className="block break-words text-sm font-medium">{issue.reason}</span><span className="mt-1 block text-xs text-muted-foreground">{issue.severity} · {issue.signalType}</span></span></Link>) : <div className="rounded-xl border border-white/10 bg-white/[0.025] p-4 text-sm text-muted-foreground">当前没有可追溯的 AI 推荐改进建议。完成企业知识、实体或可见性数据后重新诊断。</div>}</div></div></CardContent></Card>;
 }
 
 function ProjectPulse({ project, analysis, knowledgeScore, opportunityCount, tasks, benchmark }: { project: Project; analysis: AnalysisSummary | null; knowledgeScore: number | null; opportunityCount: number; tasks: OptimizationTask[]; benchmark: BenchmarkOverviewResponse | null }) {

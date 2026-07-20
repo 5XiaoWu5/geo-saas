@@ -12,6 +12,7 @@
     "check:benchmark-repository": "node scripts/check-benchmark-repository.mjs",
     "test:benchmark-engine": "tsx --test src/features/competitor-benchmark/benchmark-engine.test.ts",
     "check:knowledge-foundation": "node scripts/check-knowledge-foundation.mjs",
+    "check:ai-search-intelligence": "node scripts/check-ai-search-intelligence.mjs",
     "preview": "opennextjs-cloudflare preview",
     "start": "next start",
     "lint": "eslint",
