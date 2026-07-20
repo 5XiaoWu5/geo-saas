@@ -73,7 +73,7 @@ export function GrowthWorkspace({ initialProjectId }: { initialProjectId?: strin
       {!data?.projects.length ? <Card className="glass-panel border-white/10"><CardContent className="p-6"><p className="text-sm text-muted-foreground">{t("growth.noProjects")}</p><Button asChild className="mt-4"><Link href="/projects">{t("growth.goToProjects")}</Link></Button></CardContent></Card> : activeProject ? <>
         <Card className="glass-panel border-white/10"><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="text-sm text-muted-foreground">{t("growth.project")}</p><select value={projectId} onChange={(event) => void selectProject(event.target.value)} className="mt-2 h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm sm:w-72">{data.projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></div><div className="-mx-1 overflow-x-auto px-1 pb-1"><div className="flex min-w-max gap-2">{GROWTH_RANGES.map((item) => <Button key={item} size="sm" className="min-h-11" variant={range === item ? "default" : "outline"} onClick={() => void selectRange(item)}>{t(`growth.ranges.${item}`)}</Button>)}</div></div></CardContent></Card>
 
-        <GrowthCenterSummary projectId={activeProject.id} />
+        <GrowthCenterSummary project={activeProject} />
 
         <GrowthSummary project={activeProject} />
 

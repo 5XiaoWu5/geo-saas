@@ -36,6 +36,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pro
   return NextResponse.json({
     tasks,
     issues: analysis?.issues ?? [],
+    analysis: analysis ? {
+      totalScore: analysis.totalScore,
+      entityScore: analysis.entityScore,
+      schemaScore: analysis.schemaScore,
+      technicalScore: analysis.technicalScore,
+      contentScore: analysis.contentScore,
+      createdAt: analysis.createdAt,
+    } : null,
     trackedIssueIds: [...trackedIssueIds],
     analysisAt: analysis?.createdAt ?? null,
   });
