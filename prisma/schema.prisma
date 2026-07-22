@@ -185,6 +185,13 @@ enum GrowthActionImpact {
   LOW
 }
 
+enum GrowthAgentTaskStatus {
+  TODO
+  IN_PROGRESS
+  COMPLETED
+  VERIFIED
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -327,6 +334,7 @@ model Project {
   notifications           Notification[]
   growthReports           GrowthReport[]
   growthActions           GrowthAction[]
+  growthAgentTasks        GrowthAgentTask[]
 
   @@index([userId])
 }
@@ -434,10 +442,36 @@ model GrowthAction {
 
   project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   optimizationTask OptimizationTask? @relation(fields: [optimizationTaskId], references: [id], onDelete: SetNull)
+  agentTasks       GrowthAgentTask[]
 
   @@unique([projectId, sourceKey])
   @@index([projectId, status, createdAt])
   @@index([optimizationTaskId])
+}
+
+model GrowthAgentTask {
+  id               String                @id @default(cuid())
+  projectId        String
+  actionId         String
+  title            String
+  description      String
+  category         GrowthActionCategory
+  status           GrowthAgentTaskStatus @default(TODO)
+  priority         GrowthActionPriority
+  confidence       Int
+  expectedImpact   Json
+  executionPlan    Json
+  verificationPlan Json
+  generatedAt      DateTime              @default(now())
+  completedAt      DateTime?
+  createdAt        DateTime              @default(now())
+
+  project Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  action  GrowthAction @relation(fields: [actionId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, actionId])
+  @@index([projectId, status, createdAt])
+  @@index([actionId])
 }
 
 model QueryTemplate {

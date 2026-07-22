@@ -19,6 +19,7 @@ import { getHostname } from "@/lib/format";
 import type { AISearchIntelligenceResponse } from "@/features/ai-search-intelligence";
 import type { AISearchGrowthResponse } from "@/features/ai-search-growth";
 import type { MonitoringCenterResponse } from "@/features/monitoring-automation/types";
+import type { GrowthAgentOverview } from "@/features/growth-agent/types";
 
 type AnalysisSummary = { totalScore: number; entityScore: number; schemaScore: number; technicalScore: number; contentScore: number; createdAt: string };
 type OptimizationSummary = { tasks: OptimizationTask[]; issues: GeoIssue[]; analysis: AnalysisSummary | null };
@@ -33,6 +34,7 @@ type DashboardData = {
   aiIntelligence: AISearchIntelligenceResponse | null;
   aiGrowth: AISearchGrowthResponse | null;
   monitoring: MonitoringCenterResponse | null;
+  agent: GrowthAgentOverview | null;
 };
 
 async function readJson<T>(response: Response): Promise<T> {
@@ -48,8 +50,8 @@ async function loadDashboard(): Promise<DashboardData> {
     fetch("/api/knowledge", { cache: "no-store" }).then(readJson<KnowledgeOverviewResponse>),
   ]);
   const projectId = projectResult.projects[0]?.id;
-  if (!projectId) return { projects: projectResult.projects, knowledge, optimization: null, growth: null, assessment: null, benchmark: null, competitors: null, aiIntelligence: null, aiGrowth: null, monitoring: null };
-  const [optimization, growth, assessment, benchmark, competitors, aiIntelligence, aiGrowth, monitoring] = await Promise.all([
+  if (!projectId) return { projects: projectResult.projects, knowledge, optimization: null, growth: null, assessment: null, benchmark: null, competitors: null, aiIntelligence: null, aiGrowth: null, monitoring: null, agent: null };
+  const [optimization, growth, assessment, benchmark, competitors, aiIntelligence, aiGrowth, monitoring, agent] = await Promise.all([
     fetch(`/api/projects/${projectId}/optimization`, { cache: "no-store" }).then(readJson<OptimizationSummary>),
     fetch(`/api/growth?projectId=${encodeURIComponent(projectId)}&range=30d`, { cache: "no-store" }).then(readJson<GrowthWorkspaceResponse>),
     fetch(`/api/knowledge/${projectId}/assessment`, { cache: "no-store" }).then(readJson<KnowledgeAssessment>),
@@ -58,8 +60,9 @@ async function loadDashboard(): Promise<DashboardData> {
     fetch(`/api/ai-search-intelligence/${projectId}`, { cache: "no-store" }).then(readJson<AISearchIntelligenceResponse>),
     fetch(`/api/ai-search-growth/${projectId}`, { cache: "no-store" }).then(readJson<AISearchGrowthResponse>),
     fetch(`/api/ai-search-monitoring/${projectId}`, { cache: "no-store" }).then(readJson<MonitoringCenterResponse>),
+    fetch(`/api/projects/${projectId}/agent-tasks`, { cache: "no-store" }).then(readJson<GrowthAgentOverview>),
   ]);
-  return { projects: projectResult.projects, knowledge, optimization, growth, assessment, benchmark, competitors, aiIntelligence, aiGrowth, monitoring };
+  return { projects: projectResult.projects, knowledge, optimization, growth, assessment, benchmark, competitors, aiIntelligence, aiGrowth, monitoring, agent };
 }
 
 export default function DashboardPage() {
@@ -82,6 +85,7 @@ export default function DashboardPage() {
       {error ? <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">Dashboard 数据加载失败：{error}</div> : null}
       {!data && !error ? <DashboardLoading /> : data && !project ? <EmptyDashboard /> : data && project && data.optimization ? <>
         <ProjectPulse project={project} analysis={data.optimization.analysis} knowledgeScore={data.assessment?.completeness ?? knowledgeSummary?.knowledgeBase?.completenessScore ?? null} opportunityCount={opportunities.filter((item) => !item.trackedTaskId).length} tasks={data.optimization.tasks} benchmark={data.benchmark} />
+        <AgentPulse project={project} agent={data.agent} />
         <AIRecommendationReadiness project={project} intelligence={data.aiIntelligence} />
         <EnterpriseAIGrowthHealth project={project} growth={data.aiGrowth} opportunityCount={opportunities.length} />
         <MonitoringPulse project={project} monitoring={data.monitoring} />
@@ -98,6 +102,11 @@ export default function DashboardPage() {
       </> : null}
     </div>
   );
+}
+
+function AgentPulse({ project, agent }: { project: Project; agent: GrowthAgentOverview | null }) {
+  const items = [["Agent 完成率", `${agent?.summary.completionRate ?? 0}%`], ["AI 自动建议", `${agent?.summary.suggestionCount ?? 0}`], ["预计影响指标", `${agent?.summary.expectedMetricCount ?? 0}`], ["预计增长值", "unavailable"]] as const;
+  return <Card className="glass-panel overflow-hidden border-violet-300/20"><CardContent className="grid gap-5 p-5 lg:grid-cols-[0.72fr_0.28fr]"><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{items.map(([label, value]) => <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.025] p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-2 text-xl font-semibold">{value}</p></div>)}</div><div className="rounded-2xl border border-violet-300/20 bg-violet-300/[0.04] p-4"><p className="flex items-center gap-2 text-sm font-medium text-violet-200"><BrainCircuit className="h-5 w-5" />AI Growth Agent</p><p className="mt-2 text-sm text-muted-foreground">把真实增长行动拆解为执行与验证计划。</p><Button asChild variant="outline" className="mt-4 min-h-11 w-full"><Link href={`/projects/${project.id}/growth/agent`}>进入 Agent <ArrowRight className="h-4 w-4" /></Link></Button></div></CardContent></Card>;
 }
 
 function MonitoringPulse({ project, monitoring }: { project: Project; monitoring: MonitoringCenterResponse | null }) {

@@ -52,6 +52,7 @@ export const zh = {
     growthCenter: "增长中心",
     growthReports: "AI 增长报告",
     growthActions: "AI 增长行动",
+    growthAgent: "AI Growth Agent",
     growthDashboard: "增长总览",
     competitorCenter: "竞品管理",
     websiteCrawl: "网站抓取",
