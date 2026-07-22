@@ -21,9 +21,9 @@ export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
   return (
     <div className={cn("hidden min-h-11 items-center rounded-xl border border-white/10 bg-white/[0.04] p-1 sm:flex")} aria-label={locale === "zh" ? "语言切换" : "Language switcher"}>
       <Languages className="mx-1 h-4 w-4 text-muted-foreground" />
-      <button type="button" onClick={() => setLocale("zh")} className={cn("min-h-9 rounded-lg px-2 text-xs transition", locale === "zh" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")} aria-pressed={locale === "zh"}>中文</button>
+      <button type="button" onClick={() => setLocale("zh")} className={cn("min-h-11 rounded-lg px-2 text-xs transition", locale === "zh" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")} aria-pressed={locale === "zh"}>中文</button>
       <span className="text-muted-foreground/50">|</span>
-      <button type="button" onClick={() => setLocale("en")} className={cn("min-h-9 rounded-lg px-2 text-xs transition", locale === "en" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")} aria-pressed={locale === "en"}>English</button>
+      <button type="button" onClick={() => setLocale("en")} className={cn("min-h-11 rounded-lg px-2 text-xs transition", locale === "en" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")} aria-pressed={locale === "en"}>English</button>
     </div>
   );
 }

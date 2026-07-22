@@ -23,12 +23,12 @@ const tabs = [
 export function ProjectTabs() {
   const pathname = usePathname();
   const { project } = useProject();
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
 
   if (tabs.length <= 1) return null;
 
   return (
-    <nav aria-label="项目工作区" className="max-w-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-1">
+    <nav aria-label={locale === "zh" ? "项目工作区" : "Project workspace"} className="max-w-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-1">
       <div className="flex snap-x snap-mandatory gap-1 overflow-x-auto overscroll-x-contain pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
         {tabs.map((tab) => {
           const href = `/projects/${project.id}/${tab.path}`;
