@@ -20,6 +20,7 @@
     "test:monitoring-automation": "tsx --test src/features/monitoring-automation/*.test.ts",
     "check:growth-reports": "node scripts/check-growth-reports.mjs",
     "test:growth-reports": "tsx --test src/features/growth-reports/*.test.ts",
+    "test:growth-actions": "tsx --test src/features/growth-actions/*.test.ts",
     "preview": "opennextjs-cloudflare preview",
     "start": "next start",
     "lint": "eslint",

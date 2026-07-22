@@ -1,5 +1,5 @@
 ﻿import type { LucideIcon } from "lucide-react";
-import { BookOpen, ClipboardList, CreditCard, FileText, Gauge, HelpCircle, KeyRound, LineChart, SearchCheck, Sparkles, Swords, UserCircle } from "lucide-react";
+import { BookOpen, CircleDot, ClipboardList, CreditCard, FileText, Gauge, HelpCircle, KeyRound, LineChart, SearchCheck, Sparkles, Swords, UserCircle } from "lucide-react";
 
 export type NavItem = {
   titleKey: string;
@@ -46,6 +46,7 @@ export const mainNavSections: NavSection[] = [
     titleKey: "nav.executionCenter",
     items: [
       { titleKey: "nav.optimizationCenter", href: "/optimization", icon: ClipboardList },
+      { titleKey: "nav.growthActions", href: "/actions", icon: CircleDot },
     ],
   },
 ];

@@ -158,6 +158,33 @@ enum GrowthReportStatus {
   FAILED
 }
 
+enum GrowthActionCategory {
+  SEO
+  GEO
+  AI_SEARCH
+  KNOWLEDGE
+  COMPETITOR
+}
+
+enum GrowthActionPriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum GrowthActionStatus {
+  TODO
+  IN_PROGRESS
+  COMPLETED
+  VERIFIED
+}
+
+enum GrowthActionImpact {
+  HIGH
+  MEDIUM
+  LOW
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -299,6 +326,7 @@ model Project {
   monitoringHistories     MonitoringHistory[]
   notifications           Notification[]
   growthReports           GrowthReport[]
+  growthActions           GrowthAction[]
 
   @@index([userId])
 }
@@ -380,9 +408,36 @@ model OptimizationTask {
 
   project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   notifications Notification[]
+  growthActions GrowthAction[]
 
   @@unique([projectId, issueId])
   @@index([projectId])
+}
+
+model GrowthAction {
+  id                 String               @id @default(cuid())
+  projectId          String
+  opportunityId      String?
+  optimizationTaskId String?
+  sourceKey          String
+  sourceType         String
+  title              String
+  description        String
+  category           GrowthActionCategory
+  priority           GrowthActionPriority
+  status             GrowthActionStatus   @default(TODO)
+  impact             GrowthActionImpact
+  createdBy          String
+  completedAt        DateTime?
+  verifiedAt         DateTime?
+  createdAt          DateTime             @default(now())
+
+  project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  optimizationTask OptimizationTask? @relation(fields: [optimizationTaskId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, sourceKey])
+  @@index([projectId, status, createdAt])
+  @@index([optimizationTaskId])
 }
 
 model QueryTemplate {
