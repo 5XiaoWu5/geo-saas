@@ -23,7 +23,8 @@ export const growthReportRepository = {
     const project = await this.projectForUser(userId, projectId);
     if (!project) return null;
     const db = realAISearchDatabase();
-    const [scanRows, analysisRows, entityRows, visibilityChecks, visibilityCitations, aiResults, aiCitations, scoreRows, knowledgeRows, assetRows, benchmarkRuns, benchmarkResults, tasks, insights, growthSnapshots] = await Promise.all([
+    const sourceNames = ["WebsiteScan", "GeoAnalysis", "EntityProfile", "VisibilityCheck", "VisibilityCitation", "AISearchResult", "AISearchCitation", "AISearchGrowthScore", "CompanyKnowledgeProfile", "KnowledgeAssets", "BenchmarkRun", "BenchmarkResult", "OptimizationTask", "GeoBrainAnalysis", "GrowthSnapshot"];
+    const settled = await Promise.allSettled([
       db.query('SELECT scan.* FROM "WebsiteScan" scan WHERE scan."projectId" = $1 ORDER BY scan."createdAt" DESC LIMIT 1', [projectId]),
       db.query('SELECT analysis.* FROM "GeoAnalysis" analysis WHERE analysis."projectId" = $1 ORDER BY analysis."createdAt" DESC LIMIT 1', [projectId]),
       db.query('SELECT entity.* FROM "EntityProfile" entity WHERE entity."projectId" = $1 ORDER BY entity."updatedAt" DESC LIMIT 1', [projectId]),
@@ -40,7 +41,11 @@ export const growthReportRepository = {
       db.query('SELECT insight.* FROM "GeoBrainAnalysis" insight WHERE insight."projectId" = $1 ORDER BY insight."createdAt" DESC LIMIT 1', [projectId]),
       db.query('SELECT snapshot.* FROM "GrowthSnapshot" snapshot WHERE snapshot."projectId" = $1 ORDER BY snapshot."createdAt" DESC LIMIT 100', [projectId]),
     ]);
-    return { project, scan: scanRows[0] ?? null, analysis: analysisRows[0] ?? null, entity: entityRows[0] ?? null, visibilityChecks, visibilityCitations, aiResults, aiCitations, growthScore: scoreRows[0] ?? null, knowledge: knowledgeRows[0] ?? null, knowledgeAssets: assetRows[0] ?? null, benchmarkRun: benchmarkRuns[0] ?? null, benchmarkResults, optimizationTasks: tasks, insight: insights[0] ?? null, growthSnapshots };
+    const sourceWarnings = settled.flatMap((result, index) => result.status === "rejected" ? [sourceNames[index] ?? `source-${index}`] : []);
+    settled.forEach((result, index) => { if (result.status === "rejected") console.error("growth_report_source_unavailable", { source: sourceNames[index], message: result.reason instanceof Error ? result.reason.message : String(result.reason) }); });
+    const rows = settled.map((result) => result.status === "fulfilled" ? result.value : []);
+    const [scanRows, analysisRows, entityRows, visibilityChecks, visibilityCitations, aiResults, aiCitations, scoreRows, knowledgeRows, assetRows, benchmarkRuns, benchmarkResults, tasks, insights, growthSnapshots] = rows;
+    return { project, scan: scanRows[0] ?? null, analysis: analysisRows[0] ?? null, entity: entityRows[0] ?? null, visibilityChecks, visibilityCitations, aiResults, aiCitations, growthScore: scoreRows[0] ?? null, knowledge: knowledgeRows[0] ?? null, knowledgeAssets: assetRows[0] ?? null, benchmarkRun: benchmarkRuns[0] ?? null, benchmarkResults, optimizationTasks: tasks, insight: insights[0] ?? null, growthSnapshots, sourceWarnings };
   },
 
   async complete(userId: string, reportId: string, dataVersion: string, snapshot: GrowthReportSnapshot) {

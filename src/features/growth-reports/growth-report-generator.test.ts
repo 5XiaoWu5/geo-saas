@@ -5,7 +5,7 @@ import { HtmlGrowthReportExporter } from "./html-report-exporter";
 import type { GrowthReportEvidence } from "./types";
 
 function emptyEvidence(): GrowthReportEvidence {
-  return { project: { id: "project-1", name: "空数据企业", domain: "example.com" }, scan: null, analysis: null, entity: null, visibilityChecks: [], visibilityCitations: [], aiResults: [], aiCitations: [], growthScore: null, knowledge: null, knowledgeAssets: null, benchmarkRun: null, benchmarkResults: [], optimizationTasks: [], insight: null, growthSnapshots: [] };
+  return { project: { id: "project-1", name: "空数据企业", domain: "example.com" }, scan: null, analysis: null, entity: null, visibilityChecks: [], visibilityCitations: [], aiResults: [], aiCitations: [], growthScore: null, knowledge: null, knowledgeAssets: null, benchmarkRun: null, benchmarkResults: [], optimizationTasks: [], insight: null, growthSnapshots: [], sourceWarnings: [] };
 }
 
 test("空数据项目成功生成报告，所有业务模块均为 unavailable 且不生成虚假评分", () => {

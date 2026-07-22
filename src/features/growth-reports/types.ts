@@ -30,6 +30,7 @@ export type GrowthReportSnapshot = {
     confidence: number;
     status: GrowthReportStatus;
     executiveSummary: ExecutiveSummary;
+    sourceWarnings?: string[];
     failureReason?: string;
   };
   seoSnapshot: SnapshotModule;
@@ -76,4 +77,5 @@ export type GrowthReportEvidence = {
   optimizationTasks: Record<string, unknown>[];
   insight: Record<string, unknown> | null;
   growthSnapshots: Record<string, unknown>[];
+  sourceWarnings: string[];
 };

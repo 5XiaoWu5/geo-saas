@@ -52,7 +52,7 @@ export function buildGrowthReportSnapshot(input: { evidence: GrowthReportEvidenc
   const dataVersion = `gr-${input.version}-${createHash("sha256").update(JSON.stringify({ projectId: evidence.project.id, sourceIds, generatedAt })).digest("hex").slice(0, 16)}`;
   const base = { seoSnapshot, geoSnapshot, aiSearchSnapshot, knowledgeSnapshot, competitorSnapshot, optimizationSnapshot, insightSnapshot, roadmapSnapshot };
   const confidence = Math.round(([seoSnapshot, geoSnapshot, aiSearchSnapshot, knowledgeSnapshot, competitorSnapshot, optimizationSnapshot, insightSnapshot, roadmapSnapshot].filter((item) => item.status === "available").length / 8) * 100);
-  const snapshot: GrowthReportSnapshot = { reportMeta: { projectId: String(evidence.project.id), projectName: String(evidence.project.name), domain: String(evidence.project.domain), version: input.version, generatedBy: input.generatedBy, generatedAt, dataVersion, methodVersion: GROWTH_REPORT_METHOD_VERSION, confidence, status: "COMPLETED", executiveSummary: buildExecutiveSummary(base) }, ...base };
+  const snapshot: GrowthReportSnapshot = { reportMeta: { projectId: String(evidence.project.id), projectName: String(evidence.project.name), domain: String(evidence.project.domain), version: input.version, generatedBy: input.generatedBy, generatedAt, dataVersion, methodVersion: GROWTH_REPORT_METHOD_VERSION, confidence, status: "COMPLETED", executiveSummary: buildExecutiveSummary(base), sourceWarnings: evidence.sourceWarnings }, ...base };
   validateGrowthReportSnapshot(snapshot);
   return snapshot;
 }
