@@ -1,5 +1,5 @@
 ﻿import type { LucideIcon } from "lucide-react";
-import { BookOpen, ClipboardList, CreditCard, Gauge, HelpCircle, KeyRound, LineChart, SearchCheck, Sparkles, Swords, UserCircle } from "lucide-react";
+import { BookOpen, ClipboardList, CreditCard, FileText, Gauge, HelpCircle, KeyRound, LineChart, SearchCheck, Sparkles, Swords, UserCircle } from "lucide-react";
 
 export type NavItem = {
   titleKey: string;
@@ -32,6 +32,7 @@ export const mainNavSections: NavSection[] = [
       { titleKey: "nav.seoGrowth", href: "/seo", icon: SearchCheck, activePrefixes: ["/crawl", "/inventory", "/analyzer", "/query-generator"] },
       { titleKey: "nav.geoGrowth", href: "/geo", icon: Sparkles, activePrefixes: ["/entity", "/simulator", "/visibility", "/campaigns", "/insights"] },
       { titleKey: "nav.growthCenter", href: "/growth/overview", icon: LineChart, activePrefixes: ["/growth"] },
+      { titleKey: "nav.growthReports", href: "/reports", icon: FileText },
     ],
   },
   {

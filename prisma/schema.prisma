@@ -152,6 +152,12 @@ enum NotificationLevel {
   LOW
 }
 
+enum GrowthReportStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -292,6 +298,7 @@ model Project {
   monitoringSchedule      MonitoringSchedule?
   monitoringHistories     MonitoringHistory[]
   notifications           Notification[]
+  growthReports           GrowthReport[]
 
   @@index([userId])
 }
@@ -970,6 +977,24 @@ model Notification {
   @@unique([projectId, sourceKey])
   @@index([projectId, isRead, createdAt])
   @@index([optimizationTaskId])
+}
+
+model GrowthReport {
+  id            String             @id @default(cuid())
+  projectId     String
+  version       Int
+  generatedBy   String
+  status        GrowthReportStatus @default(PROCESSING)
+  dataVersion   String
+  methodVersion String             @default("growth-report-v1")
+  snapshot      Json               @default("{}")
+  createdAt     DateTime           @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, version])
+  @@index([projectId, createdAt])
+  @@index([generatedBy, createdAt])
 }
 
 model GrowthSnapshot {

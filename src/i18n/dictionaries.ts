@@ -50,6 +50,7 @@ export const zh = {
     knowledgeCenter: "知识中心",
     optimizationCenter: "优化中心",
     growthCenter: "增长中心",
+    growthReports: "AI 增长报告",
     growthDashboard: "增长总览",
     competitorCenter: "竞品管理",
     websiteCrawl: "网站抓取",
@@ -765,7 +766,7 @@ export const en: Dictionary = {
   ...zh,
   common: { ...zh.common, actions: "Actions" },
   projects: { ...zh.projects, overview: "Overview" },
-  nav: { ...zh.nav, overviewGroup: "Overview", growthEngines: "Growth engines", operationCenters: "Operations", assetManagement: "Assets", executionCenter: "Execution", dashboard: "Growth Command Center", projects: "Projects", seoGrowth: "SEO Growth", geoGrowth: "AI Search Growth", knowledgeCenter: "Knowledge Center", competitorCenter: "Competitors", optimizationCenter: "Optimization Center", growthCenter: "Growth Center", growthDashboard: "Growth Dashboard", reports: "Reports", simulator: "AI Search Simulator", growth: "GEO Growth Timeline", insights: "AI Recommendation Insights", competitors: "Competitors", knowledge: "Knowledge Base" },
+  nav: { ...zh.nav, overviewGroup: "Overview", growthEngines: "Growth engines", operationCenters: "Operations", assetManagement: "Assets", executionCenter: "Execution", dashboard: "Growth Command Center", projects: "Projects", seoGrowth: "SEO Growth", geoGrowth: "AI Search Growth", knowledgeCenter: "Knowledge Center", competitorCenter: "Competitors", optimizationCenter: "Optimization Center", growthCenter: "Growth Center", growthDashboard: "Growth Dashboard", growthReports: "AI Growth Reports", reports: "Reports", simulator: "AI Search Simulator", growth: "GEO Growth Timeline", insights: "AI Recommendation Insights", competitors: "Competitors", knowledge: "Knowledge Base" },
   competitors: {
     title: "Competitor Management",
     description: "Maintain real competitor profiles for this project as the foundation for recommendation probability, visibility, and growth comparisons.",

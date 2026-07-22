@@ -14,6 +14,7 @@ const tabs = [
   { labelKey: "nav.knowledge", path: "knowledge" },
   { labelKey: "nav.competitors", path: "competitors" },
   { labelKey: "nav.optimization", path: "optimization" },
+  { labelKey: "nav.growthReports", path: "reports" },
 ];
 
 export function ProjectTabs() {

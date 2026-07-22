@@ -18,6 +18,8 @@
     "test:ai-search-growth": "tsx --test src/features/ai-search-growth/*.test.ts",
     "check:monitoring-automation": "node scripts/check-monitoring-automation.mjs",
     "test:monitoring-automation": "tsx --test src/features/monitoring-automation/*.test.ts",
+    "check:growth-reports": "node scripts/check-growth-reports.mjs",
+    "test:growth-reports": "tsx --test src/features/growth-reports/*.test.ts",
     "preview": "opennextjs-cloudflare preview",
     "start": "next start",
     "lint": "eslint",
