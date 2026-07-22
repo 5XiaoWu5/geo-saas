@@ -1,0 +1,18 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { buildAutomationPlan, compareAutomationEvidence } from "./service";
+import type { AutomationEvidenceSnapshot } from "./types";
+import { PROVIDER_METADATA } from "@/features/real-ai-search/provider-metadata";
+import { en } from "@/i18n/dictionaries";
+
+function snapshot(value: number | null, records = 0): AutomationEvidenceSnapshot { const capturedAt = "2026-07-22T00:00:00.000Z"; const metric = (sourceType: string) => ({ status: value === null ? "unavailable" as const : "available" as const, value, sourceId: value === null ? null : `${sourceType}-1`, sourceType, capturedAt }); return { capturedAt, metrics: { seoHealth: metric("GeoAnalysis"), aiVisibility: metric("AISearchGrowthScore"), knowledgeCompleteness: metric("CompanyKnowledgeBase"), citationCount: metric("AISearchCitation"), entityAuthority: metric("EntityProfile") }, records: { growthActions: records, growthAgentTasks: records, optimizationTasks: records, growthReports: records } }; }
+
+test("Safe Mode only contains evidence steps", () => { assert.deepEqual(buildAutomationPlan("SAFE", []).map(step => step.stepKey), ["LOAD_EVIDENCE", "CAPTURE_AFTER"]); });
+test("Standard Mode creates existing business records through the audit plan", () => { const keys = buildAutomationPlan("STANDARD", []).map(step => step.stepKey); assert.deepEqual(keys, ["LOAD_EVIDENCE", "GENERATE_ACTIONS", "SYNC_OPTIMIZATION", "GENERATE_AGENT_TASKS", "GENERATE_REPORT", "REFRESH_TIMELINE", "CAPTURE_AFTER"]); });
+test("Expert Mode requires approval for each configured provider", () => { const steps = buildAutomationPlan("EXPERT", ["OPENAI", "GEMINI"]).filter(step => step.riskLevel === "EXTERNAL_COST"); assert.equal(steps.length, 2); assert.ok(steps.every(step => step.status === "AWAITING_APPROVAL")); });
+test("Standard Mode never calls an external provider", () => { assert.ok(buildAutomationPlan("STANDARD", ["OPENAI"]).every(step => step.riskLevel !== "EXTERNAL_COST" && step.riskLevel !== "EXTERNAL_WRITE")); });
+test("automation plan step keys are stable and unique", () => { const keys = buildAutomationPlan("EXPERT", ["OPENAI", "GEMINI", "CLAUDE", "PERPLEXITY"]).map(step => step.stepKey); assert.equal(new Set(keys).size, keys.length); });
+test("Before/After never invents a delta when evidence is unavailable", () => { const result = compareAutomationEvidence(snapshot(null), snapshot(null)); assert.ok(result.metrics.every(metric => metric.status === "unavailable" && metric.delta === null)); });
+test("Before/After reports real record differences", () => { const result = compareAutomationEvidence(snapshot(10, 2), snapshot(15, 5)); assert.equal(result.metrics[0]?.delta, 5); assert.deepEqual(result.records.growthActions, { before: 2, after: 5, created: 3 }); });
+test("Provider UX uses the approved official key and documentation destinations", () => { assert.equal(PROVIDER_METADATA.OPENAI.apiKeyUrl, "https://platform.openai.com/api-keys"); assert.equal(PROVIDER_METADATA.GEMINI.apiKeyUrl, "https://aistudio.google.com/app/apikey"); assert.equal(PROVIDER_METADATA.CLAUDE.apiKeyUrl, "https://console.anthropic.com/settings/keys"); assert.equal(PROVIDER_METADATA.PERPLEXITY.apiKeyUrl, "https://www.perplexity.ai/settings/api"); for (const metadata of Object.values(PROVIDER_METADATA)) { assert.match(metadata.docsUrl, /^https:\/\//); assert.match(metadata.environmentReference, /^env:/); } });
+test("new English UX namespaces contain no Chinese copy", () => { const text = JSON.stringify({ automation: en.automation, providerUx: en.providerUx, metrics: en.metrics }); assert.doesNotMatch(text, /[\u3400-\u9fff]/); });

@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { defaultLocale, dictionaries, type Dictionary, type Locale } from "@/i18n/dictionaries";
 
 type TranslationKey = string;
@@ -30,9 +30,17 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocale] = useState<Locale>(defaultLocale);
   const dictionary = dictionaries[locale];
 
+  useEffect(() => {
+    const saved = window.localStorage.getItem("geopilot.locale");
+    if (saved === "zh" || saved === "en") setLocale(saved);
+  }, []);
+
+  useEffect(() => { document.documentElement.lang = locale === "zh" ? "zh-CN" : "en"; }, [locale]);
+  const changeLocale = useCallback((next: Locale) => { setLocale(next); window.localStorage.setItem("geopilot.locale", next); }, []);
+
   const value = useMemo<I18nContextValue>(() => ({
     locale,
-    setLocale,
+    setLocale: changeLocale,
     dictionary,
     t: (key, values) => {
       const template = resolveValue(dictionary, key);
@@ -40,7 +48,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
       return Object.entries(values).reduce((text, [name, replacement]) => text.replaceAll(`{${name}}`, String(replacement)), template);
     },
-  }), [dictionary, locale]);
+  }), [changeLocale, dictionary, locale]);
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }

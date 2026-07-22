@@ -18,6 +18,32 @@ export async function getRealAISearchMonitoring(userId: string, projectId: strin
 export async function saveProviderConfig(userId: string, projectId: string, input: { provider: AISearchProviderType; enabled: boolean; apiKeyReference: string | null; model: string }) { if (!await realAISearchRepository.projectForUser(userId, projectId)) throw new RealAISearchError("PROJECT_FORBIDDEN", 403); const config = await realAISearchRepository.saveConfig(userId, projectId, input); if (!config) throw new RealAISearchError("PROJECT_FORBIDDEN", 403); return config; }
 export async function removeProviderConfig(userId: string, projectId: string, provider: AISearchProviderType) { if (!await realAISearchRepository.projectForUser(userId, projectId)) throw new RealAISearchError("PROJECT_FORBIDDEN", 403); return { deleted: await realAISearchRepository.deleteConfig(userId, projectId, provider) }; }
 
+export async function testProviderConnection(userId: string, projectId: string, providerType: AISearchProviderType) {
+  const project = await realAISearchRepository.projectForUser(userId, projectId);
+  if (!project) throw new RealAISearchError("PROJECT_FORBIDDEN", 403);
+  const config = await realAISearchRepository.internalConfig(userId, projectId, providerType);
+  if (!config || !config.enabled) throw new RealAISearchError("PROVIDER_DISABLED", 422);
+  const apiKey = resolveApiKey(config.apiKeyReference);
+  const provider = providerRegistry[providerType];
+  const health = await provider.check({ apiKey, model: String(config.model) });
+  if (!health.available || !apiKey) {
+    const code = health.reason ?? "API_KEY_REFERENCE_UNRESOLVED";
+    await realAISearchRepository.recordProviderTest(userId, projectId, providerType, "FAILED", code);
+    throw new RealAISearchError(code, 422);
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const response = await provider.query({ query: "Return only the word OK to verify this API connection.", intent: "TECHNICAL", targetEntity: String(project.targetEntity), industry: String(project.industry) }, { apiKey, model: String(config.model), signal: controller.signal });
+    await realAISearchRepository.recordProviderTest(userId, projectId, providerType, "SUCCEEDED", null);
+    return { provider: providerType, status: "SUCCEEDED" as const, requestId: response.requestId, testedAt: new Date().toISOString() };
+  } catch (error) {
+    const code = error instanceof DOMException && error.name === "AbortError" ? "PROVIDER_TIMEOUT" : errorCode(error);
+    await realAISearchRepository.recordProviderTest(userId, projectId, providerType, "FAILED", code);
+    throw new RealAISearchError(code, 422);
+  } finally { clearTimeout(timer); }
+}
+
 export async function executeRealAISearch(userId: string, input: { projectId: string; provider: AISearchProviderType; query: string; intent: AISearchIntent }) {
   enforceRateLimit(`${userId}:${input.projectId}`);
   const project = await realAISearchRepository.projectForUser(userId, input.projectId);

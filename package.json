@@ -22,6 +22,7 @@
     "test:growth-reports": "tsx --test src/features/growth-reports/*.test.ts",
     "test:growth-actions": "tsx --test src/features/growth-actions/*.test.ts",
     "test:growth-agent": "tsx --test src/features/growth-agent/*.test.ts",
+    "test:automation": "tsx --test src/features/automation/*.test.ts",
     "preview": "opennextjs-cloudflare preview",
     "start": "next start",
     "lint": "eslint",

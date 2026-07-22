@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Menu, Sparkles, X } from "lucide-react";
 import { accountNavItems, appConfig, mainNavSections, type NavItem } from "@/config/app";
 import { useI18n } from "@/i18n/provider";
@@ -80,9 +80,10 @@ export function Sidebar() {
 }
 
 export function MobileNav() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const touchStartX = useRef<number | null>(null);
 
   useEffect(() => {
     setOpen(false);
@@ -97,7 +98,7 @@ export function MobileNav() {
 
   return (
     <div className="flex items-center gap-3 lg:hidden">
-      <Button variant="outline" size="icon" aria-label="打开导航菜单" onClick={() => setOpen(true)}>
+      <Button variant="outline" size="icon" aria-label={locale === "zh" ? "打开导航菜单" : "Open navigation"} onClick={() => setOpen(true)}>
         <Menu className="h-4 w-4" />
       </Button>
       <div className="flex items-center gap-2">
@@ -110,7 +111,7 @@ export function MobileNav() {
       {open ? (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setOpen(false)} aria-hidden />
-          <div className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col border-r border-white/10 bg-background p-4">
+          <div className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] touch-pan-y flex-col border-r border-white/10 bg-background p-4" onTouchStart={event => { touchStartX.current = event.touches[0]?.clientX ?? null; }} onTouchEnd={event => { const start = touchStartX.current; const end = event.changedTouches[0]?.clientX; touchStartX.current = null; if (start !== null && end !== undefined && start - end > 64) setOpen(false); }}>
             <div className="mb-6 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
@@ -118,7 +119,7 @@ export function MobileNav() {
                 </div>
                 <span className="font-semibold">{t(appConfig.nameKey)}</span>
               </div>
-              <Button variant="ghost" size="icon" aria-label="关闭导航菜单" onClick={() => setOpen(false)}>
+              <Button variant="ghost" size="icon" aria-label={locale === "zh" ? "关闭导航菜单" : "Close navigation"} onClick={() => setOpen(false)}>
                 <X className="h-4 w-4" />
               </Button>
             </div>

@@ -16,6 +16,7 @@ const tabs = [
   { labelKey: "nav.optimization", path: "optimization" },
   { labelKey: "nav.growthActions", path: "growth/actions" },
   { labelKey: "nav.growthAgent", path: "growth/agent" },
+  { labelKey: "nav.automation", path: "automation" },
   { labelKey: "nav.growthReports", path: "reports" },
 ];
 

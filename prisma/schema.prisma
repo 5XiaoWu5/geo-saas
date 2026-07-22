@@ -192,6 +192,39 @@ enum GrowthAgentTaskStatus {
   VERIFIED
 }
 
+enum AutomationMode {
+  SAFE
+  STANDARD
+  EXPERT
+}
+
+enum AutomationRunStatus {
+  PREVIEW
+  AWAITING_APPROVAL
+  RUNNING
+  PAUSED
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum AutomationRiskLevel {
+  SAFE
+  INTERNAL_WRITE
+  EXTERNAL_COST
+  EXTERNAL_WRITE
+}
+
+enum AutomationStepStatus {
+  PENDING
+  AWAITING_APPROVAL
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+  CANCELLED
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -335,6 +368,8 @@ model Project {
   growthReports           GrowthReport[]
   growthActions           GrowthAction[]
   growthAgentTasks        GrowthAgentTask[]
+  automationRuns          AutomationRun[]
+  automationSteps         AutomationStep[]
 
   @@index([userId])
 }
@@ -472,6 +507,67 @@ model GrowthAgentTask {
   @@unique([projectId, actionId])
   @@index([projectId, status, createdAt])
   @@index([actionId])
+}
+
+model AutomationRun {
+  id             String              @id @default(cuid())
+  projectId      String
+  createdBy      String
+  mode           AutomationMode
+  status         AutomationRunStatus @default(PREVIEW)
+  progress       Int                 @default(0)
+  currentStepKey String?
+  beforeSnapshot Json                @default("{}")
+  afterSnapshot  Json?
+  summary        Json?
+  errorCode      String?
+  errorMessage   String?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  cancelledAt    DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  project Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  steps   AutomationStep[]
+
+  @@unique([id, projectId])
+  @@index([projectId, createdAt])
+  @@index([projectId, status, updatedAt])
+  @@index([createdBy, createdAt])
+}
+
+model AutomationStep {
+  id              String               @id @default(cuid())
+  runId           String
+  projectId       String
+  sequence        Int
+  stepKey         String
+  stepType        String
+  riskLevel       AutomationRiskLevel
+  status          AutomationStepStatus @default(PENDING)
+  title           String
+  activityMessage String
+  inputEvidence   Json                 @default("{}")
+  outputEvidence  Json?
+  approvalSummary Json?
+  approvedBy      String?
+  approvedAt      DateTime?
+  errorCode       String?
+  errorMessage    String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  durationMs      Int?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  run     AutomationRun @relation(fields: [runId, projectId], references: [id, projectId], onDelete: Cascade)
+  project Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, sequence])
+  @@unique([runId, stepKey])
+  @@index([projectId, status, createdAt])
+  @@index([runId, status, sequence])
 }
 
 model QueryTemplate {
@@ -902,6 +998,9 @@ model AISearchProviderConfig {
   enabled         Boolean              @default(false)
   apiKeyReference String?
   model           String
+  lastTestStatus  String?
+  lastTestError   String?
+  lastTestedAt    DateTime?
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 
