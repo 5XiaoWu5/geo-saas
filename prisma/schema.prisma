@@ -9,6 +9,7 @@ enum GrowthEventType {
   SIMULATION
   VISIBILITY
   OPTIMIZATION
+  AI_SEARCH
 }
 
 enum GrowthTriggerType {
@@ -116,6 +117,39 @@ enum AISearchExecutionStatus {
 enum AISearchCitationType {
   OFFICIAL
   THIRD_PARTY
+}
+
+enum MonitoringFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum MonitoringScheduleStatus {
+  ACTIVE
+  PAUSED
+}
+
+enum MonitoringHistoryStatus {
+  SUCCEEDED
+  FAILED
+  PARTIAL
+}
+
+enum NotificationType {
+  REAL_AI_VISIBILITY_DROP
+  REAL_AI_VISIBILITY_GAIN
+  CITATION_DROP
+  CITATION_INCREASE
+  RANKING_DROP
+  RANKING_IMPROVED
+  PROVIDER_FAILED
+}
+
+enum NotificationLevel {
+  HIGH
+  MEDIUM
+  LOW
 }
 
 datasource db {
@@ -255,6 +289,9 @@ model Project {
   aiSearchResults         AISearchResult[]
   aiSearchCitations       AISearchCitation[]
   aiSearchGrowthScores    AISearchGrowthScore[]
+  monitoringSchedule      MonitoringSchedule?
+  monitoringHistories     MonitoringHistory[]
+  notifications           Notification[]
 
   @@index([userId])
 }
@@ -334,7 +371,8 @@ model OptimizationTask {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  notifications Notification[]
 
   @@unique([projectId, issueId])
   @@index([projectId])
@@ -869,6 +907,69 @@ model AISearchGrowthScore {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, calculatedAt])
+}
+
+model MonitoringSchedule {
+  id        String                   @id @default(cuid())
+  projectId String                   @unique
+  enabled   Boolean                  @default(false)
+  frequency MonitoringFrequency      @default(DAILY)
+  dailyTime String                   @default("09:00")
+  timezone  String                   @default("Asia/Shanghai")
+  nextRunAt DateTime?
+  lastRunAt DateTime?
+  status    MonitoringScheduleStatus @default(PAUSED)
+  createdAt DateTime                 @default(now())
+  updatedAt DateTime                 @updatedAt
+
+  project   Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  histories MonitoringHistory[]
+
+  @@index([enabled, nextRunAt])
+}
+
+model MonitoringHistory {
+  id           String                  @id @default(cuid())
+  projectId    String
+  scheduleId   String?
+  provider     AISearchProviderType
+  status       MonitoringHistoryStatus
+  startedAt    DateTime
+  endedAt      DateTime?
+  successCount Int                     @default(0)
+  failedCount  Int                     @default(0)
+  durationMs   Int?
+  errorMessage String?
+  resultCount  Int                     @default(0)
+  resultIds    Json                    @default("[]")
+  createdAt    DateTime                @default(now())
+
+  project  Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  schedule MonitoringSchedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+  @@index([projectId, provider, status])
+}
+
+model Notification {
+  id                 String            @id @default(cuid())
+  projectId          String
+  optimizationTaskId String?
+  type               NotificationType
+  title              String
+  content            String
+  level              NotificationLevel
+  isRead             Boolean           @default(false)
+  sourceKey          String
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  optimizationTask OptimizationTask? @relation(fields: [optimizationTaskId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, sourceKey])
+  @@index([projectId, isRead, createdAt])
+  @@index([optimizationTaskId])
 }
 
 model GrowthSnapshot {

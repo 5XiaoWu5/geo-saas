@@ -16,6 +16,8 @@
     "check:real-ai-search-provider": "node scripts/check-real-ai-search-provider.mjs",
     "check:ai-search-growth": "node scripts/check-ai-search-growth.mjs",
     "test:ai-search-growth": "tsx --test src/features/ai-search-growth/*.test.ts",
+    "check:monitoring-automation": "node scripts/check-monitoring-automation.mjs",
+    "test:monitoring-automation": "tsx --test src/features/monitoring-automation/*.test.ts",
     "preview": "opennextjs-cloudflare preview",
     "start": "next start",
     "lint": "eslint",

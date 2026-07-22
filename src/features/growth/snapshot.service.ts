@@ -3,6 +3,7 @@ import { buildVisibilityAnalytics } from "@/features/visibility/analytics";
 import { toVisibilityCampaign, toVisibilityCheck, toVisibilityPrompt } from "@/features/visibility/mapper";
 import { buildGrowthMetrics, calculateEntityCompleteness } from "./score-history";
 import { GROWTH_EVENT_TYPES, GROWTH_TRIGGER_TYPES, type CreateGrowthSnapshotInput, type GrowthSnapshot } from "./types";
+import { realAISearchDatabase } from "@/features/real-ai-search/database";
 
 export class GrowthServiceError extends Error {
   constructor(message: string, readonly status: number) {
@@ -68,6 +69,11 @@ async function validateSource(userId: string, input: CreateGrowthSnapshotInput) 
     if (!campaign || String(campaign.projectId) !== input.projectId) throw new GrowthServiceError("GROWTH_SOURCE_NOT_FOUND", 404);
     const geoCampaign = await prisma.geoCampaign.findFirstForUser({ where: { id: String(campaign.id), userId } });
     return { campaignId: geoCampaign && String(geoCampaign.projectId) === input.projectId ? String(geoCampaign.id) : null, simulationId: null, metadata: { visibilityCampaignId: campaign.id, provider: check.provider, prompt: check.prompt, mentioned: check.brandMentioned } };
+  }
+  if (input.eventType === "AI_SEARCH") {
+    const result = (await realAISearchDatabase().query('SELECT result."id", result."provider", result."status", result."mentioned", result."rankPosition" FROM "AISearchResult" result INNER JOIN "Project" p ON p."id" = result."projectId" WHERE result."id" = $1 AND result."projectId" = $2 AND p."userId" = $3 LIMIT 1', [input.sourceId, input.projectId, userId]))[0];
+    if (!result) throw new GrowthServiceError("GROWTH_SOURCE_NOT_FOUND", 404);
+    return { campaignId: null, simulationId: null, metadata: { aiSearchResultId: result.id, provider: result.provider, status: result.status, mentioned: result.mentioned, rankPosition: result.rankPosition } };
   }
   const task = await prisma.optimizationTask.findById({ where: { id: input.sourceId, userId } });
   if (!task || String(task.projectId) !== input.projectId || String(task.status) !== "COMPLETED") throw new GrowthServiceError("GROWTH_SOURCE_NOT_FOUND", 404);

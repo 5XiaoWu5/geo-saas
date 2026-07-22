@@ -2,6 +2,7 @@ import { providerRegistry } from "./provider-adapters";
 import { jsonArray } from "./database";
 import { realAISearchRepository } from "./repository";
 import type { AISearchIntent, AISearchProviderType } from "./types";
+import { recordMonitoringFailure, recordMonitoringSuccess } from "@/features/monitoring-automation";
 
 export class RealAISearchError extends Error { constructor(public code: string, public status: number) { super(code); } }
 const rateWindows = new Map<string, number[]>();
@@ -23,8 +24,8 @@ export async function executeRealAISearch(userId: string, input: { projectId: st
   if (!project) throw new RealAISearchError("PROJECT_FORBIDDEN", 403);
   const pending = await realAISearchRepository.createPending(userId, { ...input, targetEntity: String(project.targetEntity), industry: String(project.industry) });
   if (!pending) throw new RealAISearchError("PROJECT_FORBIDDEN", 403);
-  const started = Date.now(); let attempts = 0;
-  const fail = async (code: string) => { await realAISearchRepository.markFailed(userId, input.projectId, pending.resultId, code, Date.now() - started, attempts); throw new RealAISearchError(code, 422); };
+  const startedAt = new Date(); const started = startedAt.getTime(); let attempts = 0;
+  const fail = async (code: string) => { const endedAt = new Date(); const durationMs = endedAt.getTime() - started; await realAISearchRepository.markFailed(userId, input.projectId, pending.resultId, code, durationMs, attempts); try { await recordMonitoringFailure(userId, { projectId: input.projectId, provider: input.provider, resultId: pending.resultId, startedAt, endedAt, durationMs, errorCode: code }); } catch (automationError) { console.error("[MONITORING AUTOMATION FAILURE]", automationError); } throw new RealAISearchError(code, 422); };
   const config = await realAISearchRepository.internalConfig(userId, input.projectId, input.provider);
   if (!config || !config.enabled) return fail("PROVIDER_DISABLED");
   const apiKey = resolveApiKey(config.apiKeyReference);
@@ -43,5 +44,7 @@ export async function executeRealAISearch(userId: string, input: { projectId: st
   await realAISearchRepository.markSucceeded(userId, input.projectId, pending.resultId, response, parsed, Date.now() - started, attempts);
   await realAISearchRepository.syncVisibility(userId, input.projectId, { provider: input.provider, query: input.query, answer: response.text, parsed });
   if (!parsed.mentioned) await realAISearchRepository.syncGapTask(userId, input.projectId, input.provider);
+  const endedAt = new Date();
+  try { await recordMonitoringSuccess(userId, { projectId: input.projectId, provider: input.provider, resultId: pending.resultId, startedAt, endedAt, durationMs: endedAt.getTime() - started }); } catch (automationError) { console.error("[MONITORING AUTOMATION SUCCESS]", automationError); }
   return getRealAISearchMonitoring(userId, input.projectId);
 }

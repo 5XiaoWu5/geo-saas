@@ -18,6 +18,7 @@ import type { GrowthOpportunity } from "@/features/growth-engine/types";
 import { getHostname } from "@/lib/format";
 import type { AISearchIntelligenceResponse } from "@/features/ai-search-intelligence";
 import type { AISearchGrowthResponse } from "@/features/ai-search-growth";
+import type { MonitoringCenterResponse } from "@/features/monitoring-automation/types";
 
 type AnalysisSummary = { totalScore: number; entityScore: number; schemaScore: number; technicalScore: number; contentScore: number; createdAt: string };
 type OptimizationSummary = { tasks: OptimizationTask[]; issues: GeoIssue[]; analysis: AnalysisSummary | null };
@@ -31,6 +32,7 @@ type DashboardData = {
   competitors: CompetitorWorkspaceResponse | null;
   aiIntelligence: AISearchIntelligenceResponse | null;
   aiGrowth: AISearchGrowthResponse | null;
+  monitoring: MonitoringCenterResponse | null;
 };
 
 async function readJson<T>(response: Response): Promise<T> {
@@ -46,8 +48,8 @@ async function loadDashboard(): Promise<DashboardData> {
     fetch("/api/knowledge", { cache: "no-store" }).then(readJson<KnowledgeOverviewResponse>),
   ]);
   const projectId = projectResult.projects[0]?.id;
-  if (!projectId) return { projects: projectResult.projects, knowledge, optimization: null, growth: null, assessment: null, benchmark: null, competitors: null, aiIntelligence: null, aiGrowth: null };
-  const [optimization, growth, assessment, benchmark, competitors, aiIntelligence, aiGrowth] = await Promise.all([
+  if (!projectId) return { projects: projectResult.projects, knowledge, optimization: null, growth: null, assessment: null, benchmark: null, competitors: null, aiIntelligence: null, aiGrowth: null, monitoring: null };
+  const [optimization, growth, assessment, benchmark, competitors, aiIntelligence, aiGrowth, monitoring] = await Promise.all([
     fetch(`/api/projects/${projectId}/optimization`, { cache: "no-store" }).then(readJson<OptimizationSummary>),
     fetch(`/api/growth?projectId=${encodeURIComponent(projectId)}&range=30d`, { cache: "no-store" }).then(readJson<GrowthWorkspaceResponse>),
     fetch(`/api/knowledge/${projectId}/assessment`, { cache: "no-store" }).then(readJson<KnowledgeAssessment>),
@@ -55,8 +57,9 @@ async function loadDashboard(): Promise<DashboardData> {
     fetch(`/api/competitors?projectId=${encodeURIComponent(projectId)}`, { cache: "no-store" }).then(readJson<CompetitorWorkspaceResponse>),
     fetch(`/api/ai-search-intelligence/${projectId}`, { cache: "no-store" }).then(readJson<AISearchIntelligenceResponse>),
     fetch(`/api/ai-search-growth/${projectId}`, { cache: "no-store" }).then(readJson<AISearchGrowthResponse>),
+    fetch(`/api/ai-search-monitoring/${projectId}`, { cache: "no-store" }).then(readJson<MonitoringCenterResponse>),
   ]);
-  return { projects: projectResult.projects, knowledge, optimization, growth, assessment, benchmark, competitors, aiIntelligence, aiGrowth };
+  return { projects: projectResult.projects, knowledge, optimization, growth, assessment, benchmark, competitors, aiIntelligence, aiGrowth, monitoring };
 }
 
 export default function DashboardPage() {
@@ -81,6 +84,7 @@ export default function DashboardPage() {
         <ProjectPulse project={project} analysis={data.optimization.analysis} knowledgeScore={data.assessment?.completeness ?? knowledgeSummary?.knowledgeBase?.completenessScore ?? null} opportunityCount={opportunities.filter((item) => !item.trackedTaskId).length} tasks={data.optimization.tasks} benchmark={data.benchmark} />
         <AIRecommendationReadiness project={project} intelligence={data.aiIntelligence} />
         <EnterpriseAIGrowthHealth project={project} growth={data.aiGrowth} opportunityCount={opportunities.length} />
+        <MonitoringPulse project={project} monitoring={data.monitoring} />
         <section className="grid gap-5 xl:grid-cols-3">
           <SeoStatus project={project} analysis={data.optimization.analysis} issues={data.optimization.issues} />
           <AiSearchStatus project={project} analysis={data.optimization.analysis} knowledgeScore={data.assessment?.completeness ?? null} benchmark={data.benchmark} growth={data.growth} />
@@ -94,6 +98,16 @@ export default function DashboardPage() {
       </> : null}
     </div>
   );
+}
+
+function MonitoringPulse({ project, monitoring }: { project: Project; monitoring: MonitoringCenterResponse | null }) {
+  const items = [
+    ["最近一次检测", monitoring?.summary.lastCheckAt ? new Date(monitoring.summary.lastCheckAt).toLocaleString("zh-CN") : "unavailable"],
+    ["最近下降", String(monitoring?.summary.recentDrops ?? 0)],
+    ["最近提升", String(monitoring?.summary.recentImprovements ?? 0)],
+    ["待处理变化", String(monitoring?.summary.pendingChanges ?? 0)],
+  ] as const;
+  return <Card className="glass-panel overflow-hidden border-amber-300/20"><CardContent className="grid gap-4 p-5 lg:grid-cols-[0.72fr_0.28fr]"><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{items.map(([label, value]) => <div key={label} className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.025] p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-2 break-words text-lg font-semibold">{value}</p></div>)}</div><div className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.04] p-4"><p className="text-sm font-medium text-amber-200">Top Alert</p><p className="mt-2 break-words text-sm font-semibold">{monitoring?.summary.topAlert?.title ?? "unavailable"}</p><Button asChild variant="outline" className="mt-4 min-h-11 w-full"><Link href={`/projects/${project.id}/geo/monitoring-center`}>进入持续监控中心 <ArrowRight className="h-4 w-4" /></Link></Button></div></CardContent></Card>;
 }
 
 function EnterpriseAIGrowthHealth({ project, growth, opportunityCount }: { project: Project; growth: AISearchGrowthResponse | null; opportunityCount: number }) {

@@ -1,6 +1,6 @@
 import type { GeoCampaignProject } from "@/features/geo-campaign/types";
 
-export const GROWTH_EVENT_TYPES = ["SCAN", "ENTITY", "SIMULATION", "VISIBILITY", "OPTIMIZATION"] as const;
+export const GROWTH_EVENT_TYPES = ["SCAN", "ENTITY", "SIMULATION", "VISIBILITY", "OPTIMIZATION", "AI_SEARCH"] as const;
 export type GrowthEventType = (typeof GROWTH_EVENT_TYPES)[number];
 
 export const GROWTH_TRIGGER_TYPES = ["MANUAL", "AUTO", "SCHEDULE", "API"] as const;
@@ -74,4 +74,3 @@ export type CreateGrowthSnapshotInput = {
   sourceId: string;
   triggerType?: GrowthTriggerType;
 };
-

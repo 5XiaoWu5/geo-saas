@@ -100,7 +100,7 @@ export function OptimizationWorkspace({ initialProjectId, initialIssueId }: { in
     processing: tasks.filter((task) => task.status === "PROCESSING").length,
     completed: tasks.filter((task) => task.status === "COMPLETED").length,
   };
-  const aiRoadmap = tasks.filter((task) => task.issueId.startsWith("growth:REAL_AI_VISIBILITY_GAP") || task.issueId.startsWith("growth:AI_RECOMMENDATION_GAP") || task.issueId.startsWith("growth:KNOWLEDGE_GAP") || task.issueId.startsWith("growth:BENCHMARK_GAP") || task.issueId.startsWith("benchmark:")).sort((left, right) => severityRank(left.severity) - severityRank(right.severity) || statusRank(left.status) - statusRank(right.status)).slice(0, 10);
+  const aiRoadmap = tasks.filter((task) => task.issueId.startsWith("growth:REAL_AI_VISIBILITY_GAP") || task.issueId.startsWith("growth:REAL_AI_VISIBILITY_DROP") || task.issueId.startsWith("growth:RANKING_DROP") || task.issueId.startsWith("growth:CITATION_DROP") || task.issueId.startsWith("growth:AI_RECOMMENDATION_GAP") || task.issueId.startsWith("growth:KNOWLEDGE_GAP") || task.issueId.startsWith("growth:BENCHMARK_GAP") || task.issueId.startsWith("benchmark:")).sort((left, right) => severityRank(left.severity) - severityRank(right.severity) || statusRank(left.status) - statusRank(right.status)).slice(0, 10);
 
   useEffect(() => {
     if (!initialIssueId || !tasks.some((task) => task.issueId === initialIssueId)) return;
@@ -217,6 +217,7 @@ function InfoBlock({ label, value }: { label: string; value: string }) {
 }
 
 function taskSourceLabel(task: OptimizationTask) {
+  if (task.category === "ai_monitoring" || task.issueId.startsWith("growth:REAL_AI_VISIBILITY_DROP") || task.issueId.startsWith("growth:RANKING_DROP") || task.issueId.startsWith("growth:CITATION_DROP")) return "AI 持续监控";
   if (task.issueId.startsWith("growth:REAL_AI_VISIBILITY_GAP") || task.category === "real_ai_visibility") return "真实 AI 可见性";
   if (task.issueId.startsWith("growth:AI_RECOMMENDATION_GAP") || task.category === "ai_recommendation") return "AI 推荐诊断";
   if (task.issueId.startsWith("growth:KNOWLEDGE_GAP") || task.category === "knowledge") return "知识评估";

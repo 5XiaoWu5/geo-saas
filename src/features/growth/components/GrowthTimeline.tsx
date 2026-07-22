@@ -1,11 +1,11 @@
-import { Building2, CheckCircle2, Eye, FlaskConical, ScanSearch } from "lucide-react";
+import { Building2, CheckCircle2, Eye, FlaskConical, ScanSearch, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useI18n } from "@/i18n/provider";
 import { formatDateTime } from "@/lib/format";
 import type { GrowthEventType, GrowthSnapshot } from "../types";
 
-const ICONS = { SCAN: ScanSearch, ENTITY: Building2, SIMULATION: FlaskConical, VISIBILITY: Eye, OPTIMIZATION: CheckCircle2 } satisfies Record<GrowthEventType, typeof ScanSearch>;
+const ICONS = { SCAN: ScanSearch, ENTITY: Building2, SIMULATION: FlaskConical, VISIBILITY: Eye, OPTIMIZATION: CheckCircle2, AI_SEARCH: Sparkles } satisfies Record<GrowthEventType, typeof ScanSearch>;
 
 export function GrowthTimeline({ snapshots }: { snapshots: GrowthSnapshot[] }) {
   const { t } = useI18n();
@@ -44,4 +44,3 @@ function TimelineItem({ snapshot }: { snapshot: GrowthSnapshot }) {
     </div>
   );
 }
-
