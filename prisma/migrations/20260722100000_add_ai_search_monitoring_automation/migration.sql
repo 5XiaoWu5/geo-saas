@@ -1,4 +1,16 @@
-ALTER TYPE "GrowthEventType" ADD VALUE IF NOT EXISTS 'AI_SEARCH';
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'GrowthEventType') THEN
+        ALTER TYPE "GrowthEventType" ADD VALUE IF NOT EXISTS 'AI_SEARCH';
+    ELSE
+        EXECUTE 'CREATE TYPE "GrowthEventType" AS ENUM (''SCAN'', ''ENTITY'', ''SIMULATION'', ''VISIBILITY'', ''OPTIMIZATION'', ''AI_SEARCH'')';
+        EXECUTE 'CREATE CAST ("GrowthEventType" AS text) WITH INOUT AS IMPLICIT';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'GrowthTriggerType') THEN
+        EXECUTE 'CREATE TYPE "GrowthTriggerType" AS ENUM (''MANUAL'', ''AUTO'', ''SCHEDULE'', ''API'')';
+        EXECUTE 'CREATE CAST ("GrowthTriggerType" AS text) WITH INOUT AS IMPLICIT';
+    END IF;
+END $$;
 
 CREATE TYPE "MonitoringFrequency" AS ENUM ('DAILY', 'WEEKLY', 'MONTHLY');
 CREATE TYPE "MonitoringScheduleStatus" AS ENUM ('ACTIVE', 'PAUSED');

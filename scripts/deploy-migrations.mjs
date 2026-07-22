@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 
 const baselineMigration = "20260718080000_existing_schema_baseline";
+const recoverableMigration = "20260722100000_add_ai_search_monitoring_automation";
 
 function prisma(args) {
   return spawnSync("prisma", args, {
@@ -22,6 +23,15 @@ if ((deployment.status ?? 1) === 0) {
 }
 
 const output = `${deployment.stdout ?? ""}\n${deployment.stderr ?? ""}`;
+if (output.includes("P3009") && output.includes(recoverableMigration)) {
+  console.log(`Recovering the known failed migration ${recoverableMigration}.`);
+  const rollback = prisma(["migrate", "resolve", "--rolled-back", recoverableMigration]);
+  print(rollback);
+  if ((rollback.status ?? 1) !== 0) process.exit(rollback.status ?? 1);
+  deployment = prisma(["migrate", "deploy"]);
+  print(deployment);
+  process.exit(deployment.status ?? 1);
+}
 if (!output.includes("P3005")) {
   print(deployment);
   process.exit(deployment.status ?? 1);
