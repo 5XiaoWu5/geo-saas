@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useI18n } from "@/i18n/provider";
 import type { GeoIssue } from "@/features/geo-analysis/types";
 import type { GrowthWorkspaceProject } from "@/features/growth/types";
-import type { KnowledgeAssessment } from "@/features/knowledge/types";
+import type { KnowledgeAssessment, KnowledgeIntelligenceResponse } from "@/features/knowledge/types";
 import type { BenchmarkOverviewResponse } from "@/features/competitor-benchmark/types";
 
 type AnalysisSummary = { technicalScore: number; schemaScore: number; contentScore: number };
@@ -33,11 +33,11 @@ export function GrowthCenterSummary({ project }: { project: GrowthWorkspaceProje
     setError("");
     void Promise.all([
       fetch(`/api/projects/${project.id}/optimization`, { cache: "no-store" }).then(readJson<{ analysis: AnalysisSummary | null; issues: GeoIssue[] }>),
-      fetch(`/api/knowledge/${project.id}/assessment`, { cache: "no-store" }).then(readJson<KnowledgeAssessment>),
+      fetch(`/api/knowledge/${project.id}/assessment`, { cache: "no-store" }).then(readJson<KnowledgeIntelligenceResponse>),
       fetch(`/api/benchmark?projectId=${encodeURIComponent(project.id)}`, { cache: "no-store" }).then(readJson<BenchmarkOverviewResponse>),
     ]).then(([optimization, knowledge, benchmark]) => {
       if (!active) return;
-      setData({ analysis: optimization.analysis, issues: optimization.issues, knowledge, benchmark });
+      setData({ analysis: optimization.analysis, issues: optimization.issues, knowledge: knowledge.assessment, benchmark });
     }).catch((requestError) => { if (active) setError(requestError instanceof Error ? requestError.message : "增长总览加载失败"); });
     return () => { active = false; };
   }, [project.id]);
