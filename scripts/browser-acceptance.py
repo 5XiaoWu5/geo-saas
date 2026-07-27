@@ -182,13 +182,14 @@ def provider_interactions(page: Page, project_id: str, evidence: dict[str, Any])
 
 def automation_interaction(page: Page, project_id: str, evidence: dict[str, Any]) -> None:
     page.goto(f"{BASE_URL}/projects/{project_id}/automation", wait_until="domcontentloaded")
+    page.wait_for_load_state("networkidle", timeout=15_000)
     page.get_by_role("button", name=re.compile("Standard Mode|标准模式")).click()
     with page.expect_response(lambda response: response.url.endswith("/automation/preview") and response.request.method == "POST") as preview:
         page.get_by_role("button", name=re.compile("生成预演|Create preview")).click()
     if preview.value.status != 200:
         raise AssertionError(f"AUTOMATION_PREVIEW_{preview.value.status}")
     with page.expect_response(lambda response: response.url.endswith("/start") and response.request.method == "POST") as started:
-        page.get_by_role("button", name=re.compile("确认并开始|Confirm and start")).click()
+        page.get_by_role("button", name=re.compile("确认开始|Confirm and start")).click()
     if started.value.status != 200:
         raise AssertionError(f"AUTOMATION_START_{started.value.status}")
     page.wait_for_timeout(1_500)
@@ -201,10 +202,16 @@ def automation_interaction(page: Page, project_id: str, evidence: dict[str, Any]
 
 def locale_and_tooltip(page: Page, project_id: str, evidence: dict[str, Any]) -> None:
     page.goto(f"{BASE_URL}/projects/{project_id}/geo/command-center", wait_until="domcontentloaded")
-    switch = page.get_by_role("button", name="Switch to English")
+    page.wait_for_load_state("networkidle", timeout=15_000)
+    page.wait_for_function(
+        """() => !document.body.innerText.includes('正在加载会话')
+          && !document.body.innerText.includes('Loading session')""",
+        timeout=15_000,
+    )
+    switch = page.get_by_role("button", name=re.compile(r"^English$|^Switch to English$"))
     if switch.count():
-        switch.click()
-        page.wait_for_timeout(200)
+        switch.last.click()
+        page.get_by_text("AI Search Command Center", exact=True).wait_for()
     evidence["englishTitle"] = page.get_by_text("AI Search Command Center", exact=True).count() > 0
     help_button = page.locator('button[aria-label$=" help"]').first
     if help_button.count():
@@ -214,13 +221,18 @@ def locale_and_tooltip(page: Page, project_id: str, evidence: dict[str, Any]) ->
         page.keyboard.press("Escape")
     else:
         evidence["tooltipOpened"] = False
-    switch_back = page.get_by_role("button", name="切换到中文")
+    switch_back = page.get_by_role("button", name=re.compile(r"^中文$|^切换到中文$"))
     if switch_back.count():
-        switch_back.click()
-        page.wait_for_timeout(200)
+        switch_back.last.click()
+        page.get_by_text("AI 搜索增长驾驶舱", exact=True).wait_for()
     evidence["chineseTitle"] = page.get_by_text("AI 搜索增长驾驶舱", exact=True).count() > 0
     if not all((evidence["englishTitle"], evidence["tooltipOpened"], evidence["chineseTitle"])):
-        raise AssertionError("LOCALE_OR_TOOLTIP_FAILED")
+        page.screenshot(path=str(ARTIFACT_DIR / "locale-debug.png"), full_page=True)
+        raise AssertionError(
+            "LOCALE_OR_TOOLTIP_FAILED_"
+            f"{evidence['englishTitle']}_{evidence['tooltipOpened']}_{evidence['chineseTitle']}_"
+            f"{page.url}_{page.locator('body').inner_text()[:240]!r}"
+        )
 
 
 def viewport_acceptance(context: BrowserContext, project_id: str, results: dict[str, Any]) -> None:
