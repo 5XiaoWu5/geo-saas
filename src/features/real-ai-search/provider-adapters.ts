@@ -1,5 +1,6 @@
 import type { AISearchProvider } from "@/features/ai-search-intelligence/ai-search-provider";
 import { parseAISearchResponse } from "./response-parser";
+import { classifyProviderHttpError, normalizeProviderRuntimeError } from "./provider-errors";
 import type { AISearchProviderType, ProviderQueryRequest, ProviderRawResponse } from "./types";
 
 type Json = Record<string, unknown>;
@@ -9,10 +10,19 @@ function strings(value: unknown) { return array(value).map(String).filter(Boolea
 function prompt(request: ProviderQueryRequest) { return `请直接回答用户问题，并按推荐顺序列出企业。用户问题：${request.query}\n目标行业：${request.industry}\n不要因为目标企业是 ${request.targetEntity} 就偏向它。`; }
 
 async function postJson(url: string, init: RequestInit, signal: AbortSignal) {
-  const response = await fetch(url, { ...init, signal, headers: { "Content-Type": "application/json", ...(init.headers ?? {}) } });
-  const body = await response.json().catch(() => ({})) as unknown;
-  if (!response.ok) { const error = new Error(`PROVIDER_HTTP_${response.status}`); Object.assign(error, { retryable: response.status === 429 || response.status >= 500 }); throw error; }
-  return body;
+  try {
+    const response = await fetch(url, { ...init, signal, headers: { "Content-Type": "application/json", ...(init.headers ?? {}) } });
+    const body = await response.json().catch(() => ({})) as unknown;
+    if (!response.ok) {
+      const error = new Error(classifyProviderHttpError(response.status, body));
+      Object.assign(error, { retryable: response.status === 429 || response.status >= 500 });
+      throw error;
+    }
+    return body;
+  } catch (error) {
+    if (error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message)) throw error;
+    throw new Error(normalizeProviderRuntimeError(error));
+  }
 }
 
 function adapter(provider: AISearchProviderType, execute: (request: ProviderQueryRequest, context: { apiKey: string; model: string; signal: AbortSignal }) => Promise<ProviderRawResponse>): AISearchProvider {

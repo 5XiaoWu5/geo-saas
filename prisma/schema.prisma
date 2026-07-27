@@ -992,17 +992,22 @@ model SimulationEvaluationProfile {
 }
 
 model AISearchProviderConfig {
-  id              String               @id @default(cuid())
-  projectId       String
-  provider        AISearchProviderType
-  enabled         Boolean              @default(false)
-  apiKeyReference String?
-  model           String
-  lastTestStatus  String?
-  lastTestError   String?
-  lastTestedAt    DateTime?
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
+  id                String               @id @default(cuid())
+  projectId         String
+  provider          AISearchProviderType
+  enabled           Boolean              @default(false)
+  apiKeyReference   String?
+  encryptedApiKey   String?
+  apiKeyIv          String?
+  apiKeyAuthTag     String?
+  apiKeyHint        String?
+  secretVersion     Int                  @default(1)
+  model             String
+  lastTestStatus    String?
+  lastTestError     String?
+  lastTestedAt      DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 

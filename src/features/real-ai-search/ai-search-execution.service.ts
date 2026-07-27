@@ -1,4 +1,6 @@
 import { providerRegistry } from "./provider-adapters";
+import { normalizeProviderRuntimeError } from "./provider-errors";
+import { decryptProviderApiKey, encryptProviderApiKey } from "./provider-secret";
 import { jsonArray } from "./database";
 import { realAISearchRepository } from "./repository";
 import type { AISearchIntent, AISearchProviderType } from "./types";
@@ -10,36 +12,72 @@ const TIMEOUT_MS = 20_000;
 const MAX_ATTEMPTS = 2;
 
 function enforceRateLimit(key: string) { const now = Date.now(); const recent = (rateWindows.get(key) ?? []).filter((time) => now - time < 60_000); if (recent.length >= 10) throw new RealAISearchError("AI_SEARCH_RATE_LIMITED", 429); recent.push(now); rateWindows.set(key, recent); }
-function resolveApiKey(reference: unknown) { if (typeof reference !== "string" || !/^env:[A-Z][A-Z0-9_]{1,127}$/.test(reference)) return null; return process.env[reference.slice(4)]?.trim() || null; }
+function resolveApiKey(config: Record<string, unknown>, projectId: string, provider: AISearchProviderType) {
+  const encrypted = decryptProviderApiKey(config, projectId, provider);
+  if (encrypted) return encrypted;
+  const reference = config.apiKeyReference;
+  if (typeof reference !== "string" || !/^env:[A-Z][A-Z0-9_]{1,127}$/.test(reference)) return null;
+  return process.env[reference.slice(4)]?.trim() || null;
+}
 function errorCode(error: unknown) { const value = error instanceof Error ? error.message : "PROVIDER_REQUEST_FAILED"; return /^[A-Z0-9_:-]{3,120}$/.test(value) ? value.replace(/:/g, "_") : "PROVIDER_REQUEST_FAILED"; }
 function retryable(error: unknown) { return Boolean(error && typeof error === "object" && "retryable" in error && (error as { retryable?: boolean }).retryable); }
 
 export async function getRealAISearchMonitoring(userId: string, projectId: string) { const data = await realAISearchRepository.monitoring(userId, projectId); if (!data) throw new RealAISearchError("PROJECT_FORBIDDEN", 403); return data; }
-export async function saveProviderConfig(userId: string, projectId: string, input: { provider: AISearchProviderType; enabled: boolean; apiKeyReference: string | null; model: string }) { if (!await realAISearchRepository.projectForUser(userId, projectId)) throw new RealAISearchError("PROJECT_FORBIDDEN", 403); const config = await realAISearchRepository.saveConfig(userId, projectId, input); if (!config) throw new RealAISearchError("PROJECT_FORBIDDEN", 403); return config; }
+export async function saveProviderConfig(userId: string, projectId: string, input: {
+  provider: AISearchProviderType;
+  enabled: boolean;
+  apiKeyReference: string | null;
+  apiKey?: string;
+  model: string;
+}) {
+  if (!await realAISearchRepository.projectForUser(userId, projectId)) throw new RealAISearchError("PROJECT_FORBIDDEN", 403);
+  let encryptedSecret = null;
+  if (input.apiKey) {
+    try {
+      encryptedSecret = encryptProviderApiKey(input.apiKey, projectId, input.provider);
+    } catch (error) {
+      throw new RealAISearchError(normalizeProviderRuntimeError(error), 503);
+    }
+  }
+  const config = await realAISearchRepository.saveConfig(userId, projectId, { ...input, encryptedSecret });
+  if (!config) throw new RealAISearchError("PROJECT_FORBIDDEN", 403);
+  return config;
+}
 export async function removeProviderConfig(userId: string, projectId: string, provider: AISearchProviderType) { if (!await realAISearchRepository.projectForUser(userId, projectId)) throw new RealAISearchError("PROJECT_FORBIDDEN", 403); return { deleted: await realAISearchRepository.deleteConfig(userId, projectId, provider) }; }
 
-export async function testProviderConnection(userId: string, projectId: string, providerType: AISearchProviderType) {
+export async function testProviderConnection(userId: string, projectId: string, providerType: AISearchProviderType, direct?: { apiKey?: string; model?: string }) {
   const project = await realAISearchRepository.projectForUser(userId, projectId);
   if (!project) throw new RealAISearchError("PROJECT_FORBIDDEN", 403);
   const config = await realAISearchRepository.internalConfig(userId, projectId, providerType);
-  if (!config || !config.enabled) throw new RealAISearchError("PROVIDER_DISABLED", 422);
-  const apiKey = resolveApiKey(config.apiKeyReference);
+  if (!direct?.apiKey && (!config || !config.enabled)) throw new RealAISearchError("PROVIDER_DISABLED", 422);
+  let apiKey = direct?.apiKey?.trim() || null;
+  if (!apiKey && config) {
+    try {
+      apiKey = resolveApiKey(config, projectId, providerType);
+    } catch (error) {
+      const code = normalizeProviderRuntimeError(error);
+      console.error("[AI_PROVIDER_TEST]", { provider: providerType, code });
+      throw new RealAISearchError(code, 503);
+    }
+  }
   const provider = providerRegistry[providerType];
-  const health = await provider.check({ apiKey, model: String(config.model) });
+  const model = direct?.model?.trim() || String(config?.model ?? "");
+  const health = await provider.check({ apiKey, model });
   if (!health.available || !apiKey) {
     const code = health.reason ?? "API_KEY_REFERENCE_UNRESOLVED";
-    await realAISearchRepository.recordProviderTest(userId, projectId, providerType, "FAILED", code);
+    if (config) await realAISearchRepository.recordProviderTest(userId, projectId, providerType, "FAILED", code);
     throw new RealAISearchError(code, 422);
   }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    const response = await provider.query({ query: "Return only the word OK to verify this API connection.", intent: "TECHNICAL", targetEntity: String(project.targetEntity), industry: String(project.industry) }, { apiKey, model: String(config.model), signal: controller.signal });
-    await realAISearchRepository.recordProviderTest(userId, projectId, providerType, "SUCCEEDED", null);
+    const response = await provider.query({ query: "Return only the word OK to verify this API connection.", intent: "TECHNICAL", targetEntity: String(project.targetEntity), industry: String(project.industry) }, { apiKey, model, signal: controller.signal });
+    if (config) await realAISearchRepository.recordProviderTest(userId, projectId, providerType, "SUCCEEDED", null);
     return { provider: providerType, status: "SUCCEEDED" as const, requestId: response.requestId, testedAt: new Date().toISOString() };
   } catch (error) {
-    const code = error instanceof DOMException && error.name === "AbortError" ? "PROVIDER_TIMEOUT" : errorCode(error);
-    await realAISearchRepository.recordProviderTest(userId, projectId, providerType, "FAILED", code);
+    const code = normalizeProviderRuntimeError(error);
+    console.error("[AI_PROVIDER_TEST]", { provider: providerType, code });
+    if (config) await realAISearchRepository.recordProviderTest(userId, projectId, providerType, "FAILED", code);
     throw new RealAISearchError(code, 422);
   } finally { clearTimeout(timer); }
 }
@@ -54,7 +92,12 @@ export async function executeRealAISearch(userId: string, input: { projectId: st
   const fail = async (code: string) => { const endedAt = new Date(); const durationMs = endedAt.getTime() - started; await realAISearchRepository.markFailed(userId, input.projectId, pending.resultId, code, durationMs, attempts); try { await recordMonitoringFailure(userId, { projectId: input.projectId, provider: input.provider, resultId: pending.resultId, startedAt, endedAt, durationMs, errorCode: code }); } catch (automationError) { console.error("[MONITORING AUTOMATION FAILURE]", automationError); } throw new RealAISearchError(code, 422); };
   const config = await realAISearchRepository.internalConfig(userId, input.projectId, input.provider);
   if (!config || !config.enabled) return fail("PROVIDER_DISABLED");
-  const apiKey = resolveApiKey(config.apiKeyReference);
+  let apiKey;
+  try {
+    apiKey = resolveApiKey(config, input.projectId, input.provider);
+  } catch (error) {
+    return fail(normalizeProviderRuntimeError(error));
+  }
   const provider = providerRegistry[input.provider];
   const health = await provider.check({ apiKey, model: String(config.model) });
   if (!health.available || !apiKey) return fail(health.reason ?? "PROVIDER_UNAVAILABLE");

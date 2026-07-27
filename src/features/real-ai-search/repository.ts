@@ -1,14 +1,61 @@
 import { realAISearchDatabase, iso, jsonArray, type Row } from "./database";
 import { AI_SEARCH_PROVIDER_TYPES, DEFAULT_PROVIDER_MODELS, type AISearchIntent, type AISearchProviderType, type ExecutionResultView, type ParsedAISearchResponse, type ProviderConfigView } from "./types";
+import { providerSecretStorageAvailable, type EncryptedProviderSecret } from "./provider-secret";
 
-function configView(provider: AISearchProviderType, row?: Row): ProviderConfigView { return { id: row ? String(row.id) : null, provider, enabled: Boolean(row?.enabled), configured: Boolean(row?.apiKeyReference), model: row ? String(row.model) : DEFAULT_PROVIDER_MODELS[provider], lastTestStatus: row?.lastTestStatus === "SUCCEEDED" || row?.lastTestStatus === "FAILED" ? row.lastTestStatus : null, lastTestError: row?.lastTestError ? String(row.lastTestError) : null, lastTestedAt: row?.lastTestedAt ? iso(row.lastTestedAt) : null, createdAt: row ? iso(row.createdAt) : null, updatedAt: row ? iso(row.updatedAt) : null }; }
+function configView(provider: AISearchProviderType, row?: Row): ProviderConfigView {
+  const encrypted = Boolean(row?.encryptedApiKey);
+  const environment = Boolean(row?.apiKeyReference);
+  return {
+    id: row ? String(row.id) : null,
+    provider,
+    enabled: Boolean(row?.enabled),
+    configured: encrypted || environment,
+    keyMask: row?.apiKeyHint ? String(row.apiKeyHint) : environment ? "env:••••••••••••" : null,
+    configurationSource: encrypted ? "ENCRYPTED" : environment ? "ENVIRONMENT" : null,
+    secretStorageAvailable: providerSecretStorageAvailable(),
+    model: row ? String(row.model) : DEFAULT_PROVIDER_MODELS[provider],
+    lastTestStatus: row?.lastTestStatus === "SUCCEEDED" || row?.lastTestStatus === "FAILED" ? row.lastTestStatus : null,
+    lastTestError: row?.lastTestError ? String(row.lastTestError) : null,
+    lastTestedAt: row?.lastTestedAt ? iso(row.lastTestedAt) : null,
+    createdAt: row ? iso(row.createdAt) : null,
+    updatedAt: row ? iso(row.updatedAt) : null,
+  };
+}
 function resultView(row: Row, citations: Row[] = []): ExecutionResultView { return { id: String(row.id), query: String(row.query ?? ""), provider: String(row.provider) as AISearchProviderType, status: String(row.status) as ExecutionResultView["status"], mentioned: typeof row.mentioned === "boolean" ? row.mentioned : null, rankPosition: row.rankPosition === null || row.rankPosition === undefined ? null : Number(row.rankPosition), rawResponse: row.rawResponse ? String(row.rawResponse) : null, citations: citations.map((item) => ({ url: String(item.url), domain: String(item.domain), citationType: String(item.citationType) as "OFFICIAL" | "THIRD_PARTY", position: Number(item.position ?? 0), citationCount: Number(item.citationCount ?? 1) })), productMentions: jsonArray(row.productMentions).map(String), competitorBrands: jsonArray(row.competitorBrands).map(String), errorCode: row.errorCode ? String(row.errorCode) : null, durationMs: row.durationMs === null || row.durationMs === undefined ? null : Number(row.durationMs), attemptCount: Number(row.attemptCount ?? 0), createdAt: iso(row.createdAt), completedAt: row.completedAt ? iso(row.completedAt) : null }; }
 
 export const realAISearchRepository = {
   async projectForUser(userId: string, projectId: string) { return (await realAISearchDatabase().query('SELECT p."id", p."name", p."industry", p."domain", COALESCE((SELECT entity."brandName" FROM "EntityProfile" entity WHERE entity."projectId" = p."id" ORDER BY entity."updatedAt" DESC LIMIT 1), p."name") AS "targetEntity", COALESCE((SELECT JSONB_AGG(product."name") FROM "ProductEntity" product WHERE product."projectId" = p."id" AND product."status" = \'ACTIVE\'), \'[]\'::jsonb) AS "productNames", COALESCE((SELECT JSONB_AGG(competitor."name") FROM "CompetitorProfile" competitor WHERE competitor."projectId" = p."id" AND competitor."status" = \'ACTIVE\'), \'[]\'::jsonb) AS "competitorNames" FROM "Project" p WHERE p."id" = $1 AND p."userId" = $2 LIMIT 1', [projectId, userId]))[0] ?? null; },
   async configs(userId: string, projectId: string) { const rows = await realAISearchDatabase().query('SELECT config.* FROM "AISearchProviderConfig" config INNER JOIN "Project" p ON p."id" = config."projectId" WHERE config."projectId" = $1 AND p."userId" = $2', [projectId, userId]); return AI_SEARCH_PROVIDER_TYPES.map((provider) => configView(provider, rows.find((row) => row.provider === provider))); },
   async internalConfig(userId: string, projectId: string, provider: AISearchProviderType) { return (await realAISearchDatabase().query('SELECT config.* FROM "AISearchProviderConfig" config INNER JOIN "Project" p ON p."id" = config."projectId" WHERE config."projectId" = $1 AND config."provider" = $3::"AISearchProviderType" AND p."userId" = $2 LIMIT 1', [projectId, userId, provider]))[0] ?? null; },
-  async saveConfig(userId: string, projectId: string, input: { provider: AISearchProviderType; enabled: boolean; apiKeyReference: string | null; model: string }) { const now = new Date(); const rows = await realAISearchDatabase().query('WITH owned AS (SELECT p."id" FROM "Project" p WHERE p."id" = $1 AND p."userId" = $2), updated AS (UPDATE "AISearchProviderConfig" config SET "enabled" = $4, "apiKeyReference" = COALESCE($5, config."apiKeyReference"), "model" = $6, "updatedAt" = $7 FROM owned WHERE config."projectId" = owned."id" AND config."provider" = $3::"AISearchProviderType" RETURNING config.*), inserted AS (INSERT INTO "AISearchProviderConfig" ("id", "projectId", "provider", "enabled", "apiKeyReference", "model", "createdAt", "updatedAt") SELECT $8, owned."id", $3::"AISearchProviderType", $4, $5, $6, $7, $7 FROM owned WHERE NOT EXISTS (SELECT 1 FROM updated) RETURNING *) SELECT * FROM updated UNION ALL SELECT * FROM inserted', [projectId, userId, input.provider, input.enabled, input.apiKeyReference, input.model, now, crypto.randomUUID()]); return rows[0] ? configView(input.provider, rows[0]) : null; },
+  async saveConfig(userId: string, projectId: string, input: {
+    provider: AISearchProviderType;
+    enabled: boolean;
+    apiKeyReference: string | null;
+    encryptedSecret: EncryptedProviderSecret | null;
+    model: string;
+  }) {
+    const now = new Date();
+    const encrypted = input.encryptedSecret;
+    const rows = await realAISearchDatabase().query(
+      'WITH owned AS (SELECT p."id" FROM "Project" p WHERE p."id" = $1 AND p."userId" = $2), updated AS (UPDATE "AISearchProviderConfig" config SET "enabled" = $4, "apiKeyReference" = CASE WHEN $7::text IS NOT NULL THEN NULL ELSE COALESCE($5, config."apiKeyReference") END, "encryptedApiKey" = COALESCE($7, config."encryptedApiKey"), "apiKeyIv" = COALESCE($8, config."apiKeyIv"), "apiKeyAuthTag" = COALESCE($9, config."apiKeyAuthTag"), "apiKeyHint" = COALESCE($10, config."apiKeyHint"), "secretVersion" = COALESCE($11, config."secretVersion"), "model" = $6, "updatedAt" = $12 FROM owned WHERE config."projectId" = owned."id" AND config."provider" = $3::"AISearchProviderType" RETURNING config.*), inserted AS (INSERT INTO "AISearchProviderConfig" ("id", "projectId", "provider", "enabled", "apiKeyReference", "encryptedApiKey", "apiKeyIv", "apiKeyAuthTag", "apiKeyHint", "secretVersion", "model", "createdAt", "updatedAt") SELECT $13, owned."id", $3::"AISearchProviderType", $4, $5, $7, $8, $9, $10, COALESCE($11, 1), $6, $12, $12 FROM owned WHERE NOT EXISTS (SELECT 1 FROM updated) RETURNING *) SELECT * FROM updated UNION ALL SELECT * FROM inserted',
+      [
+        projectId,
+        userId,
+        input.provider,
+        input.enabled,
+        input.apiKeyReference,
+        input.model,
+        encrypted?.encryptedApiKey ?? null,
+        encrypted?.apiKeyIv ?? null,
+        encrypted?.apiKeyAuthTag ?? null,
+        encrypted?.apiKeyHint ?? null,
+        encrypted?.secretVersion ?? null,
+        now,
+        crypto.randomUUID(),
+      ],
+    );
+    return rows[0] ? configView(input.provider, rows[0]) : null;
+  },
   async deleteConfig(userId: string, projectId: string, provider: AISearchProviderType) { return (await realAISearchDatabase().query('DELETE FROM "AISearchProviderConfig" config USING "Project" p WHERE config."projectId" = $1 AND config."provider" = $3::"AISearchProviderType" AND config."projectId" = p."id" AND p."userId" = $2 RETURNING config."id"', [projectId, userId, provider])).length > 0; },
   async recordProviderTest(userId: string, projectId: string, provider: AISearchProviderType, status: "SUCCEEDED" | "FAILED", error: string | null) { const row = (await realAISearchDatabase().query('UPDATE "AISearchProviderConfig" config SET "lastTestStatus" = $4, "lastTestError" = $5, "lastTestedAt" = $6, "updatedAt" = $6 FROM "Project" p WHERE config."projectId" = $1 AND config."provider" = $3::"AISearchProviderType" AND p."id" = config."projectId" AND p."userId" = $2 RETURNING config.*', [projectId, userId, provider, status, error, new Date()]))[0]; return row ? configView(provider, row) : null; },
   async createPending(userId: string, input: { projectId: string; query: string; targetEntity: string; industry: string; intent: AISearchIntent; provider: AISearchProviderType }) { const queryId = crypto.randomUUID(), resultId = crypto.randomUUID(), monitorId = crypto.randomUUID(), now = new Date(); const rows = await realAISearchDatabase().query('WITH owned AS (SELECT p."id" FROM "Project" p WHERE p."id" = $1 AND p."userId" = $2), existing_monitor AS (SELECT monitor."id" FROM "AISearchMonitor" monitor INNER JOIN owned ON owned."id" = monitor."projectId" WHERE monitor."enabled" = true ORDER BY monitor."createdAt" LIMIT 1), inserted_monitor AS (INSERT INTO "AISearchMonitor" ("id", "projectId", "name", "enabled", "createdAt", "updatedAt") SELECT $11, owned."id", \'Real AI Search Monitor\', true, $8, $8 FROM owned WHERE NOT EXISTS (SELECT 1 FROM existing_monitor) RETURNING "id"), selected_monitor AS (SELECT "id" FROM existing_monitor UNION ALL SELECT "id" FROM inserted_monitor LIMIT 1), new_query AS (INSERT INTO "AISearchQuery" ("id", "projectId", "monitorId", "query", "targetEntity", "industry", "intent", "createdAt") SELECT $3, owned."id", selected_monitor."id", $4, $5, $6, $7::"AISearchIntent", $8 FROM owned CROSS JOIN selected_monitor RETURNING *) INSERT INTO "AISearchResult" ("id", "projectId", "queryId", "provider", "status", "createdAt") SELECT $9, new_query."projectId", new_query."id", $10::"AISearchProviderType", \'PENDING\', $8 FROM new_query RETURNING *', [input.projectId, userId, queryId, input.query, input.targetEntity, input.industry, input.intent, now, resultId, input.provider, monitorId]); return rows[0] ? { queryId, resultId } : null; },

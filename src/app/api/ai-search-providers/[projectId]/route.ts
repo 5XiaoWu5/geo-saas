@@ -5,7 +5,13 @@ import { AI_SEARCH_PROVIDER_TYPES, DEFAULT_PROVIDER_MODELS, RealAISearchError, g
 
 export const runtime = "nodejs"; export const dynamic = "force-dynamic";
 const provider = z.enum(AI_SEARCH_PROVIDER_TYPES);
-const saveSchema = z.object({ provider, enabled: z.boolean(), apiKeyReference: z.string().trim().regex(/^env:[A-Z][A-Z0-9_]{1,127}$/).nullable().optional(), model: z.string().trim().min(1).max(160) }).strict();
+const saveSchema = z.object({
+  provider,
+  enabled: z.boolean(),
+  apiKey: z.string().trim().min(8).max(512).optional(),
+  apiKeyReference: z.string().trim().regex(/^env:[A-Z][A-Z0-9_]{1,127}$/).nullable().optional(),
+  model: z.string().trim().min(1).max(160),
+}).strict();
 function failure(error: unknown) { if (error instanceof RealAISearchError) return NextResponse.json({ error: error.code }, { status: error.status }); return NextResponse.json({ error: "AI_SEARCH_PROVIDER_CONFIG_FAILED" }, { status: 500 }); }
 export async function GET(_request: Request, { params }: { params: Promise<{ projectId: string }> }) { const user = await getCurrentUser(); if (!user) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 }); try { const { projectId } = await params; const data = await getRealAISearchMonitoring(user.id, projectId); return NextResponse.json({ providers: data.providers }); } catch (error) { return failure(error); } }
 export async function PUT(request: Request, { params }: { params: Promise<{ projectId: string }> }) { const user = await getCurrentUser(); if (!user) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 }); const parsed = saveSchema.safeParse(await request.json().catch(() => null)); if (!parsed.success) return NextResponse.json({ error: "INVALID_PROVIDER_CONFIG" }, { status: 400 }); try { const { projectId } = await params; return NextResponse.json({ config: await saveProviderConfig(user.id, projectId, { ...parsed.data, apiKeyReference: parsed.data.apiKeyReference ?? null, model: parsed.data.model || DEFAULT_PROVIDER_MODELS[parsed.data.provider] }) }); } catch (error) { return failure(error); } }
