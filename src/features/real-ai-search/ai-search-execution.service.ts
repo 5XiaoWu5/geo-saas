@@ -13,8 +13,8 @@ const TIMEOUT_MS = 20_000;
 const MAX_ATTEMPTS = 2;
 
 function enforceRateLimit(key: string) { const now = Date.now(); const recent = (rateWindows.get(key) ?? []).filter((time) => now - time < 60_000); if (recent.length >= 10) throw new RealAISearchError("AI_SEARCH_RATE_LIMITED", 429); recent.push(now); rateWindows.set(key, recent); }
-function resolveApiKey(config: Record<string, unknown>, projectId: string, provider: AISearchProviderType) {
-  const encrypted = decryptProviderApiKey(config, projectId, provider);
+async function resolveApiKey(config: Record<string, unknown>, projectId: string, provider: AISearchProviderType) {
+  const encrypted = await decryptProviderApiKey(config, projectId, provider);
   if (encrypted) return encrypted;
   const reference = config.apiKeyReference;
   if (typeof reference !== "string" || !/^env:[A-Z][A-Z0-9_]{1,127}$/.test(reference)) return null;
@@ -40,7 +40,7 @@ export async function saveProviderConfig(userId: string, projectId: string, inpu
   let encryptedSecret = null;
   if (input.apiKey) {
     try {
-      encryptedSecret = encryptProviderApiKey(input.apiKey, projectId, input.provider);
+      encryptedSecret = await encryptProviderApiKey(input.apiKey, projectId, input.provider);
     } catch (error) {
       throw new RealAISearchError(normalizeProviderRuntimeError(error), 503);
     }
@@ -59,7 +59,7 @@ export async function testProviderConnection(userId: string, projectId: string, 
   let apiKey = direct?.apiKey?.trim() || null;
   if (!apiKey && config) {
     try {
-      apiKey = resolveApiKey(config, projectId, providerType);
+      apiKey = await resolveApiKey(config, projectId, providerType);
     } catch (error) {
       const code = normalizeProviderRuntimeError(error);
       console.error("[AI_PROVIDER_TEST]", { provider: providerType, code });
@@ -101,7 +101,7 @@ export async function executeRealAISearch(userId: string, input: { projectId: st
   if (!config || !config.enabled) return fail("PROVIDER_DISABLED");
   let apiKey;
   try {
-    apiKey = resolveApiKey(config, input.projectId, input.provider);
+    apiKey = await resolveApiKey(config, input.projectId, input.provider);
   } catch (error) {
     return fail(normalizeProviderRuntimeError(error));
   }

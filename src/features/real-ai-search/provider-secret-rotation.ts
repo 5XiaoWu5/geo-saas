@@ -79,9 +79,9 @@ export async function rotateProviderCredentials(
         continue;
       }
       summary.eligible += 1;
-      const apiKey = decryptProviderApiKey(record, record.projectId, record.provider);
+      const apiKey = await decryptProviderApiKey(record, record.projectId, record.provider);
       if (!apiKey) throw new ProviderSecretError("CREDENTIAL_DECRYPTION_FAILED");
-      const next = encryptProviderApiKey(apiKey, record.projectId, record.provider, activeVersion);
+      const next = await encryptProviderApiKey(apiKey, record.projectId, record.provider, activeVersion);
       summary.wouldRotate += 1;
       if (options.dryRun) continue;
       if (!options.update) throw new Error("ROTATION_UPDATE_FAILED");

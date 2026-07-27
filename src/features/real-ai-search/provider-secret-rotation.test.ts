@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rotateProviderCredentials, type ProviderCredentialRotationRecord } from "./provider-secret-rotation";
-import { decryptProviderApiKey, encryptProviderApiKey } from "./provider-secret";
+import { decryptProviderApiKey, encryptProviderApiKey, type EncryptedProviderSecret } from "./provider-secret";
 
 const key = (byte: number) => Buffer.alloc(32, byte).toString("base64");
-const record = (encrypted: ReturnType<typeof encryptProviderApiKey>): ProviderCredentialRotationRecord => ({
+const record = (encrypted: EncryptedProviderSecret): ProviderCredentialRotationRecord => ({
   id: "credential-1",
   projectId: "project-1",
   provider: "OPENAI",
@@ -21,7 +21,7 @@ test("rotation dry run does not write and apply is idempotent", async () => {
   process.env.PROVIDER_SECRET_ACTIVE_KEY_VERSION = "2";
   delete process.env.PROVIDER_SECRET_ENCRYPTION_KEY;
   try {
-    let current = record(encryptProviderApiKey("secret-value", "project-1", "OPENAI", 1));
+    let current = record(await encryptProviderApiKey("secret-value", "project-1", "OPENAI", 1));
     let writes = 0;
     const dryRun = await rotateProviderCredentials([current], {
       dryRun: true,
@@ -45,7 +45,7 @@ test("rotation dry run does not write and apply is idempotent", async () => {
     assert.equal(applied.rotated, 1);
     assert.equal(writes, 1);
     assert.equal(current.secretVersion, 2);
-    assert.equal(decryptProviderApiKey(current, "project-1", "OPENAI"), "secret-value");
+    assert.equal(await decryptProviderApiKey(current, "project-1", "OPENAI"), "secret-value");
 
     const repeated = await rotateProviderCredentials([current], {
       dryRun: false,
@@ -68,7 +68,7 @@ test("rotation dry run does not write and apply is idempotent", async () => {
 test("missing old key fails without updating ciphertext", async () => {
   const previous = { ...process.env };
   process.env.PROVIDER_SECRET_ENCRYPTION_KEY_V1 = key(1);
-  const old = record(encryptProviderApiKey("secret-value", "project-1", "OPENAI", 1));
+  const old = record(await encryptProviderApiKey("secret-value", "project-1", "OPENAI", 1));
   delete process.env.PROVIDER_SECRET_ENCRYPTION_KEY_V1;
   delete process.env.PROVIDER_SECRET_ENCRYPTION_KEY;
   process.env.PROVIDER_SECRET_ENCRYPTION_KEY_V2 = key(2);

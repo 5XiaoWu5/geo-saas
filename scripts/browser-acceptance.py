@@ -107,6 +107,16 @@ def cleanup_stale_projects(context: BrowserContext) -> None:
 def provider_interactions(page: Page, project_id: str, evidence: dict[str, Any]) -> None:
     page.goto(f"{BASE_URL}/projects/{project_id}/geo/monitoring", wait_until="domcontentloaded")
     page.wait_for_selector("#OPENAI-api-key")
+    config_response = page.context.request.get(
+        f"{BASE_URL}/api/ai-search-providers/{project_id}"
+    )
+    provider_configs = api_json(config_response).get("providers", [])
+    evidence["providerSecretStorageAvailable"] = all(
+        item.get("config", {}).get("secretStorageAvailable") is True
+        for item in provider_configs
+    )
+    if not evidence["providerSecretStorageAvailable"]:
+        raise AssertionError("PROVIDER_SECRET_STORAGE_UNAVAILABLE")
     card = page.locator("article").filter(has_text="OpenAI").first
     key_link = card.get_by_role("link", name=re.compile("获取 API Key|Get API Key"))
     docs_link = card.get_by_role("link", name=re.compile("查看官方文档|Official documentation"))

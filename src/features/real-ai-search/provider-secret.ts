@@ -1,6 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-
-const ALGORITHM = "aes-256-gcm";
+const WEB_CRYPTO_ALGORITHM = "AES-GCM";
 const LEGACY_SECRET_VERSION = 1;
 const IV_BYTES = 12;
 const AUTH_TAG_BYTES = 16;
@@ -73,8 +71,27 @@ export function storedProviderSecretVersion(value: unknown) {
   return version;
 }
 
+function bytes(value: string) {
+  return new TextEncoder().encode(value);
+}
+
+function exactArrayBuffer(value: Uint8Array) {
+  return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer;
+}
+
+async function cryptoKey(version: number, usage: KeyUsage) {
+  const raw = new Uint8Array(encryptionKey(version));
+  return crypto.subtle.importKey(
+    "raw",
+    exactArrayBuffer(raw),
+    { name: WEB_CRYPTO_ALGORITHM },
+    false,
+    [usage],
+  );
+}
+
 function aad(projectId: string, provider: string) {
-  return Buffer.from(`geopilot-provider:${projectId}:${provider}`, "utf8");
+  return bytes(`geopilot-provider:${projectId}:${provider}`);
 }
 
 export function providerSecretStorageAvailable() {
@@ -92,34 +109,44 @@ export function providerApiKeyHint(apiKey: string) {
   return `••••••••••••${suffix}`;
 }
 
-export function encryptProviderApiKey(
+export async function encryptProviderApiKey(
   apiKey: string,
   projectId: string,
   provider: string,
   version = activeProviderSecretVersion(),
-): EncryptedProviderSecret {
-  const key = encryptionKey(version);
-  const iv = randomBytes(IV_BYTES);
-  const cipher = createCipheriv(ALGORITHM, key, iv);
-  cipher.setAAD(aad(projectId, provider));
-  const encrypted = Buffer.concat([cipher.update(apiKey.trim(), "utf8"), cipher.final()]);
+): Promise<EncryptedProviderSecret> {
+  const key = await cryptoKey(version, "encrypt");
+  const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
+  const combined = new Uint8Array(await crypto.subtle.encrypt(
+    {
+      name: WEB_CRYPTO_ALGORITHM,
+      iv: exactArrayBuffer(iv),
+      additionalData: exactArrayBuffer(aad(projectId, provider)),
+      tagLength: AUTH_TAG_BYTES * 8,
+    },
+    key,
+    exactArrayBuffer(bytes(apiKey.trim())),
+  ));
+  const tagOffset = combined.length - AUTH_TAG_BYTES;
+  const encrypted = combined.slice(0, tagOffset);
+  const authTag = combined.slice(tagOffset);
   return {
-    encryptedApiKey: encrypted.toString("base64"),
-    apiKeyIv: iv.toString("base64"),
-    apiKeyAuthTag: cipher.getAuthTag().toString("base64"),
+    encryptedApiKey: Buffer.from(encrypted).toString("base64"),
+    apiKeyIv: Buffer.from(iv).toString("base64"),
+    apiKeyAuthTag: Buffer.from(authTag).toString("base64"),
     apiKeyHint: providerApiKeyHint(apiKey),
     secretVersion: version,
   };
 }
 
-export function decryptProviderApiKey(secret: StoredProviderSecret, projectId: string, provider: string) {
+export async function decryptProviderApiKey(secret: StoredProviderSecret, projectId: string, provider: string) {
   const fields = [secret.encryptedApiKey, secret.apiKeyIv, secret.apiKeyAuthTag];
   if (fields.every(value => value === null || value === undefined || value === "")) return null;
   if (fields.some(value => typeof value !== "string" || !value)) {
     throw new ProviderSecretError("CREDENTIAL_DECRYPTION_FAILED");
   }
   const version = storedProviderSecretVersion(secret.secretVersion);
-  const key = encryptionKey(version);
+  const key = await cryptoKey(version, "decrypt");
   let encrypted: Buffer;
   let iv: Buffer;
   let authTag: Buffer;
@@ -134,13 +161,20 @@ export function decryptProviderApiKey(secret: StoredProviderSecret, projectId: s
     throw new ProviderSecretError("CREDENTIAL_DECRYPTION_FAILED");
   }
   try {
-    const decipher = createDecipheriv(ALGORITHM, key, iv);
-    decipher.setAAD(aad(projectId, provider));
-    decipher.setAuthTag(authTag);
-    return Buffer.concat([
-      decipher.update(encrypted),
-      decipher.final(),
-    ]).toString("utf8");
+    const combined = new Uint8Array(encrypted.length + authTag.length);
+    combined.set(encrypted);
+    combined.set(authTag, encrypted.length);
+    const decrypted = await crypto.subtle.decrypt(
+      {
+        name: WEB_CRYPTO_ALGORITHM,
+        iv: exactArrayBuffer(iv),
+        additionalData: exactArrayBuffer(aad(projectId, provider)),
+        tagLength: AUTH_TAG_BYTES * 8,
+      },
+      key,
+      exactArrayBuffer(combined),
+    );
+    return new TextDecoder().decode(decrypted);
   } catch {
     throw new ProviderSecretError("CREDENTIAL_INTEGRITY_CHECK_FAILED");
   }
