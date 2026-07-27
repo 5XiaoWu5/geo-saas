@@ -28,6 +28,15 @@ VIEWPORTS = [
 ]
 
 
+def chromium_executable() -> str | None:
+    configured = os.environ.get("GEOPILOT_CHROMIUM_EXECUTABLE", "").strip()
+    if configured:
+        return configured
+    browser_root = Path.home() / "AppData/Local/ms-playwright"
+    candidates = sorted(browser_root.glob("chromium-*/chrome-win*/chrome.exe"))
+    return str(candidates[0]) if candidates else None
+
+
 def required(name: str) -> str:
     value = os.environ.get(name, "")
     if not value:
@@ -37,6 +46,7 @@ def required(name: str) -> str:
 
 def login(page: Page, email: str, password: str, remember: bool) -> dict[str, Any]:
     page.goto(f"{BASE_URL}/login", wait_until="domcontentloaded")
+    page.wait_for_load_state("networkidle", timeout=15_000)
     page.locator("#email").fill(email)
     page.locator("#password").fill(password)
     checkbox = page.get_by_label("保持登录状态")
@@ -80,9 +90,18 @@ def create_project(context: BrowserContext) -> str:
             "description": "Temporary isolated browser acceptance project.",
         },
     )
-    if response.status != 200:
+    if response.status not in (200, 201):
         raise AssertionError(f"PROJECT_CREATE_{response.status}_{api_json(response).get('error')}")
     return str(api_json(response)["project"]["id"])
+
+
+def cleanup_stale_projects(context: BrowserContext) -> None:
+    response = context.request.get(f"{BASE_URL}/api/projects")
+    if response.status != 200:
+        return
+    for project in api_json(response).get("projects", []):
+        if str(project.get("name", "")).startswith("Sprint 19-B Browser Acceptance"):
+            context.request.delete(f"{BASE_URL}/api/projects/{project['id']}")
 
 
 def provider_interactions(page: Page, project_id: str, evidence: dict[str, Any]) -> None:
@@ -270,21 +289,29 @@ def main() -> int:
     results: dict[str, Any] = {"baseUrl": BASE_URL, "viewports": {}, "api": {}, "interactions": {}}
     project_id: str | None = None
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
+        executable = chromium_executable()
+        browser = playwright.chromium.launch(
+            headless=True,
+            executable_path=executable,
+        )
+        session_context = browser.new_context(viewport={"width": 1440, "height": 900})
+        session_page = session_context.new_page()
+        session_cookie = login(session_page, email, password, remember=False)
+        results["sessionCookie"] = session_cookie
+        if session_cookie["persistent"]:
+            raise AssertionError("SESSION_COOKIE_SHOULD_NOT_PERSIST")
+        session_context.close()
+
         context = browser.new_context(viewport={"width": 1440, "height": 900})
         page = context.new_page()
         try:
-            session_cookie = login(page, email, password, remember=False)
-            results["sessionCookie"] = session_cookie
-            if session_cookie["persistent"]:
-                raise AssertionError("SESSION_COOKIE_SHOULD_NOT_PERSIST")
-            context.request.post(f"{BASE_URL}/api/auth/logout")
             remember_cookie = login(page, email, password, remember=True)
             results["rememberCookie"] = remember_cookie
             remaining_days = (remember_cookie["expires"] - time.time()) / 86_400
             if not 29 <= remaining_days <= 31:
                 raise AssertionError(f"REMEMBER_COOKIE_DURATION_{remaining_days}")
 
+            cleanup_stale_projects(context)
             project_id = create_project(context)
             results["projectId"] = project_id
 
