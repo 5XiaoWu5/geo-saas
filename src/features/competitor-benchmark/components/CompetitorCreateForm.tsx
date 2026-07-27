@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/i18n/provider";
 import type { CompetitorProfile } from "../types";
+import { OperationFeedback, type OperationStatus } from "@/components/shared/operation-feedback";
 
 async function responseJson<T>(response: Response) {
   const data = await response.json() as T & { error?: string };
@@ -24,11 +25,14 @@ export function CompetitorCreateForm({ projectId, onCreated }: { projectId: stri
   const [region, setRegion] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [feedback, setFeedback] = useState<OperationStatus>("IDLE");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving) return;
     setSaving(true);
     setError("");
+    setFeedback("CREATING");
     try {
       const result = await responseJson<{ competitor: CompetitorProfile }>(await fetch("/api/competitors", {
         method: "POST",
@@ -40,10 +44,12 @@ export function CompetitorCreateForm({ projectId, onCreated }: { projectId: stri
       setDomain("");
       setIndustry("");
       setRegion("");
+      setFeedback("COMPLETED");
     } catch (requestError) {
       const code = requestError instanceof Error ? requestError.message : "REQUEST_FAILED";
       const translated = t(`competitors.errors.${code}`);
       setError(translated === `competitors.errors.${code}` ? t("competitors.errors.REQUEST_FAILED") : translated);
+      setFeedback("FAILED");
     } finally {
       setSaving(false);
     }
@@ -59,6 +65,7 @@ export function CompetitorCreateForm({ projectId, onCreated }: { projectId: stri
           <div className="space-y-2"><Label htmlFor="competitor-industry">{t("competitors.industry")}</Label><Input id="competitor-industry" value={industry} onChange={(event) => setIndustry(event.target.value)} placeholder={t("competitors.industryPlaceholder")} maxLength={160} /></div>
           <div className="space-y-2"><Label htmlFor="competitor-region">{t("competitors.region")}</Label><Input id="competitor-region" value={region} onChange={(event) => setRegion(event.target.value)} placeholder={t("competitors.regionPlaceholder")} maxLength={160} /></div>
           {error ? <p className="text-sm text-destructive md:col-span-2">{error}</p> : null}
+          {feedback !== "IDLE" ? <OperationFeedback className="md:col-span-2" status={feedback} /> : null}
           <div className="md:col-span-2"><Button type="submit" className="w-full sm:w-auto" disabled={saving}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}{saving ? t("competitors.adding") : t("competitors.add")}</Button></div>
         </form>
       </CardContent>

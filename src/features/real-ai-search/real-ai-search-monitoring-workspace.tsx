@@ -18,6 +18,7 @@ import {
   Radar,
   Save,
   Server,
+  Trash2,
   XCircle,
 } from "lucide-react";
 import { OperationFeedback, type OperationStatus } from "@/components/shared/operation-feedback";
@@ -32,6 +33,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/i18n/provider";
 import { PROVIDER_METADATA } from "./provider-metadata";
+import { growthNextStepLabel, selectGrowthNextStep } from "@/features/growth-engine/next-step";
 import {
   AI_SEARCH_PROVIDER_TYPES,
   DEFAULT_PROVIDER_MODELS,
@@ -79,11 +81,16 @@ export function RealAISearchMonitoringWorkspace({ projectId }: { projectId: stri
     () => data?.providers.filter(item => item.config.enabled && item.config.configured).length ?? 0,
     [data?.providers],
   );
-  const nextStep = connected === 0
-    ? t("providerUx.connectNext")
-    : data?.results.length
-      ? t("providerUx.performanceNext")
-      : t("providerUx.runNext");
+  const tested = data?.providers.filter(item => item.config.lastTestStatus === "SUCCEEDED").length ?? 0;
+  const nextStep = growthNextStepLabel(selectGrowthNextStep({
+    configuredProviderCount: connected,
+    testedProviderCount: tested,
+    monitoringQueryCount: data?.results.length ? 1 : 0,
+    aiSearchResultCount: data?.results.length ?? 0,
+    unresolvedIssueCount: 0,
+    actionCount: 0,
+    openActionCount: 0,
+  }), locale);
 
   async function execute() {
     if (busy || query.trim().length < 3) return;
@@ -324,6 +331,7 @@ function ProviderCard({
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [testDialogOpen, setTestDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [feedback, setFeedback] = useState<{ status: OperationStatus; message?: string } | null>(null);
 
   useEffect(() => {
@@ -333,6 +341,7 @@ function ProviderCard({
 
   const testing = busy === `test:${stats.provider}`;
   const saving = busy === `save:${stats.provider}`;
+  const deleting = busy === `delete:${stats.provider}`;
   const status: ProviderCardStatus = testing
     ? "testing"
     : feedback?.status === "COMPLETED"
@@ -422,6 +431,27 @@ function ProviderCard({
     }
   }
 
+  async function remove() {
+    if (busy || !stats.config.id) return;
+    setDeleteDialogOpen(false);
+    setBusy(`delete:${stats.provider}`);
+    setFeedback({ status: "RUNNING", message: t("providerUx.deletingKey") });
+    try {
+      await json(await fetch(
+        `/api/ai-search-providers/${projectId}?provider=${encodeURIComponent(stats.provider)}`,
+        { method: "DELETE" },
+      ));
+      setApiKey("");
+      setFeedback({ status: "COMPLETED", message: t("providerUx.deleteSuccess") });
+      await onSaved();
+    } catch (requestError) {
+      const code = requestError instanceof Error ? requestError.message : "REQUEST_FAILED";
+      setFeedback({ status: "FAILED", message: providerErrorMessage(t, code) });
+    } finally {
+      setBusy("");
+    }
+  }
+
   return (
     <article className="min-w-0 rounded-3xl border border-white/10 bg-white/[0.025] p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -490,6 +520,9 @@ function ProviderCard({
           {stats.config.keyMask ? (
             <p className="mt-2 text-xs text-muted-foreground">{t("providerUx.configuredMask", { mask: stats.config.keyMask })}</p>
           ) : null}
+          {stats.config.keyVersion ? (
+            <p className="mt-1 text-xs text-muted-foreground">{t("providerUx.keyVersion", { version: stats.config.keyVersion })}</p>
+          ) : null}
           <div className="relative mt-2">
             <Input
               id={`${stats.provider}-api-key`}
@@ -556,6 +589,17 @@ function ProviderCard({
           {testing ? t("providerUx.testing") : t("providerUx.test")}
         </Button>
       </div>
+      {stats.config.id ? (
+        <Button
+          variant="ghost"
+          className="mt-2 min-h-11 w-full text-rose-200 hover:bg-rose-300/10 hover:text-rose-100"
+          disabled={busy !== ""}
+          onClick={() => setDeleteDialogOpen(true)}
+        >
+          {deleting ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Trash2 className="h-4 w-4" />}
+          {deleting ? t("providerUx.deletingKey") : t("providerUx.deleteKey")}
+        </Button>
+      ) : null}
 
       {stats.config.lastTestedAt ? (
         <p className="mt-3 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
@@ -579,6 +623,26 @@ function ProviderCard({
             </DialogClose>
             <Button className="min-h-11" onClick={() => void test()}>
               <Server className="h-4 w-4" />{t("providerUx.confirmTest")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogTitle className="pr-12 text-lg font-semibold">{t("providerUx.deleteConfirmTitle")}</DialogTitle>
+          <DialogDescription className="mt-3 text-sm leading-6 text-muted-foreground">
+            {t("providerUx.deleteConfirmDescription")}
+          </DialogDescription>
+          <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <DialogClose asChild>
+              <Button variant="outline" className="min-h-11">{locale === "zh" ? "取消" : "Cancel"}</Button>
+            </DialogClose>
+            <Button
+              variant="destructive"
+              className="min-h-11"
+              onClick={() => void remove()}
+            >
+              <Trash2 className="h-4 w-4" />{t("providerUx.deleteKey")}
             </Button>
           </div>
         </DialogContent>

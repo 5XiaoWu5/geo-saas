@@ -23,3 +23,16 @@ test("provider actions disable duplicate submissions and never log API keys", as
   assert.match(source, /if \(busy \|\| !canSave\) return/);
   assert.doesNotMatch(source, /console\.(log|error)\([^)]*apiKey/);
 });
+
+test("provider deletion is explicit, confirmed, and never returns a saved plaintext key", async () => {
+  const [workspace, route, repository] = await Promise.all([
+    readFile("src/features/real-ai-search/real-ai-search-monitoring-workspace.tsx", "utf8"),
+    readFile("src/app/api/ai-search-providers/[projectId]/route.ts", "utf8"),
+    readFile("src/features/real-ai-search/repository.ts", "utf8"),
+  ]);
+  assert.match(workspace, /deleteDialogOpen/);
+  assert.match(workspace, /method: "DELETE"/);
+  assert.match(route, /export async function DELETE/);
+  assert.doesNotMatch(repository, /keyMask:\s*row\?\.encryptedApiKey/);
+  assert.doesNotMatch(workspace, /localStorage|sessionStorage/);
+});

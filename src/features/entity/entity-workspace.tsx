@@ -5,6 +5,7 @@ import type { FormEvent, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, ArrowRight, BookOpen, Building2, CheckCircle2, ClipboardList, FileText, Globe2, Loader2, Save, ShieldCheck, Sparkles, Target } from "lucide-react";
 import { PageHeader } from "@/components/shared/page";
+import { OperationFeedback, type OperationStatus } from "@/components/shared/operation-feedback";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -65,6 +66,7 @@ export function EntityWorkspace({ initialProjectId }: { initialProjectId?: strin
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [feedback, setFeedback] = useState<OperationStatus>("IDLE");
 
   const hydrateForm = useCallback((report: EntityProjectReport | null) => {
     const project = report?.project;
@@ -125,10 +127,11 @@ export function EntityWorkspace({ initialProjectId }: { initialProjectId?: strin
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!projectId) return;
+    if (!projectId || saving) return;
     setSaving(true);
     setError("");
     setSuccess("");
+    setFeedback("VALIDATING");
     try {
       const result = await readJson<{ report: EntityProjectReport }>(
         await fetch("/api/entity/profile", {
@@ -149,18 +152,21 @@ export function EntityWorkspace({ initialProjectId }: { initialProjectId?: strin
       );
       setData((current) => current ? { ...current, report: result.report } : current);
       setSuccess("实体档案已保存，评分已基于真实数据刷新。");
+      setFeedback("COMPLETED");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "保存实体档案失败");
+      setFeedback("FAILED");
     } finally {
       setSaving(false);
     }
   }
 
   async function analyzeEntity() {
-    if (!projectId) return;
+    if (!projectId || analyzing) return;
     setAnalyzing(true);
     setError("");
     setSuccess("");
+    setFeedback("ANALYZING");
     try {
       const result = await readJson<{ createdOrExistingTaskCount: number }>(
         await fetch("/api/entity/analyze", {
@@ -171,8 +177,10 @@ export function EntityWorkspace({ initialProjectId }: { initialProjectId?: strin
       );
       await loadEntity(projectId);
       setSuccess(`实体分析完成，已同步 ${result.createdOrExistingTaskCount} 条优化任务。`);
+      setFeedback("COMPLETED");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "实体分析失败");
+      setFeedback("FAILED");
     } finally {
       setAnalyzing(false);
     }
@@ -230,6 +238,7 @@ export function EntityWorkspace({ initialProjectId }: { initialProjectId?: strin
           <CheckCircle2 className="h-4 w-4 shrink-0" /> {success}
         </div>
       ) : null}
+      {feedback !== "IDLE" ? <OperationFeedback status={feedback} message={feedback === "COMPLETED" ? success : undefined} /> : null}
 
       {projects.length === 0 ? (
         <Card className="glass-panel border-white/10">

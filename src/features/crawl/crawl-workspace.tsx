@@ -12,6 +12,8 @@ import { CrawlProgress } from "@/features/crawl/crawl-progress";
 import { CrawlQueue } from "@/features/crawl/crawl-queue";
 import { CrawlResultsTable } from "@/features/crawl/crawl-results-table";
 import { CrawlStartForm } from "@/features/crawl/crawl-start-form";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { OperationFeedback, type OperationStatus } from "@/components/shared/operation-feedback";
 
 function toCrawlJob(scan: WebsiteScan): CrawlJob {
   const isRunning = scan.status === "running";
@@ -21,7 +23,7 @@ function toCrawlJob(scan: WebsiteScan): CrawlJob {
     id: scan.id,
     websiteUrl: scan.url,
     status: isRunning ? "Running" : isCompleted ? "Completed" : "Failed",
-    progress: isRunning ? 55 : 100,
+    progress: isCompleted ? 100 : null,
     currentPage: scan.url,
     pagesFound: isCompleted ? 1 : 0,
     assetsFound: scan.schemaCount,
@@ -40,12 +42,12 @@ function toCrawlResult(scan: WebsiteScan): CrawlPageResult {
     title: scan.title ?? "未发现页面标题",
     metaDescription: scan.description ?? "未发现页面描述",
     h1: `H1 数量：${scan.h1Count}`,
-    language: "zh",
-    statusCode: scan.status === "completed" ? 200 : 500,
-    wordCount: 0,
-    canonical: scan.url,
-    indexable: scan.status === "completed",
-    depth: 0,
+    language: null,
+    statusCode: null,
+    wordCount: null,
+    canonical: null,
+    indexable: null,
+    depth: null,
   };
 }
 
@@ -57,13 +59,15 @@ async function readJson<T>(response: Response): Promise<T> {
 }
 
 export function CrawlWorkspace() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [scans, setScans] = useState<WebsiteScan[]>([]);
   const [selectedJobId, setSelectedJobId] = useState("");
   const [loading, setLoading] = useState(true);
   const [cleaning, setCleaning] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [confirmClean, setConfirmClean] = useState(false);
+  const [feedback, setFeedback] = useState<OperationStatus>("IDLE");
 
   const jobs = useMemo(() => scans.map(toCrawlJob), [scans]);
   const selectedJob = useMemo(() => jobs.find((job) => job.id === selectedJobId) ?? jobs[0] ?? null, [jobs, selectedJobId]);
@@ -93,15 +97,20 @@ export function CrawlWorkspace() {
   }
 
   async function handleCleanTestScans() {
+    if (cleaning) return;
+    setConfirmClean(false);
     setCleaning(true);
     setNotice("");
     setError("");
+    setFeedback("RUNNING");
     try {
       const data = await readJson<{ deleted: number }>(await fetch("/api/crawl", { method: "DELETE" }));
       setNotice(`已清理 ${data.deleted} 条测试扫描记录。`);
+      setFeedback("COMPLETED");
       await loadScans();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "测试扫描记录清理失败");
+      setFeedback("FAILED");
     } finally {
       setCleaning(false);
     }
@@ -109,10 +118,11 @@ export function CrawlWorkspace() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t("crawl.title")} description="展示当前账号真实项目扫描记录；开发测试域名数据已从页面默认数据中移除。" action={<Button variant="outline" onClick={() => void handleCleanTestScans()} disabled={cleaning}><Trash2 className="h-4 w-4" /> {cleaning ? "正在清理..." : "清理测试扫描记录"}</Button>} />
+      <PageHeader title={t("crawl.title")} description="展示当前账号真实项目扫描记录；开发测试域名数据已从页面默认数据中移除。" action={<Button variant="outline" className="min-h-11" onClick={() => setConfirmClean(true)} disabled={cleaning}><Trash2 className="h-4 w-4" /> {cleaning ? "正在清理..." : "清理测试扫描记录"}</Button>} />
       <CrawlStartForm onStart={handleStart} />
       {notice ? <div className="rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-primary">{notice}</div> : null}
       {error ? <div className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div> : null}
+      {feedback !== "IDLE" ? <OperationFeedback status={feedback} message={feedback === "COMPLETED" ? notice : undefined} /> : null}
       {loading ? <Card className="glass-panel border-white/10"><CardContent className="flex items-center gap-2 p-6 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> 正在加载真实扫描记录...</CardContent></Card> : null}
       {!loading && !selectedJob ? <Card className="glass-panel border-white/10"><CardContent className="p-6 text-sm text-muted-foreground">暂无真实扫描记录。请先在项目详情页运行一次“开始分析”。</CardContent></Card> : null}
       {!loading && selectedJob ? (
@@ -122,6 +132,18 @@ export function CrawlWorkspace() {
         </section>
       ) : null}
       {selectedScan && selectedScan.status === "completed" ? <CrawlResultsTable pages={[toCrawlResult(selectedScan)]} /> : null}
+      <Dialog open={confirmClean} onOpenChange={setConfirmClean}>
+        <DialogContent>
+          <DialogTitle className="pr-12 text-lg font-semibold">{locale === "zh" ? "确认清理测试扫描" : "Clear test scans?"}</DialogTitle>
+          <DialogDescription className="mt-3 text-sm leading-6 text-muted-foreground">
+            {locale === "zh" ? "只会清理当前账号下被服务端识别为测试数据的扫描记录。真实项目扫描不会被删除。" : "Only scans identified by the server as test data for this account will be removed. Real project scans are preserved."}
+          </DialogDescription>
+          <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <DialogClose asChild><Button variant="outline" className="min-h-11">{locale === "zh" ? "取消" : "Cancel"}</Button></DialogClose>
+            <Button variant="destructive" className="min-h-11" onClick={() => void handleCleanTestScans()}><Trash2 className="h-4 w-4" />{locale === "zh" ? "确认清理" : "Clear test scans"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -17,7 +17,7 @@ export async function addUrlTasks(scanId: string, urls: string[]) {
   const now = new Date().toISOString();
   const nextTasks = urls
     .filter((url) => !knownUrls.has(url))
-    .map((url) => ({ id: `task_${scanId}_${Math.random().toString(36).slice(2)}`, scanId, url, status: "queued" as const, createdAt: now, updatedAt: now }));
+      .map((url) => ({ id: `task_${scanId}_${crypto.randomUUID()}`, scanId, url, status: "queued" as const, createdAt: now, updatedAt: now }));
 
   queueByScan.set(scanId, [...existing, ...nextTasks]);
   return nextTasks;

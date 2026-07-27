@@ -7,6 +7,8 @@ export const PROVIDER_USER_ERROR_CODES = [
   "PROVIDER_NETWORK_ERROR",
   "PROVIDER_SERVER_CONFIG_ERROR",
   "PROVIDER_TIMEOUT",
+  "PROVIDER_INVALID_RESPONSE",
+  "PROVIDER_EMPTY_RESPONSE",
   "PROVIDER_UNKNOWN_ERROR",
 ] as const;
 
@@ -48,7 +50,9 @@ export function normalizeProviderRuntimeError(error: unknown): ProviderUserError
   if (error instanceof TypeError) return "PROVIDER_NETWORK_ERROR";
   const code = error instanceof Error ? error.message : "";
   if (PROVIDER_USER_ERROR_CODES.includes(code as ProviderUserErrorCode)) return code as ProviderUserErrorCode;
-  if (/SECRET_STORAGE|SECRET_DECRYPTION|API_KEY_REFERENCE_UNRESOLVED/.test(code)) {
+  if (
+    /SECRET_STORAGE|SECRET_DECRYPTION|API_KEY_REFERENCE_UNRESOLVED|ENCRYPTION_KEY_|CREDENTIAL_(DECRYPTION|INTEGRITY_CHECK)_FAILED/.test(code)
+  ) {
     return "PROVIDER_SERVER_CONFIG_ERROR";
   }
   return "PROVIDER_UNKNOWN_ERROR";

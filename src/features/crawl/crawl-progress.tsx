@@ -26,12 +26,16 @@ export function CrawlProgress({ job }: { job: CrawlJob }) {
           <p className="mt-2 text-sm text-muted-foreground">{job.status === "Completed" ? `${t("crawl.completed")} ${formatDateTime(job.completedAt)}` : `${t("crawl.currentState")}: ${job.status}`}</p>
         </div>
         <div className="rounded-2xl border border-primary/20 bg-primary/10 px-4 py-2 text-right">
-          <p className="text-2xl font-semibold text-primary">{job.progress}%</p>
+          <p className="text-2xl font-semibold text-primary">{job.progress === null ? "unavailable" : `${job.progress}%`}</p>
           <p className="text-xs text-muted-foreground">{t("crawl.progress")}</p>
         </div>
       </CardHeader>
       <CardContent>
-        <Progress value={job.progress} className="h-3" />
+        {job.progress === null ? (
+          <p className="rounded-xl border border-dashed border-white/15 p-3 text-sm text-muted-foreground">
+            {job.status === "Running" ? "扫描正在运行，数据源未提供可验证百分比。" : "没有可验证的进度数据。"}
+          </p>
+        ) : <Progress value={job.progress} className="h-3" />}
         <div className="mt-5 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
           <Route className="h-5 w-5 text-primary" />
           <div className="min-w-0">

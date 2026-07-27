@@ -43,10 +43,14 @@ export function CrawlQueue({ jobs, selectedJobId, onSelectJob }: { jobs: CrawlJo
                 </div>
                 <Badge variant={meta.variant}><Icon className="mr-1 h-3 w-3" />{getCrawlStatusLabel(job.status)}</Badge>
               </div>
-              <div className="mt-4 flex items-center gap-3">
-                <Progress value={job.progress} />
-                <span className="w-10 text-right text-xs text-muted-foreground">{job.progress}%</span>
-              </div>
+              {job.progress === null ? (
+                <p className="mt-4 text-xs text-muted-foreground">进度 unavailable</p>
+              ) : (
+                <div className="mt-4 flex items-center gap-3">
+                  <Progress value={job.progress} />
+                  <span className="w-10 text-right text-xs text-muted-foreground">{job.progress}%</span>
+                </div>
+              )}
             </button>
           );
         })}

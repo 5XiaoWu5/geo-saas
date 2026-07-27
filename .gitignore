@@ -10,3 +10,4 @@ coverage
 .open-next
 .wrangler
 .superpowers/
+output/playwright/

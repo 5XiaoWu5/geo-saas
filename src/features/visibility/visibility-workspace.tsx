@@ -13,6 +13,7 @@ import type {
   VisibilityTrendPoint,
 } from "@/features/visibility/types";
 import { PageHeader } from "@/components/shared/page";
+import { OperationFeedback, type OperationStatus } from "@/components/shared/operation-feedback";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,6 +58,7 @@ export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: s
   const [savingPrompt, setSavingPrompt] = useState(false);
   const [savingCheck, setSavingCheck] = useState(false);
   const [error, setError] = useState("");
+  const [feedback, setFeedback] = useState<OperationStatus>("IDLE");
 
   const loadVisibility = useCallback(async (id?: string) => {
     setError("");
@@ -100,9 +102,10 @@ export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: s
 
   async function createCampaign(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!projectId) return;
+    if (!projectId || savingKeyword) return;
     setSavingKeyword(true);
     setError("");
+    setFeedback("CREATING");
     try {
       await readJson<{ campaign: VisibilityCampaignWithChecks }>(
         await fetch("/api/visibility", {
@@ -113,8 +116,10 @@ export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: s
       );
       setKeyword("");
       await loadVisibility(projectId);
+      setFeedback("COMPLETED");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "创建监控关键词失败");
+      setFeedback("FAILED");
     } finally {
       setSavingKeyword(false);
     }
@@ -122,9 +127,10 @@ export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: s
 
   async function createPrompt(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedCampaign) return;
+    if (!selectedCampaign || savingPrompt) return;
     setSavingPrompt(true);
     setError("");
+    setFeedback("CREATING");
     try {
       await readJson<{ prompt: VisibilityPrompt }>(
         await fetch("/api/visibility/prompts", {
@@ -135,8 +141,10 @@ export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: s
       );
       setNewPrompt("");
       await loadVisibility(projectId);
+      setFeedback("COMPLETED");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "创建 Prompt 失败");
+      setFeedback("FAILED");
     } finally {
       setSavingPrompt(false);
     }
@@ -144,9 +152,10 @@ export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: s
 
   async function saveCheck(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedCampaign || !selectedPrompt) return;
+    if (!selectedCampaign || !selectedPrompt || savingCheck) return;
     setSavingCheck(true);
     setError("");
+    setFeedback("RUNNING");
     try {
       await readJson<{ check: VisibilityCheck }>(
         await fetch("/api/visibility/checks", {
@@ -171,8 +180,10 @@ export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: s
       setSourceUrlsText("");
       setScore("0");
       await loadVisibility(projectId);
+      setFeedback("COMPLETED");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "保存检测结果失败");
+      setFeedback("FAILED");
     } finally {
       setSavingCheck(false);
     }
@@ -214,6 +225,7 @@ export function VisibilityWorkspace({ initialProjectId }: { initialProjectId?: s
           <AlertCircle className="h-4 w-4 shrink-0" /> {error}
         </div>
       ) : null}
+      {feedback !== "IDLE" ? <OperationFeedback status={feedback} /> : null}
 
       {projects.length === 0 ? (
         <Card className="glass-panel border-white/10">

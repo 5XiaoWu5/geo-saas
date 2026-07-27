@@ -56,3 +56,48 @@ test("provider adapter converts a real failed response into a safe category", as
     globalThis.fetch = previous;
   }
 });
+
+test("provider integration maps billing, permissions, rate limits, outages, and invalid JSON", async () => {
+  const previous = globalThis.fetch;
+  const cases = [
+    { status: 402, body: { error: { message: "payment required" } }, code: "ACCOUNT_BALANCE_INSUFFICIENT" },
+    { status: 403, body: { error: { message: "permission denied" } }, code: "API_KEY_PERMISSION_DENIED" },
+    { status: 429, body: { error: { message: "rate limit exceeded" } }, code: "PROVIDER_RATE_LIMITED" },
+    { status: 503, body: { error: { message: "service unavailable" } }, code: "PROVIDER_UNAVAILABLE" },
+  ] as const;
+  try {
+    for (const item of cases) {
+      globalThis.fetch = async () => new Response(JSON.stringify(item.body), {
+        status: item.status,
+        headers: { "content-type": "application/json" },
+      });
+      await assert.rejects(queryOpenAI(), new RegExp(item.code));
+    }
+    globalThis.fetch = async () => new Response("{not-json", {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+    await assert.rejects(queryOpenAI(), /PROVIDER_INVALID_RESPONSE/);
+  } finally {
+    globalThis.fetch = previous;
+  }
+});
+
+test("provider integration maps network interruption and timeout without leaking credentials", async () => {
+  const previous = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => { throw new TypeError("connection reset while using private-test-credential"); };
+    await assert.rejects(queryOpenAI(), /PROVIDER_NETWORK_ERROR/);
+    globalThis.fetch = async () => { throw new DOMException("aborted private-test-credential", "AbortError"); };
+    await assert.rejects(queryOpenAI(), /PROVIDER_TIMEOUT/);
+  } finally {
+    globalThis.fetch = previous;
+  }
+});
+
+function queryOpenAI() {
+  return providerRegistry.OPENAI.query(
+    { query: "connection test", intent: "TECHNICAL", targetEntity: "Example", industry: "Testing" },
+    { apiKey: "private-test-credential", model: "gpt-test", signal: new AbortController().signal },
+  );
+}

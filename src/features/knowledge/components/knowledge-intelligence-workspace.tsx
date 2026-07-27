@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, ArrowLeft, Award, BrainCircuit, BriefcaseBusiness, CheckCircle2, FileQuestion, Loader2, Package, RefreshCw, ShieldCheck, Target, Users } from "lucide-react";
 import { PageHeader } from "@/components/shared/page";
+import { OperationFeedback, type OperationStatus } from "@/components/shared/operation-feedback";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,17 +28,22 @@ export function KnowledgeIntelligenceWorkspace({ projectId }: { projectId: strin
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState("");
+  const [feedback, setFeedback] = useState<OperationStatus>("IDLE");
 
   const load = useCallback(async () => responseJson(await fetch(`/api/knowledge/${projectId}/profile`, { cache: "no-store" })), [projectId]);
   useEffect(() => { load().then(setData).catch((requestError) => setError(requestError instanceof Error ? requestError.message : "REQUEST_FAILED")).finally(() => setLoading(false)); }, [load]);
 
   async function analyze() {
+    if (analyzing) return;
     setAnalyzing(true);
     setError("");
+    setFeedback("ANALYZING");
     try {
       setData(await responseJson(await fetch(`/api/knowledge/${projectId}/analyze`, { method: "POST" })));
+      setFeedback("COMPLETED");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "REQUEST_FAILED");
+      setFeedback("FAILED");
     } finally {
       setAnalyzing(false);
     }
@@ -51,6 +57,7 @@ export function KnowledgeIntelligenceWorkspace({ projectId }: { projectId: strin
       <PageHeader title={t("knowledge.intelligence.title")} description={`${data.project.name} · ${data.project.websiteUrl}`} action={<Button type="button" className="min-h-11 w-full sm:w-auto" onClick={() => void analyze()} disabled={analyzing}>{analyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}{analyzing ? t("knowledge.intelligence.analyzing") : t("knowledge.intelligence.analyze")}</Button>} />
       <Button asChild variant="ghost" className="min-h-11 px-0"><Link href={`/projects/${projectId}/knowledge`}><ArrowLeft className="h-4 w-4" />{t("knowledge.intelligence.back")}</Link></Button>
       {error ? <p className="border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">{t(`knowledge.errors.${error}`) === `knowledge.errors.${error}` ? t("knowledge.errors.REQUEST_FAILED") : t(`knowledge.errors.${error}`)}</p> : null}
+      {feedback !== "IDLE" ? <OperationFeedback status={feedback} /> : null}
       <div className="grid gap-5 border-y border-white/10 py-5 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label={t("knowledge.intelligence.completeness")} value={data.assessment.completeness === null ? t("knowledge.intelligence.unavailable") : `${data.assessment.completeness}/100`} icon={<BrainCircuit className="h-4 w-4" />} />
         <Metric label={t("knowledge.intelligence.confidence")} value={data.assessment.confidence === null ? t("knowledge.intelligence.unavailable") : `${data.assessment.confidence}%`} icon={<ShieldCheck className="h-4 w-4" />} />

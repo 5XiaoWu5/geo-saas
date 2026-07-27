@@ -5,6 +5,7 @@ import { jsonArray } from "./database";
 import { realAISearchRepository } from "./repository";
 import type { AISearchIntent, AISearchProviderType } from "./types";
 import { recordMonitoringFailure, recordMonitoringSuccess } from "@/features/monitoring-automation";
+import { safeErrorCode } from "@/lib/server/redact-sensitive";
 
 export class RealAISearchError extends Error { constructor(public code: string, public status: number) { super(code); } }
 const rateWindows = new Map<string, number[]>();
@@ -19,7 +20,12 @@ function resolveApiKey(config: Record<string, unknown>, projectId: string, provi
   if (typeof reference !== "string" || !/^env:[A-Z][A-Z0-9_]{1,127}$/.test(reference)) return null;
   return process.env[reference.slice(4)]?.trim() || null;
 }
-function errorCode(error: unknown) { const value = error instanceof Error ? error.message : "PROVIDER_REQUEST_FAILED"; return /^[A-Z0-9_:-]{3,120}$/.test(value) ? value.replace(/:/g, "_") : "PROVIDER_REQUEST_FAILED"; }
+function errorCode(error: unknown) {
+  return safeErrorCode(
+    error instanceof Error ? new Error(error.message.replace(/:/g, "_")) : error,
+    "PROVIDER_REQUEST_FAILED",
+  );
+}
 function retryable(error: unknown) { return Boolean(error && typeof error === "object" && "retryable" in error && (error as { retryable?: boolean }).retryable); }
 
 export async function getRealAISearchMonitoring(userId: string, projectId: string) { const data = await realAISearchRepository.monitoring(userId, projectId); if (!data) throw new RealAISearchError("PROJECT_FORBIDDEN", 403); return data; }
@@ -72,6 +78,7 @@ export async function testProviderConnection(userId: string, projectId: string, 
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     const response = await provider.query({ query: "Return only the word OK to verify this API connection.", intent: "TECHNICAL", targetEntity: String(project.targetEntity), industry: String(project.industry) }, { apiKey, model, signal: controller.signal });
+    if (!response.text.trim()) throw new Error("PROVIDER_EMPTY_RESPONSE");
     if (config) await realAISearchRepository.recordProviderTest(userId, projectId, providerType, "SUCCEEDED", null);
     return { provider: providerType, status: "SUCCEEDED" as const, requestId: response.requestId, testedAt: new Date().toISOString() };
   } catch (error) {
@@ -108,7 +115,7 @@ export async function executeRealAISearch(userId: string, input: { projectId: st
     try { response = await provider.query({ query: input.query, intent: input.intent, targetEntity: String(project.targetEntity), industry: String(project.industry) }, { apiKey, model: String(config.model), signal: controller.signal }); clearTimeout(timer); break; }
     catch (error) { clearTimeout(timer); if (attempts >= MAX_ATTEMPTS || !retryable(error)) return fail(error instanceof DOMException && error.name === "AbortError" ? "PROVIDER_TIMEOUT" : errorCode(error)); await new Promise((resolve) => setTimeout(resolve, 500 * attempts)); }
   }
-  if (!response) return fail("PROVIDER_EMPTY_RESPONSE");
+  if (!response?.text.trim()) return fail("PROVIDER_EMPTY_RESPONSE");
   const parsed = provider.analyzeResponse(response, { targetEntity: String(project.targetEntity), officialDomain: String(project.domain).replace(/^https?:\/\//, "").split("/")[0], productNames: jsonArray(project.productNames).map(String), competitorNames: jsonArray(project.competitorNames).map(String) });
   await realAISearchRepository.markSucceeded(userId, input.projectId, pending.resultId, response, parsed, Date.now() - started, attempts);
   await realAISearchRepository.syncVisibility(userId, input.projectId, { provider: input.provider, query: input.query, answer: response.text, parsed });

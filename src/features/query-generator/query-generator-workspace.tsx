@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, CheckCircle2, Loader2, Plus, Send, Sparkles, Target, Wand2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page";
+import { OperationFeedback, type OperationStatus } from "@/components/shared/operation-feedback";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,6 +44,7 @@ export function QueryGeneratorWorkspace() {
   const [generating, setGenerating] = useState(false);
   const [importingId, setImportingId] = useState("");
   const [error, setError] = useState("");
+  const [feedback, setFeedback] = useState<OperationStatus>("IDLE");
 
   const loadGenerator = useCallback(async (id?: string) => {
     setError("");
@@ -76,9 +78,10 @@ export function QueryGeneratorWorkspace() {
   }
 
   async function generatePrompts() {
-    if (!projectId) return;
+    if (!projectId || generating) return;
     setGenerating(true);
     setError("");
+    setFeedback("GENERATING");
     try {
       await readJson<{ templates: QueryTemplate[] }>(
         await fetch("/api/query-generator/generate", {
@@ -88,16 +91,20 @@ export function QueryGeneratorWorkspace() {
         }),
       );
       await loadGenerator(projectId);
+      setFeedback("COMPLETED");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "生成问题失败");
+      setFeedback("FAILED");
     } finally {
       setGenerating(false);
     }
   }
 
   async function importTemplate(templateId: string) {
+    if (importingId) return;
     setImportingId(templateId);
     setError("");
+    setFeedback("CREATING");
     try {
       await readJson<{ imported: Array<{ promptId: string }> }>(
         await fetch("/api/query-generator/import", {
@@ -107,8 +114,10 @@ export function QueryGeneratorWorkspace() {
         }),
       );
       await loadGenerator(projectId);
+      setFeedback("COMPLETED");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "加入监控失败");
+      setFeedback("FAILED");
     } finally {
       setImportingId("");
     }
@@ -148,6 +157,7 @@ export function QueryGeneratorWorkspace() {
           <AlertCircle className="h-4 w-4 shrink-0" /> {error}
         </div>
       ) : null}
+      {feedback !== "IDLE" ? <OperationFeedback status={feedback} /> : null}
 
       {projects.length === 0 ? (
         <Card className="glass-panel border-white/10">
@@ -293,4 +303,3 @@ function TemplateRow({ template, importing, onImport }: { template: QueryTemplat
     </div>
   );
 }
-

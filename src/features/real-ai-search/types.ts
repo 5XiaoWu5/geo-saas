@@ -19,6 +19,7 @@ export type ProviderConfigView = {
   enabled: boolean;
   configured: boolean;
   keyMask: string | null;
+  keyVersion: number | null;
   configurationSource: "ENCRYPTED" | "ENVIRONMENT" | null;
   secretStorageAvailable: boolean;
   model: string;

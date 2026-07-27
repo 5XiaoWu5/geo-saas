@@ -4,7 +4,7 @@ export type CrawlJob = {
   id: string;
   websiteUrl: string;
   status: CrawlStatus;
-  progress: number;
+  progress: number | null;
   currentPage: string;
   pagesFound: number;
   assetsFound: number;
@@ -21,12 +21,12 @@ export type CrawlPageResult = {
   title: string;
   metaDescription: string;
   h1: string;
-  language: string;
-  statusCode: 200 | 301 | 302 | 404 | 500;
-  wordCount: number;
-  canonical: string;
-  indexable: boolean;
-  depth: number;
+  language: string | null;
+  statusCode: number | null;
+  wordCount: number | null;
+  canonical: string | null;
+  indexable: boolean | null;
+  depth: number | null;
 };
 
 export type CrawlResultSortKey = "title" | "statusCode" | "wordCount" | "depth" | "indexable";

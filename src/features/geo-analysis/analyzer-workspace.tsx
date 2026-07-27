@@ -11,6 +11,8 @@ import { buildOptimizationSuggestions, categoryLabel, diagnoseIssues, type Diagn
 import { GeoBrainScoreCard } from "@/features/geo-brain/components/GeoBrainScoreCard";
 import type { GeoBrainAnalysis } from "@/features/geo-brain/types";
 import { ComingSoon, PageHeader } from "@/components/shared/page";
+import { MetricHelp, type MetricHelpContent } from "@/components/shared/metric-help";
+import { OperationFeedback, type OperationStatus } from "@/components/shared/operation-feedback";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,7 +63,8 @@ export function AnalyzerWorkspace() {
   const [error, setError] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [brainLoading, setBrainLoading] = useState(false);
-  const { t } = useI18n();
+  const [brainFeedback, setBrainFeedback] = useState<{ status: OperationStatus; message: string } | null>(null);
+  const { locale, t } = useI18n();
 
   useEffect(() => {
     let mounted = true;
@@ -133,8 +136,13 @@ export function AnalyzerWorkspace() {
   const geoBrainAnalysis = activeProject.brainAnalysis ?? null;
 
   async function runGeoBrain() {
+    if (brainLoading) return;
     setBrainLoading(true);
     setError("");
+    setBrainFeedback({
+      status: "ANALYZING",
+      message: locale === "zh" ? "正在读取最新网站扫描与实体证据。" : "Reading the latest website scan and entity evidence.",
+    });
     try {
       const response = await fetch("/api/geo-brain/analyze", {
         method: "POST",
@@ -147,8 +155,13 @@ export function AnalyzerWorkspace() {
       const refreshed = await loadAnalyzer();
       setData(refreshed);
       setSelectedProjectId(activeProject.projectId);
+      setBrainFeedback({
+        status: "COMPLETED",
+        message: locale === "zh" ? "GEO 分析已基于最新真实扫描数据更新。" : "The GEO analysis was updated from the latest persisted scan evidence.",
+      });
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "GEO Brain failed");
+      const message = requestError instanceof Error ? requestError.message : "GEO Brain failed";
+      setBrainFeedback({ status: "FAILED", message });
     } finally {
       setBrainLoading(false);
     }
@@ -157,9 +170,17 @@ export function AnalyzerWorkspace() {
   return (
     <div className="space-y-6">
       <PageHeader title="GEO 分析器" description="基于真实网站扫描结果的 AI 搜索可见性分析。" />
+      {brainFeedback ? <OperationFeedback status={brainFeedback.status} message={brainFeedback.message} /> : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard icon={<Target className="h-5 w-5" />} label="综合 GEO 评分" value={`${data.summary.totalScore}`} suffix="/100" description="全部已分析项目均值" />
+        <SummaryCard
+          icon={<Target className="h-5 w-5" />}
+          label={locale === "zh" ? "综合 GEO 评分" : "Overall GEO Score"}
+          value={`${data.summary.totalScore}`}
+          suffix="/100"
+          description={locale === "zh" ? "全部已分析项目均值" : "Average across analyzed projects"}
+          help={geoScoreHelp(locale)}
+        />
         <SummaryCard icon={<Layers3 className="h-5 w-5" />} label="已分析项目" value={`${data.analyzedCount}`} suffix={`/${data.totalProjects}`} description="完成扫描并生成评分" />
         <SummaryCard icon={<ClipboardList className="h-5 w-5" />} label="检测问题" value={`${activeProject.analysis.issues.length}`} description="当前所选项目的问题项" />
         <SummaryCard icon={<CheckCircle2 className="h-5 w-5" />} label="最近分析时间" value={data.summary.lastAnalysisAt ? formatDateTime(data.summary.lastAnalysisAt) : "—"} description="最近一次生成分析" small />
@@ -264,17 +285,36 @@ export function AnalyzerWorkspace() {
   );
 }
 
-function SummaryCard({ icon, label, value, suffix, description, small }: { icon: ReactNode; label: string; value: string; suffix?: string; description: string; small?: boolean }) {
+function SummaryCard({ icon, label, value, suffix, description, small, help }: { icon: ReactNode; label: string; value: string; suffix?: string; description: string; small?: boolean; help?: MetricHelpContent }) {
   return (
     <Card className="glass-panel border-white/10">
       <CardContent className="p-5">
         <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">{icon}</div>
-        <p className="mt-4 text-sm text-muted-foreground">{label}</p>
+        <div className="mt-3 flex min-w-0 items-center gap-1">
+          <p className="text-sm text-muted-foreground">{label}</p>
+          {help ? <MetricHelp label={label} content={help} /> : null}
+        </div>
         <p className={`mt-1 font-semibold text-foreground ${small ? "text-base" : "text-2xl"}`}>{value}{suffix ? <span className="ml-1 text-sm text-muted-foreground">{suffix}</span> : null}</p>
         <p className="mt-2 text-xs text-muted-foreground">{description}</p>
       </CardContent>
     </Card>
   );
+}
+
+function geoScoreHelp(locale: "zh" | "en"): MetricHelpContent {
+  return locale === "zh"
+    ? {
+      what: "综合衡量网站结构、实体、Schema 与内容是否便于 AI 搜索理解。",
+      why: "更完整、可验证的信息能降低 AI 对企业身份和产品能力的不确定性。",
+      source: "最新 WebsiteScan 与 GeoAnalysis 记录。",
+      improve: "先处理高优先级诊断，再重新运行分析验证变化。",
+    }
+    : {
+      what: "Measures how well site structure, entities, schema, and content can be understood by AI search.",
+      why: "Complete, verifiable evidence reduces uncertainty about the company and its products.",
+      source: "Latest persisted WebsiteScan and GeoAnalysis records.",
+      improve: "Resolve high-priority findings, then rerun the analysis to verify changes.",
+    };
 }
 
 function CategoryScore({ label, value, max }: { label: string; value: number; max: number }) {

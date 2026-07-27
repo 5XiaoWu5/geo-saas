@@ -12,7 +12,15 @@ function prompt(request: ProviderQueryRequest) { return `请直接回答用户�
 async function postJson(url: string, init: RequestInit, signal: AbortSignal) {
   try {
     const response = await fetch(url, { ...init, signal, headers: { "Content-Type": "application/json", ...(init.headers ?? {}) } });
-    const body = await response.json().catch(() => ({})) as unknown;
+    const text = await response.text();
+    let body: unknown = {};
+    if (text) {
+      try {
+        body = JSON.parse(text) as unknown;
+      } catch {
+        throw new Error("PROVIDER_INVALID_RESPONSE");
+      }
+    }
     if (!response.ok) {
       const error = new Error(classifyProviderHttpError(response.status, body));
       Object.assign(error, { retryable: response.status === 429 || response.status >= 500 });
