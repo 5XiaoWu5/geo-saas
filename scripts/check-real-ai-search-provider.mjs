@@ -5,9 +5,11 @@ const provider = readFileSync("src/features/ai-search-intelligence/ai-search-pro
 const adapters = readFileSync("src/features/real-ai-search/provider-adapters.ts", "utf8");
 const route = readFileSync("src/app/api/ai-search-providers/[projectId]/route.ts", "utf8");
 for (const forbidden of ["CREATE TABLE", "ALTER TABLE", "ensureSchema"]) if (repository.includes(forbidden) || service.includes(forbidden)) throw new Error(`Runtime DDL found: ${forbidden}`);
-for (const method of ["check(", "query(", "analyzeResponse(", "extractCitation("]) if (!provider.includes(method)) throw new Error(`AISearchProvider method missing: ${method}`);
+for (const method of ["check(", "listModels(", "query(", "analyzeResponse(", "extractCitation("]) if (!provider.includes(method)) throw new Error(`AISearchProvider method missing: ${method}`);
 for (const type of ["OPENAI", "GEMINI", "CLAUDE", "PERPLEXITY"]) if (!adapters.includes(`${type}: adapter`)) throw new Error(`Provider adapter missing: ${type}`);
 if (!service.includes("PROVIDER_TIMEOUT") || !service.includes("AI_SEARCH_RATE_LIMITED") || !service.includes("MAX_ATTEMPTS")) throw new Error("Timeout, retry or rate limiting is missing.");
-if (!route.includes("apiKeyReference") || route.includes("apiKey:")) throw new Error("Provider config API must use references and never accept a plaintext apiKey field.");
+if (!route.includes("verificationToken") || !service.includes("encryptProviderApiKey") || !service.includes("verifyProviderVerificationToken")) throw new Error("Provider config must encrypt submitted keys and require a server-signed model verification.");
+const configView = repository.slice(repository.indexOf("function configView"), repository.indexOf("function resultView"));
+for (const forbidden of ["encryptedApiKey:", "apiKeyIv:", "apiKeyAuthTag:"]) if (configView.includes(forbidden)) throw new Error(`Provider API view exposes secret material: ${forbidden}`);
 if (!repository.includes('p."userId"')) throw new Error("Repository is not project/user scoped.");
-console.log("Verified provider interface, four server adapters, reference-only keys, failure controls, project ownership, and migration-only schema management.");
+console.log("Verified provider interface, four server adapters, encrypted keys, signed model verification, failure controls, project ownership, and migration-only schema management.");

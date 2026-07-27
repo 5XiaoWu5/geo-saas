@@ -1,18 +1,22 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/features/auth/server/session";
-import { AI_SEARCH_PROVIDER_TYPES, DEFAULT_PROVIDER_MODELS, RealAISearchError, getRealAISearchMonitoring, removeProviderConfig, saveProviderConfig } from "@/features/real-ai-search";
+import { AI_SEARCH_CONNECTION_TYPES, AI_SEARCH_PROVIDER_TYPES, RealAISearchError, getRealAISearchMonitoring, removeProviderConfig, saveProviderConfig } from "@/features/real-ai-search";
 
 export const runtime = "nodejs"; export const dynamic = "force-dynamic";
 const provider = z.enum(AI_SEARCH_PROVIDER_TYPES);
 const saveSchema = z.object({
   provider,
+  connectionType: z.enum(AI_SEARCH_CONNECTION_TYPES),
+  displayName: z.string().trim().min(1).max(80).nullable(),
+  baseUrl: z.string().trim().url().max(2048).nullable(),
   enabled: z.boolean(),
   apiKey: z.string().trim().min(8).max(512).optional(),
   apiKeyReference: z.string().trim().regex(/^env:[A-Z][A-Z0-9_]{1,127}$/).nullable().optional(),
   model: z.string().trim().min(1).max(160),
+  verificationToken: z.string().trim().min(32).max(8192),
 }).strict();
 function failure(error: unknown) { if (error instanceof RealAISearchError) return NextResponse.json({ error: error.code }, { status: error.status }); return NextResponse.json({ error: "AI_SEARCH_PROVIDER_CONFIG_FAILED" }, { status: 500 }); }
 export async function GET(_request: Request, { params }: { params: Promise<{ projectId: string }> }) { const user = await getCurrentUser(); if (!user) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 }); try { const { projectId } = await params; const data = await getRealAISearchMonitoring(user.id, projectId); return NextResponse.json({ providers: data.providers }); } catch (error) { return failure(error); } }
-export async function PUT(request: Request, { params }: { params: Promise<{ projectId: string }> }) { const user = await getCurrentUser(); if (!user) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 }); const parsed = saveSchema.safeParse(await request.json().catch(() => null)); if (!parsed.success) return NextResponse.json({ error: "INVALID_PROVIDER_CONFIG" }, { status: 400 }); try { const { projectId } = await params; return NextResponse.json({ config: await saveProviderConfig(user.id, projectId, { ...parsed.data, apiKeyReference: parsed.data.apiKeyReference ?? null, model: parsed.data.model || DEFAULT_PROVIDER_MODELS[parsed.data.provider] }) }); } catch (error) { return failure(error); } }
+export async function PUT(request: Request, { params }: { params: Promise<{ projectId: string }> }) { const user = await getCurrentUser(); if (!user) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 }); const parsed = saveSchema.safeParse(await request.json().catch(() => null)); if (!parsed.success) return NextResponse.json({ error: "INVALID_PROVIDER_CONFIG" }, { status: 400 }); try { const { projectId } = await params; return NextResponse.json({ config: await saveProviderConfig(user.id, projectId, { ...parsed.data, apiKeyReference: parsed.data.apiKeyReference ?? null }) }); } catch (error) { return failure(error); } }
 export async function DELETE(request: Request, { params }: { params: Promise<{ projectId: string }> }) { const user = await getCurrentUser(); if (!user) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 }); const parsed = provider.safeParse(new URL(request.url).searchParams.get("provider")); if (!parsed.success) return NextResponse.json({ error: "INVALID_PROVIDER" }, { status: 400 }); try { const { projectId } = await params; return NextResponse.json(await removeProviderConfig(user.id, projectId, parsed.data)); } catch (error) { return failure(error); } }

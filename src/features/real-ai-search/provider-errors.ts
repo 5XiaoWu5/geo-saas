@@ -9,6 +9,8 @@ export const PROVIDER_USER_ERROR_CODES = [
   "PROVIDER_TIMEOUT",
   "PROVIDER_INVALID_RESPONSE",
   "PROVIDER_EMPTY_RESPONSE",
+  "MODEL_NOT_FOUND",
+  "MODEL_UNSUPPORTED",
   "PROVIDER_UNKNOWN_ERROR",
 ] as const;
 
@@ -42,6 +44,12 @@ export function classifyProviderHttpError(status: number, body: unknown): Provid
     return "PROVIDER_RATE_LIMITED";
   }
   if (status >= 500) return "PROVIDER_UNAVAILABLE";
+  if (status === 404 || /model.+not found|unknown model|does not exist/.test(message)) {
+    return "MODEL_NOT_FOUND";
+  }
+  if (status === 400 && /unsupported model|not supported/.test(message)) {
+    return "MODEL_UNSUPPORTED";
+  }
   return "PROVIDER_UNKNOWN_ERROR";
 }
 

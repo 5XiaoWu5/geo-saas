@@ -1,6 +1,4 @@
 "use client";
-/* eslint-disable @next/next/no-img-element -- provider marks are small brand assets */
-
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -22,6 +20,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { OperationFeedback, type OperationStatus } from "@/components/shared/operation-feedback";
+import { ProviderLogo } from "@/components/shared/provider-logo";
 import { PageHeader } from "@/components/shared/page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,10 +35,12 @@ import { PROVIDER_METADATA } from "./provider-metadata";
 import { growthNextStepLabel, selectGrowthNextStep } from "@/features/growth-engine/next-step";
 import {
   AI_SEARCH_PROVIDER_TYPES,
-  DEFAULT_PROVIDER_MODELS,
   PROVIDER_LABELS,
+  type AISearchConnectionType,
   type AISearchProviderType,
   type MonitoringResponse,
+  type ProviderCapabilities,
+  type ProviderModelOption,
   type ProviderStats,
 } from "./types";
 
@@ -155,6 +156,11 @@ export function RealAISearchMonitoringWorkspace({ projectId }: { projectId: stri
               <h2 className="text-lg font-semibold">{t("providerUx.title")}</h2>
             </div>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{t("providerUx.description")}</p>
+            <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-sky-100">
+              {locale === "zh"
+                ? "API Key 用于运行 AI 检测和分析建议；连接 API 不会把网站提交给 ChatGPT，也不能保证品牌一定被推荐。"
+                : "API Keys run AI checks and analysis. Connecting an API does not submit your site to ChatGPT and cannot guarantee a recommendation."}
+            </p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-black/15 p-4 lg:min-w-72">
             <p className="text-sm font-medium">{t("providerUx.connectedProgress", { connected, total: AI_SEARCH_PROVIDER_TYPES.length })}</p>
@@ -184,7 +190,7 @@ export function RealAISearchMonitoringWorkspace({ projectId }: { projectId: stri
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-        <Card className="glass-panel min-w-0 border-white/10">
+        <Card id="run-real-check" className="glass-panel min-w-0 scroll-mt-24 border-white/10">
           <CardHeader>
             <CardTitle>{locale === "zh" ? "配置流程" : "Setup process"}</CardTitle>
           </CardHeader>
@@ -269,6 +275,9 @@ export function RealAISearchMonitoringWorkspace({ projectId }: { projectId: stri
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant={result.status === "SUCCEEDED" ? "success" : result.status === "FAILED" ? "warning" : "outline"}>{result.status}</Badge>
                 <Badge variant="outline">{PROVIDER_LABELS[result.provider]}</Badge>
+                <Badge variant="muted">
+                  {detectionSourceLabel(result.detectionSource, locale)}
+                </Badge>
                 {result.mentioned !== null ? (
                   <Badge variant={result.mentioned ? "success" : "warning"}>
                     {result.mentioned
@@ -281,6 +290,19 @@ export function RealAISearchMonitoringWorkspace({ projectId }: { projectId: stri
               <p className="mt-2 line-clamp-3 break-words text-sm text-muted-foreground">
                 {result.rawResponse ?? providerErrorMessage(t, result.errorCode ?? "PROVIDER_UNKNOWN_ERROR")}
               </p>
+              {result.detectionSource === "COMPATIBLE_GATEWAY" ? (
+                <p className="mt-2 text-xs leading-5 text-amber-100">
+                  {locale === "zh"
+                    ? "本次第三方兼容接口回答中记录了品牌表现；这不代表 ChatGPT 官方应用中的实际展示。"
+                    : "This records the brand result in a third-party compatible response; it does not represent the official ChatGPT product experience."}
+                </p>
+              ) : result.detectionSource === "OFFICIAL_API" ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {locale === "zh"
+                    ? "检测来源：官方 API。API 结果不等同于网页或手机应用中的实际展示。"
+                    : "Source: official API. API results are not the same as the web or mobile product experience."}
+                </p>
+              ) : null}
             </article>
           )) : (
             <p className="rounded-2xl border border-white/10 bg-white/[0.025] p-5 text-sm text-muted-foreground">
@@ -327,19 +349,34 @@ function ProviderCard({
   const { locale, t } = useI18n();
   const meta = PROVIDER_METADATA[stats.provider];
   const [enabled, setEnabled] = useState(stats.config.id ? stats.config.enabled : true);
-  const [model, setModel] = useState(stats.config.model || DEFAULT_PROVIDER_MODELS[stats.provider]);
+  const [connectionType, setConnectionType] = useState<AISearchConnectionType>(stats.config.connectionType);
+  const [displayName, setDisplayName] = useState(stats.config.displayName ?? "");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [models, setModels] = useState<ProviderModelOption[]>([]);
+  const [model, setModel] = useState(stats.config.selectedModelId ?? "");
+  const [connectionTested, setConnectionTested] = useState(false);
+  const [verificationToken, setVerificationToken] = useState("");
+  const [verifiedCapabilities, setVerifiedCapabilities] = useState<ProviderCapabilities | null>(stats.config.capabilities);
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [testDialogOpen, setTestDialogOpen] = useState(false);
+  const [verifyDialogOpen, setVerifyDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [configurationDirty, setConfigurationDirty] = useState(false);
   const [feedback, setFeedback] = useState<{ status: OperationStatus; message?: string } | null>(null);
 
   useEffect(() => {
     setEnabled(stats.config.id ? stats.config.enabled : true);
-    setModel(stats.config.model || DEFAULT_PROVIDER_MODELS[stats.provider]);
-  }, [stats.config.enabled, stats.config.id, stats.config.model, stats.provider]);
+    setConnectionType(stats.config.connectionType);
+    setDisplayName(stats.config.displayName ?? "");
+    setModel(stats.config.selectedModelId ?? "");
+    setVerifiedCapabilities(stats.config.capabilities);
+    setConfigurationDirty(false);
+  }, [stats.config.capabilities, stats.config.connectionType, stats.config.displayName, stats.config.enabled, stats.config.id, stats.config.selectedModelId]);
 
   const testing = busy === `test:${stats.provider}`;
+  const retrievingModels = busy === `models:${stats.provider}`;
+  const verifyingModel = busy === `verify:${stats.provider}`;
   const saving = busy === `save:${stats.provider}`;
   const deleting = busy === `delete:${stats.provider}`;
   const status: ProviderCardStatus = testing
@@ -368,10 +405,29 @@ function ProviderCard({
     unavailable: t("providerUx.unavailableStatus"),
     disabled: t("providerUx.disabled"),
   }[status];
-  const canTest = enabled && (apiKey.trim().length >= 8 || stats.config.configured);
-  const canSave = stats.config.secretStorageAvailable
-    ? apiKey.trim().length >= 8 || stats.config.configured
-    : stats.config.configured;
+  const canTest = (apiKey.trim().length >= 8 || stats.config.configured)
+    && (connectionType !== "OPENAI_COMPATIBLE" || Boolean(baseUrl.trim() || stats.config.baseUrlHost));
+  const canSave = Boolean(verificationToken && model);
+
+  function connectionPayload() {
+    return {
+      provider: stats.provider,
+      connectionType,
+      displayName: connectionType === "OPENAI_COMPATIBLE" ? displayName.trim() || null : null,
+      baseUrl: connectionType === "OPENAI_COMPATIBLE" && baseUrl.trim() ? baseUrl.trim() : null,
+      ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
+    };
+  }
+
+  function invalidateConnection() {
+    setConfigurationDirty(true);
+    setConnectionTested(false);
+    setModels([]);
+    setModel("");
+    setVerificationToken("");
+    setVerifiedCapabilities(null);
+    setFeedback(null);
+  }
 
   async function save() {
     if (busy || !canSave) return;
@@ -383,13 +439,15 @@ function ProviderCard({
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          provider: stats.provider,
+          ...connectionPayload(),
           enabled,
           model,
-          ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
+          verificationToken,
         }),
       }));
       setApiKey("");
+      setVerificationToken("");
+      setConfigurationDirty(false);
       setFeedback({ status: "COMPLETED", message: t("providerUx.saveSuccessDescription") });
       await onSaved();
     } catch (requestError) {
@@ -411,21 +469,89 @@ function ProviderCard({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          provider: stats.provider,
+          ...connectionPayload(),
           approvedExternalRequest: true,
-          model,
-          ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
         }),
       }));
+      setConnectionTested(true);
+      setModels([]);
+      setModel("");
+      setVerificationToken("");
       setFeedback({
         status: "COMPLETED",
-        message: t("providerUx.testSuccessDescription", { provider: meta.name }),
+        message: locale === "zh"
+          ? "基础连接成功。下一步获取这个账号可见的模型。"
+          : "The base connection works. Next, retrieve the models visible to this account.",
       });
-      await onSaved();
     } catch (requestError) {
       const code = requestError instanceof Error ? requestError.message : "PROVIDER_UNKNOWN_ERROR";
       setFeedback({ status: "FAILED", message: providerErrorMessage(t, code) });
-      await onSaved().catch(() => undefined);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function fetchModels() {
+    if (busy || !connectionTested) return;
+    setBusy(`models:${stats.provider}`);
+    setFeedback({ status: "RUNNING", message: locale === "zh" ? "正在获取当前账号可见的模型…" : "Retrieving models available to this account…" });
+    try {
+      const response = await json<{ models: ProviderModelOption[] }>(await fetch(`/api/ai-search-providers/${projectId}/models`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(connectionPayload()),
+      }));
+      setModels(response.models);
+      setModel("");
+      setVerificationToken("");
+      setFeedback({
+        status: "COMPLETED",
+        message: locale === "zh"
+          ? `已找到 ${response.models.length} 个可测试模型。请选择一个模型。`
+          : `${response.models.length} testable models found. Select one to continue.`,
+      });
+    } catch (requestError) {
+      const code = requestError instanceof Error ? requestError.message : "REQUEST_FAILED";
+      setFeedback({ status: "FAILED", message: providerErrorMessage(t, code) });
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function verifyModel() {
+    if (busy || !model || !models.some(item => item.modelId === model)) return;
+    setBusy(`verify:${stats.provider}`);
+    setVerifyDialogOpen(false);
+    setVerificationToken("");
+    setFeedback({
+      status: "RUNNING",
+      message: locale === "zh" ? "正在发送一次最小真实请求验证模型…" : "Sending one minimal real request to verify the model…",
+    });
+    try {
+      const response = await json<{
+        status: string;
+        verificationToken: string | null;
+        capabilities: ProviderCapabilities | null;
+        error?: string;
+      }>(await fetch(`/api/ai-search-providers/${projectId}/verify-model`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...connectionPayload(), modelId: model, approvedExternalRequest: true }),
+      }));
+      if (response.status !== "VERIFIED_AVAILABLE" || !response.verificationToken) {
+        throw new Error(response.error ?? response.status);
+      }
+      setVerificationToken(response.verificationToken);
+      setVerifiedCapabilities(response.capabilities);
+      setFeedback({
+        status: "COMPLETED",
+        message: locale === "zh"
+          ? "模型已通过真实请求验证。现在可以安全保存。"
+          : "The model passed a real request. You can now save it safely.",
+      });
+    } catch (requestError) {
+      const code = requestError instanceof Error ? requestError.message : "MODEL_VERIFICATION_FAILED";
+      setFeedback({ status: "FAILED", message: providerErrorMessage(t, code) });
     } finally {
       setBusy("");
     }
@@ -456,18 +582,43 @@ function ProviderCard({
     <article className="min-w-0 rounded-3xl border border-white/10 bg-white/[0.025] p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 gap-3">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-slate-950">
-            <img src={meta.logo} alt={`${meta.name} logo`} className="h-7 w-7" />
-          </div>
+          <ProviderLogo provider={stats.provider} connectionType={connectionType} />
           <div className="min-w-0">
-            <h3 className="font-semibold">{meta.name}</h3>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">{meta.description[locale]}</p>
+            <h3 className="font-semibold">
+              {connectionType === "OPENAI_COMPATIBLE"
+                ? displayName || (locale === "zh" ? "第三方 AI 接口" : "Third-party AI interface")
+                : meta.name}
+            </h3>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              {connectionType === "OPENAI_COMPATIBLE"
+                ? (locale === "zh"
+                  ? "通过第三方 OpenAI 兼容接口运行检测；不代表 OpenAI 官方产品结果。"
+                  : "Runs checks through a third-party OpenAI-compatible interface; this is not an official OpenAI product result.")
+                : meta.description[locale]}
+            </p>
           </div>
         </div>
         <Badge variant={status === "success" ? "success" : status === "failed" ? "warning" : "muted"} className="w-fit">
           {testing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin motion-reduce:animate-none" /> : null}
           {statusLabel}
         </Badge>
+      </div>
+
+      <div className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-black/10 p-4 text-sm sm:grid-cols-2">
+        <p className="min-w-0">
+          <span className="text-muted-foreground">{locale === "zh" ? "当前模型：" : "Current model: "}</span>
+          <span className="break-words font-medium">
+            {model || stats.config.selectedModelId || (locale === "zh" ? "尚未选择" : "Not selected")}
+          </span>
+        </p>
+        <p>
+          <span className="text-muted-foreground">{locale === "zh" ? "模型状态：" : "Model status: "}</span>
+          <span className="font-medium">
+            {verificationToken
+              ? (locale === "zh" ? "可以使用" : "Available")
+              : modelVerificationLabel(stats.config.modelVerificationStatus, locale)}
+          </span>
+        </p>
       </div>
 
       <div className="mt-4 rounded-2xl border border-sky-300/15 bg-sky-300/[0.05] p-4">
@@ -506,17 +657,90 @@ function ProviderCard({
       </details>
 
       <div className="mt-4 grid gap-4">
+        {stats.provider === "OPENAI" ? (
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">
+              {locale === "zh" ? "第一步：选择连接方式" : "Step 1: Choose a connection"}
+            </legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {(["OPENAI_OFFICIAL", "OPENAI_COMPATIBLE"] as const).map(value => (
+                <label
+                  key={value}
+                  className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border px-3 text-sm ${
+                    connectionType === value ? "border-violet-300/60 bg-violet-300/10" : "border-white/10"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name={`${stats.provider}-connection-type`}
+                    value={value}
+                    checked={connectionType === value}
+                    onChange={() => {
+                      setConnectionType(value);
+                      setBaseUrl("");
+                      invalidateConnection();
+                    }}
+                  />
+                  {value === "OPENAI_OFFICIAL"
+                    ? (locale === "zh" ? "OpenAI 官方 API" : "Official OpenAI API")
+                    : (locale === "zh" ? "第三方兼容接口" : "Third-party compatible API")}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        ) : null}
+
+        {connectionType === "OPENAI_COMPATIBLE" ? (
+          <div className="space-y-4 rounded-2xl border border-amber-300/20 bg-amber-300/[0.05] p-4">
+            <p className="text-xs leading-5 text-amber-100">
+              {locale === "zh"
+                ? "您正在连接第三方 AI 接口。费用、数据处理、模型真实性和稳定性由该服务商负责；GeoPilot AI 只能验证接口能否调用。"
+                : "You are connecting a third-party AI interface. Pricing, data handling, model authenticity, and reliability are the provider's responsibility; GeoPilot AI can only verify that the interface responds."}
+            </p>
+            <div>
+              <Label htmlFor={`${stats.provider}-display-name`}>
+                {locale === "zh" ? "服务名称" : "Service name"}
+              </Label>
+              <Input
+                id={`${stats.provider}-display-name`}
+                className="mt-2 min-h-11"
+                value={displayName}
+                onChange={event => {
+                  setDisplayName(event.target.value);
+                  invalidateConnection();
+                }}
+                placeholder={locale === "zh" ? "例如：企业 AI 网关" : "Example: Enterprise AI gateway"}
+              />
+            </div>
+            <div>
+              <Label htmlFor={`${stats.provider}-base-url`}>
+                {locale === "zh" ? "API 地址" : "API address"}
+              </Label>
+              <Input
+                id={`${stats.provider}-base-url`}
+                type="url"
+                inputMode="url"
+                className="mt-2 min-h-11"
+                value={baseUrl}
+                onChange={event => {
+                  setBaseUrl(event.target.value);
+                  invalidateConnection();
+                }}
+                placeholder={stats.config.baseUrlHost
+                  ? (locale === "zh" ? `已保存：${stats.config.baseUrlHost}` : `Saved: ${stats.config.baseUrlHost}`)
+                  : "https://api.example.com/v1"}
+              />
+              <p className="mt-2 text-xs text-muted-foreground">
+                {locale === "zh" ? "生产环境只接受公开 HTTPS 地址。" : "Production accepts public HTTPS addresses only."}
+              </p>
+            </div>
+          </div>
+        ) : null}
+
         <div>
-          <Label htmlFor={`${stats.provider}-model`}>{t("providerUx.model")}</Label>
-          <Input
-            id={`${stats.provider}-model`}
-            className="mt-2 min-h-11"
-            value={model}
-            onChange={event => setModel(event.target.value)}
-          />
-        </div>
-        <div>
-          <Label htmlFor={`${stats.provider}-api-key`}>{t("providerUx.apiKey")}</Label>
+          <Label htmlFor={`${stats.provider}-api-key`}>
+            {locale === "zh" ? "第二步：填写 API Key" : "Step 2: Enter the API Key"}
+          </Label>
           {stats.config.keyMask ? (
             <p className="mt-2 text-xs text-muted-foreground">{t("providerUx.configuredMask", { mask: stats.config.keyMask })}</p>
           ) : null}
@@ -531,7 +755,10 @@ function ProviderCard({
               spellCheck={false}
               className="min-h-11 pr-12"
               value={apiKey}
-              onChange={event => setApiKey(event.target.value)}
+              onChange={event => {
+                setApiKey(event.target.value);
+                invalidateConnection();
+              }}
               placeholder={t("providerUx.apiKeyPlaceholder")}
               disabled={!stats.config.secretStorageAvailable}
             />
@@ -549,13 +776,49 @@ function ProviderCard({
             <p className="mt-2 text-xs leading-5 text-amber-200">{t("providerUx.storageUnavailable")}</p>
           ) : null}
         </div>
+
+        <div>
+          <Label htmlFor={`${stats.provider}-model`}>
+            {locale === "zh" ? "第四步：选择可用模型" : "Step 4: Select an available model"}
+          </Label>
+          <Select
+            id={`${stats.provider}-model`}
+            className="mt-2 min-h-11"
+            value={model}
+            disabled={!models.length}
+            onChange={event => {
+              setModel(event.target.value);
+              setVerificationToken("");
+              setVerifiedCapabilities(null);
+            }}
+          >
+            <option value="">
+              {models.length
+                ? (locale === "zh" ? "请选择一个模型" : "Select a model")
+                : (locale === "zh" ? "请先测试连接并获取模型" : "Test the connection and retrieve models first")}
+            </option>
+            {models.map(item => (
+              <option key={item.modelId} value={item.modelId}>{item.displayName}</option>
+            ))}
+          </Select>
+          {models.length ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {locale === "zh"
+                ? `系统找到了 ${models.length} 个当前凭据可见的模型。`
+                : `${models.length} models are visible to the current credentials.`}
+            </p>
+          ) : null}
+        </div>
       </div>
 
       <label className="mt-3 flex min-h-11 items-center gap-3 text-sm">
         <input
           type="checkbox"
           checked={enabled}
-          onChange={event => setEnabled(event.target.checked)}
+          onChange={event => {
+            setEnabled(event.target.checked);
+            invalidateConnection();
+          }}
           className="h-4 w-4"
         />
         {t("providerUx.enabled")}
@@ -565,30 +828,92 @@ function ProviderCard({
 
       <p className="mt-3 text-xs leading-5 text-muted-foreground">
         <strong>{t("providerUx.nextStep")}：</strong>
-        {status === "success"
+        {!configurationDirty && stats.config.modelVerificationStatus === "VERIFIED_AVAILABLE"
           ? (locale === "zh" ? "运行第一次 AI 搜索检测" : "Run your first AI search check")
-          : t("providerUx.flow")}
+          : !connectionTested
+            ? (locale === "zh" ? "测试基础连接" : "Test the base connection")
+            : !models.length
+              ? (locale === "zh" ? "获取当前账号可见的模型" : "Retrieve models visible to this account")
+              : !model
+                ? (locale === "zh" ? "从下拉框选择一个模型" : "Select a model from the list")
+                : !verificationToken
+                  ? (locale === "zh" ? "真实验证这个模型" : "Verify this model with a real request")
+                  : (locale === "zh" ? "保存并启用这个模型" : "Save and enable this model")}
       </p>
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-2">
-        <Button
-          variant="outline"
-          className="min-h-11"
-          disabled={busy !== "" || !canSave}
-          onClick={() => void save()}
-        >
-          {saving ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Save className="h-4 w-4" />}
-          {saving ? t("providerUx.saving") : t("providerUx.save")}
-        </Button>
-        <Button
-          className="min-h-11"
-          disabled={busy !== "" || !canTest}
-          onClick={() => setTestDialogOpen(true)}
-        >
-          {testing ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Server className="h-4 w-4" />}
-          {testing ? t("providerUx.testing") : t("providerUx.test")}
-        </Button>
+      <div className="mt-4">
+        {!configurationDirty && stats.config.modelVerificationStatus === "VERIFIED_AVAILABLE" ? (
+          <Button asChild className="min-h-11 w-full">
+            <a href="#run-real-check">
+              <Play className="h-4 w-4" />
+              {locale === "zh" ? "开始第一次品牌检测" : "Run the first brand check"}
+            </a>
+          </Button>
+        ) : !connectionTested ? (
+          <Button
+            className="min-h-11 w-full"
+            disabled={busy !== "" || !canTest}
+            onClick={() => setTestDialogOpen(true)}
+          >
+            {testing ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Server className="h-4 w-4" />}
+            {testing ? t("providerUx.testing") : t("providerUx.test")}
+          </Button>
+        ) : !models.length ? (
+          <Button
+            className="min-h-11 w-full"
+            disabled={busy !== ""}
+            onClick={() => void fetchModels()}
+          >
+            {retrievingModels ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Radar className="h-4 w-4" />}
+            {retrievingModels
+              ? (locale === "zh" ? "正在获取模型…" : "Retrieving models…")
+              : (locale === "zh" ? "获取可用模型" : "Retrieve available models")}
+          </Button>
+        ) : !verificationToken ? (
+          <Button
+            className="min-h-11 w-full"
+            disabled={busy !== "" || !model}
+            onClick={() => setVerifyDialogOpen(true)}
+          >
+            {verifyingModel ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <CheckCircle2 className="h-4 w-4" />}
+            {verifyingModel
+              ? (locale === "zh" ? "正在验证模型…" : "Verifying model…")
+              : (locale === "zh" ? "验证这个模型" : "Verify this model")}
+          </Button>
+        ) : (
+          <Button
+            className="min-h-11 w-full"
+            disabled={busy !== "" || !canSave}
+            onClick={() => void save()}
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Save className="h-4 w-4" />}
+            {saving
+              ? t("providerUx.saving")
+              : (locale === "zh" ? "保存并开始检测" : "Save and start monitoring")}
+          </Button>
+        )}
       </div>
+
+      <details className="group mt-3 rounded-2xl border border-white/10">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-4 text-sm font-medium">
+          {locale === "zh" ? "查看技术详情" : "View technical details"}
+          <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180 motion-reduce:transition-none" />
+        </summary>
+        <div className="space-y-2 border-t border-white/10 px-4 py-3 text-xs leading-5 text-muted-foreground">
+          <p>{locale === "zh" ? "连接类型" : "Connection type"}：{connectionType}</p>
+          <p>{locale === "zh" ? "模型 ID" : "Model ID"}：{model || stats.config.selectedModelId || (locale === "zh" ? "尚未选择" : "Not selected")}</p>
+          {stats.config.baseUrlHost ? <p>{locale === "zh" ? "服务主机" : "Service host"}：{stats.config.baseUrlHost}</p> : null}
+          {verifiedCapabilities ? (
+            <ul>
+              {Object.entries(verifiedCapabilities).map(([name, value]) => (
+                <li key={name}>{name}：{String(value)}</li>
+              ))}
+            </ul>
+          ) : <p>{locale === "zh" ? "能力尚未验证" : "Capabilities are not verified yet"}</p>}
+        </div>
+      </details>
+
+      <div className="mt-2">
       {stats.config.id ? (
         <Button
           variant="ghost"
@@ -600,6 +925,7 @@ function ProviderCard({
           {deleting ? t("providerUx.deletingKey") : t("providerUx.deleteKey")}
         </Button>
       ) : null}
+      </div>
 
       {stats.config.lastTestedAt ? (
         <p className="mt-3 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
@@ -623,6 +949,27 @@ function ProviderCard({
             </DialogClose>
             <Button className="min-h-11" onClick={() => void test()}>
               <Server className="h-4 w-4" />{t("providerUx.confirmTest")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={verifyDialogOpen} onOpenChange={setVerifyDialogOpen}>
+        <DialogContent>
+          <DialogTitle className="pr-12 text-lg font-semibold">
+            {locale === "zh" ? "确认真实模型验证" : "Confirm real model verification"}
+          </DialogTitle>
+          <DialogDescription className="mt-3 text-sm leading-6 text-muted-foreground">
+            {locale === "zh"
+              ? `即将向 ${connectionType === "OPENAI_COMPATIBLE" ? displayName || "第三方服务" : meta.name} 的 ${model} 模型发送 1 次最小请求，可能产生少量费用。`
+              : `One minimal request will be sent to ${connectionType === "OPENAI_COMPATIBLE" ? displayName || "the third-party service" : meta.name} using ${model}. It may consume a small amount of credit.`}
+          </DialogDescription>
+          <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <DialogClose asChild>
+              <Button variant="outline" className="min-h-11">{locale === "zh" ? "返回" : "Back"}</Button>
+            </DialogClose>
+            <Button className="min-h-11" onClick={() => void verifyModel()}>
+              <CheckCircle2 className="h-4 w-4" />
+              {locale === "zh" ? "确认并验证模型" : "Confirm and verify model"}
             </Button>
           </div>
         </DialogContent>
@@ -655,4 +1002,26 @@ function providerErrorMessage(t: (key: string, values?: Record<string, string | 
   const key = `providerUx.errors.${code}`;
   const translated = t(key);
   return translated === key ? t("providerUx.errors.PROVIDER_UNKNOWN_ERROR") : translated;
+}
+
+function detectionSourceLabel(source: string, locale: "zh" | "en") {
+  if (source === "COMPATIBLE_GATEWAY") return locale === "zh" ? "第三方兼容接口" : "Compatible gateway";
+  if (source === "REAL_PRODUCT_VERIFICATION") return locale === "zh" ? "真实产品验证" : "Real product verification";
+  return locale === "zh" ? "官方 API" : "Official API";
+}
+
+function modelVerificationLabel(status: string, locale: "zh" | "en") {
+  const labels: Record<string, { zh: string; en: string }> = {
+    LISTED_NOT_TESTED: { zh: "尚未测试", en: "Not tested" },
+    VERIFYING: { zh: "正在测试", en: "Verifying" },
+    VERIFIED_AVAILABLE: { zh: "可以使用", en: "Available" },
+    NO_ACCESS: { zh: "当前账号无权使用", en: "No account access" },
+    MODEL_NOT_FOUND: { zh: "模型不存在", en: "Model not found" },
+    INSUFFICIENT_BALANCE: { zh: "余额不足", en: "Insufficient balance" },
+    RATE_LIMITED: { zh: "请求过于频繁", en: "Rate limited" },
+    TEMPORARILY_UNAVAILABLE: { zh: "服务暂时不可用", en: "Temporarily unavailable" },
+    UNSUPPORTED: { zh: "当前接口不支持", en: "Unsupported" },
+    VERIFICATION_FAILED: { zh: "验证失败", en: "Verification failed" },
+  };
+  return labels[status]?.[locale] ?? (locale === "zh" ? "尚未测试" : "Not tested");
 }

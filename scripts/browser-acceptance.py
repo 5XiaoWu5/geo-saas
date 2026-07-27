@@ -1,4 +1,4 @@
-"""Real Chromium acceptance for GeoPilot AI Sprint 19-B.
+"""Real Chromium acceptance for GeoPilot AI Sprint 19-C.
 
 Credentials are read from environment variables and are never written to artifacts:
 GEOPILOT_TEST_EMAIL, GEOPILOT_TEST_PASSWORD, GEOPILOT_TEST_EMAIL_2,
@@ -19,7 +19,7 @@ from playwright.sync_api import BrowserContext, Page, sync_playwright
 
 
 BASE_URL = os.environ.get("GEOPILOT_BASE_URL", "https://geopilotapp.com").rstrip("/")
-ARTIFACT_DIR = Path("output/playwright/sprint-19-b")
+ARTIFACT_DIR = Path("output/playwright/sprint-19-c")
 VIEWPORTS = [
     ("desktop-1440", 1440, 900),
     ("mobile-375", 375, 812),
@@ -82,7 +82,7 @@ def create_project(context: BrowserContext) -> str:
     response = context.request.post(
         f"{BASE_URL}/api/projects",
         data={
-            "name": f"Sprint 19-B Browser Acceptance {int(time.time())}",
+            "name": f"Sprint 19-C Browser Acceptance {int(time.time())}",
             "websiteUrl": "https://example.com",
             "language": "English",
             "country": "United States",
@@ -100,7 +100,7 @@ def cleanup_stale_projects(context: BrowserContext) -> None:
     if response.status != 200:
         return
     for project in api_json(response).get("projects", []):
-        if str(project.get("name", "")).startswith("Sprint 19-B Browser Acceptance"):
+        if str(project.get("name", "")).startswith(("Sprint 19-B Browser Acceptance", "Sprint 19-C Browser Acceptance")):
             context.request.delete(f"{BASE_URL}/api/projects/{project['id']}")
 
 
@@ -134,8 +134,12 @@ def provider_interactions(page: Page, project_id: str, evidence: dict[str, Any])
     }:
         raise AssertionError("OFFICIAL_PROVIDER_LINKS_INVALID")
 
+    official = card.get_by_label(re.compile("OpenAI 官方 API|Official OpenAI API"))
+    if not official.is_checked():
+        official.check()
+    evidence["officialLogoVisible"] = card.get_by_role("img", name="OpenAI").is_visible()
     field = card.locator("#OPENAI-api-key")
-    field.fill("sk-sprint19b-invalid-credential-0001")
+    field.fill("invalid-browser-credential-0001")
     card.get_by_role("button", name=re.compile("显示 API Key|Show API Key")).click()
     if field.get_attribute("type") != "text":
         raise AssertionError("API_KEY_SHOW_FAILED")
@@ -143,15 +147,6 @@ def provider_interactions(page: Page, project_id: str, evidence: dict[str, Any])
     if field.get_attribute("type") != "password":
         raise AssertionError("API_KEY_HIDE_FAILED")
 
-    with page.expect_response(lambda response: "/api/ai-search-providers/" in response.url and response.request.method == "PUT") as saved:
-        card.get_by_role("button", name=re.compile("保存配置|Save configuration")).click()
-    if saved.value.status != 200:
-        raise AssertionError(
-            f"PROVIDER_SAVE_{saved.value.status}_{api_json(saved.value).get('error')}"
-        )
-    page.wait_for_timeout(300)
-
-    card = page.locator("article").filter(has_text="OpenAI").first
     with page.expect_response(lambda response: response.url.endswith("/test") and response.request.method == "POST", timeout=30_000) as tested:
         card.get_by_role("button", name=re.compile("测试连接|Test connection")).click()
         page.get_by_role("button", name=re.compile("确认并测试|Confirm and test")).click()
@@ -160,24 +155,40 @@ def provider_interactions(page: Page, project_id: str, evidence: dict[str, Any])
     if tested.value.status not in (401, 422):
         raise AssertionError(f"INVALID_PROVIDER_TEST_{tested.value.status}")
 
-    card = page.locator("article").filter(has_text="OpenAI").first
-    field = card.locator("#OPENAI-api-key")
-    field.fill("sk-sprint19b-replacement-credential-0002")
-    with page.expect_response(lambda response: "/api/ai-search-providers/" in response.url and response.request.method == "PUT") as replaced:
-        card.get_by_role("button", name=re.compile("保存配置|Save configuration")).click()
-    if replaced.value.status != 200:
-        raise AssertionError(f"PROVIDER_REPLACE_{replaced.value.status}")
+    model_select = card.locator("#OPENAI-model")
+    evidence["modelDisabledBeforeConnection"] = model_select.is_disabled()
+    if not evidence["modelDisabledBeforeConnection"]:
+        raise AssertionError("MODEL_SELECT_ENABLED_BEFORE_CONNECTION")
 
-    card = page.locator("article").filter(has_text="OpenAI").first
-    card.get_by_role("button", name=re.compile("删除 API Key|Delete API Key")).click()
-    page.get_by_role("button", name=re.compile("^取消$|^Cancel$")).click()
-    if page.get_by_role("dialog").count():
-        raise AssertionError("PROVIDER_DELETE_CANCEL_FAILED")
-    card.get_by_role("button", name=re.compile("删除 API Key|Delete API Key")).click()
-    with page.expect_response(lambda response: "/api/ai-search-providers/" in response.url and response.request.method == "DELETE") as deleted:
-        page.get_by_role("dialog").get_by_role("button", name=re.compile("删除 API Key|Delete API Key")).click()
-    if deleted.value.status != 200:
-        raise AssertionError(f"PROVIDER_DELETE_{deleted.value.status}")
+    compatible = card.get_by_label(re.compile("第三方兼容接口|Third-party compatible API"))
+    compatible.check()
+    card.locator("#OPENAI-display-name").fill("Sprint 19-C Test Gateway")
+    card.locator("#OPENAI-base-url").fill("https://127.0.0.1/v1")
+    field = card.locator("#OPENAI-api-key")
+    field.fill("invalid-browser-gateway-credential")
+    evidence["compatibleLogoVisible"] = card.get_by_role(
+        "img", name=re.compile("Third-party AI interface")
+    ).is_visible()
+    with page.expect_response(lambda response: response.url.endswith("/test") and response.request.method == "POST", timeout=30_000) as compatible_test:
+        card.get_by_role("button", name=re.compile("测试连接|Test connection")).click()
+        page.get_by_role("button", name=re.compile("确认并测试|Confirm and test")).click()
+    evidence["compatiblePrivateUrlStatus"] = compatible_test.value.status
+    evidence["compatiblePrivateUrlError"] = api_json(compatible_test.value).get("error")
+    if evidence["compatiblePrivateUrlError"] != "COMPATIBLE_BASE_URL_PRIVATE_NETWORK":
+        raise AssertionError(
+            f"COMPATIBLE_PRIVATE_URL_NOT_BLOCKED_{evidence['compatiblePrivateUrlStatus']}_"
+            f"{evidence['compatiblePrivateUrlError']}"
+        )
+
+    card.get_by_text(re.compile("查看技术详情|View technical details")).click()
+    evidence["technicalDetailsVisible"] = card.get_by_text(
+        re.compile("连接类型|Connection type")
+    ).is_visible()
+    official.check()
+    evidence["modelClearedAfterConnectionChange"] = model_select.input_value() == ""
+    if not evidence["modelClearedAfterConnectionChange"]:
+        raise AssertionError("MODEL_NOT_CLEARED_AFTER_CONNECTION_CHANGE")
+    evidence["paidProviderModelVerification"] = "NOT_EXECUTED_NO_VALID_PAID_KEY"
 
 
 def automation_interaction(page: Page, project_id: str, evidence: dict[str, Any]) -> None:
@@ -246,6 +257,7 @@ def viewport_acceptance(context: BrowserContext, project_id: str, results: dict[
         "geo-analyzer": "/analyzer",
         "ai-search-monitoring": f"/projects/{project_id}/geo/monitoring-center",
         "ai-command-center": f"/projects/{project_id}/geo/command-center",
+        "project-settings": f"/projects/{project_id}",
     }
     for label, width, height in VIEWPORTS:
         page = context.new_page()
@@ -357,7 +369,7 @@ def main() -> int:
                 raise AssertionError("NORMAL_API_NOT_200")
             body = api_json(normal)
             serialized = json.dumps(body)
-            if "sk-sprint19b" in serialized or "encryptedApiKey" in serialized or "apiKeyAuthTag" in serialized:
+            if "invalid-browser-credential" in serialized or "encryptedApiKey" in serialized or "apiKeyAuthTag" in serialized:
                 raise AssertionError("PROVIDER_API_LEAKED_SECRET_FIELDS")
 
             second = browser.new_context(viewport={"width": 1440, "height": 900})

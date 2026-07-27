@@ -1,9 +1,19 @@
-import type { AISearchProviderType, ParsedAISearchResponse, ProviderCheck, ProviderQueryRequest, ProviderRawResponse, ResponseAnalysisInput } from "@/features/real-ai-search/types";
+import type {
+  AISearchProviderType,
+  ParsedAISearchResponse,
+  ProviderCheck,
+  ProviderConnectionContext,
+  ProviderModelOption,
+  ProviderQueryRequest,
+  ProviderRawResponse,
+  ResponseAnalysisInput,
+} from "@/features/real-ai-search/types";
 
 export interface AISearchProvider {
   readonly provider: AISearchProviderType;
   check(context: { apiKey: string | null; model: string }): Promise<ProviderCheck>;
-  query(request: ProviderQueryRequest, context: { apiKey: string; model: string; signal: AbortSignal }): Promise<ProviderRawResponse>;
+  listModels(context: Omit<ProviderConnectionContext, "model">): Promise<ProviderModelOption[]>;
+  query(request: ProviderQueryRequest, context: ProviderConnectionContext): Promise<ProviderRawResponse>;
   analyzeResponse(response: ProviderRawResponse, input: ResponseAnalysisInput): ParsedAISearchResponse;
   extractCitation(response: ProviderRawResponse): string[];
 }

@@ -12,6 +12,8 @@ test("distinguishes permissions, balance, rate limits, and provider outages", ()
   assert.equal(classifyProviderHttpError(429, { error: { code: "insufficient_quota" } }), "ACCOUNT_BALANCE_INSUFFICIENT");
   assert.equal(classifyProviderHttpError(429, { error: { message: "Rate limit exceeded" } }), "PROVIDER_RATE_LIMITED");
   assert.equal(classifyProviderHttpError(503, {}), "PROVIDER_UNAVAILABLE");
+  assert.equal(classifyProviderHttpError(404, { error: { message: "model not found" } }), "MODEL_NOT_FOUND");
+  assert.equal(classifyProviderHttpError(400, { error: { message: "unsupported model" } }), "MODEL_UNSUPPORTED");
 });
 
 test("maps network and secret configuration failures without exposing details", () => {
@@ -29,7 +31,7 @@ test("provider adapter returns a real successful response without exposing the k
   try {
     const result = await providerRegistry.OPENAI.query(
       { query: "connection test", intent: "TECHNICAL", targetEntity: "Example", industry: "Testing" },
-      { apiKey: "private-test-credential", model: "gpt-test", signal: new AbortController().signal },
+      { apiKey: "private-test-credential", model: "gpt-test", connectionType: "OPENAI_OFFICIAL", baseUrl: null, signal: new AbortController().signal },
     );
     assert.equal(result.text, "OK");
     assert.doesNotMatch(JSON.stringify(result), /private-test-credential/);
@@ -48,7 +50,7 @@ test("provider adapter converts a real failed response into a safe category", as
     await assert.rejects(
       providerRegistry.OPENAI.query(
         { query: "connection test", intent: "TECHNICAL", targetEntity: "Example", industry: "Testing" },
-        { apiKey: "private-test-credential", model: "gpt-test", signal: new AbortController().signal },
+        { apiKey: "private-test-credential", model: "gpt-test", connectionType: "OPENAI_OFFICIAL", baseUrl: null, signal: new AbortController().signal },
       ),
       /API_KEY_INVALID/,
     );
@@ -98,6 +100,6 @@ test("provider integration maps network interruption and timeout without leaking
 function queryOpenAI() {
   return providerRegistry.OPENAI.query(
     { query: "connection test", intent: "TECHNICAL", targetEntity: "Example", industry: "Testing" },
-    { apiKey: "private-test-credential", model: "gpt-test", signal: new AbortController().signal },
+    { apiKey: "private-test-credential", model: "gpt-test", connectionType: "OPENAI_OFFICIAL", baseUrl: null, signal: new AbortController().signal },
   );
 }

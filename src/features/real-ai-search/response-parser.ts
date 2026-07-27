@@ -1,6 +1,5 @@
 import type { ParsedAISearchResponse, ProviderRawResponse, ResponseAnalysisInput } from "./types";
 
-const URL_PATTERN = /https?:\/\/[^\s<>()\]"']+/gi;
 function normalized(value: string) { return value.trim().toLocaleLowerCase(); }
 function includesName(text: string, name: string) { return Boolean(name.trim()) && normalized(text).includes(normalized(name)); }
 function domainOf(url: string) { try { return new URL(url).hostname.replace(/^www\./, "").toLowerCase(); } catch { return ""; } }
@@ -17,7 +16,9 @@ export function parseAISearchResponse(response: ProviderRawResponse, input: Resp
   }
   const productMentions = input.productNames.filter((name) => includesName(text, name));
   const competitorBrands = input.competitorNames.filter((name) => includesName(text, name));
-  const urls = [...response.citations, ...(text.match(URL_PATTERN) ?? [])].map((url) => url.replace(/[.,;:!?，。；：！？]+$/, ""));
+  // Only provider-supplied structured citations are evidence. A URL written in
+  // free-form model text is not promoted into a citation record.
+  const urls = response.citations.map((url) => url.replace(/[.,;:!?，。；：！？]+$/, ""));
   const counts = new Map<string, number>();
   for (const url of urls) if (domainOf(url)) counts.set(url, (counts.get(url) ?? 0) + 1);
   const official = input.officialDomain.replace(/^www\./, "").toLowerCase();

@@ -36,3 +36,34 @@ test("provider deletion is explicit, confirmed, and never returns a saved plaint
   assert.doesNotMatch(repository, /keyMask:\s*row\?\.encryptedApiKey/);
   assert.doesNotMatch(workspace, /localStorage|sessionStorage/);
 });
+
+test("model selection is a server-fed dropdown and cannot be freely typed", async () => {
+  const source = await readFile("src/features/real-ai-search/real-ai-search-monitoring-workspace.tsx", "utf8");
+  assert.match(source, /\/models/);
+  assert.match(source, /\/verify-model/);
+  assert.match(source, /models\.map/);
+  assert.match(source, /<Select[\s\S]*id=\{`\$\{stats\.provider\}-model`\}/);
+  assert.doesNotMatch(source, /<Input[\s\S]{0,200}id=\{`\$\{stats\.provider\}-model`\}/);
+});
+
+test("official OpenAI and compatible gateways have distinct identity and logos", async () => {
+  const [workspace, logo, metadata] = await Promise.all([
+    readFile("src/features/real-ai-search/real-ai-search-monitoring-workspace.tsx", "utf8"),
+    readFile("src/components/shared/provider-logo.tsx", "utf8"),
+    readFile("src/features/real-ai-search/provider-metadata.ts", "utf8"),
+  ]);
+  assert.match(workspace, /OPENAI_OFFICIAL/);
+  assert.match(workspace, /OPENAI_COMPATIBLE/);
+  assert.match(workspace, /Third-party compatible API/);
+  assert.match(logo, /<Network/);
+  assert.match(metadata, /provider-logos\/openai\.svg/);
+  assert.match(logo, /onError/);
+});
+
+test("API responses never expose encrypted key material", async () => {
+  const repository = await readFile("src/features/real-ai-search/repository.ts", "utf8");
+  const view = repository.slice(repository.indexOf("function configView"), repository.indexOf("function resultView"));
+  assert.doesNotMatch(view, /encryptedApiKey:\s*/);
+  assert.doesNotMatch(view, /apiKeyIv:\s*/);
+  assert.doesNotMatch(view, /apiKeyAuthTag:\s*/);
+});

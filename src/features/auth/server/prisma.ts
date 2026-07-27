@@ -502,139 +502,20 @@ function normalizeGrowthSnapshotRow<T extends GrowthSnapshotRow | null>(row: T):
   return row;
 }
 
-let projectSchemaReady = false;
-let websiteScanSchemaReady = false;
-let geoAnalysisSchemaReady = false;
-let geoBrainAnalysisSchemaReady = false;
-let optimizationTaskSchemaReady = false;
-let queryTemplateSchemaReady = false;
-let geoCampaignSchemaReady = false;
-let entitySchemaReady = false;
-let visibilitySchemaReady = false;
-let simulationSchemaReady = false;
-let growthSchemaReady = false;
-
-async function ensureProjectSchema() {
-  if (projectSchemaReady) return;
-  await projectQuery('ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "userId" TEXT');
-  await projectQuery('ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "language" TEXT NOT NULL DEFAULT \'English\'');
-  await projectQuery('ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "country" TEXT NOT NULL DEFAULT \'United States\'');
-  await projectQuery('ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "industry" TEXT NOT NULL DEFAULT \'SaaS\'');
-  await projectQuery('ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "description" TEXT NOT NULL DEFAULT \'\'');
-  await projectQuery('ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "reportsCount" INTEGER NOT NULL DEFAULT 0');
-  await projectQuery('ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "geoScore" INTEGER NOT NULL DEFAULT 0');
-  await projectQuery('ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "visibilityScore" INTEGER NOT NULL DEFAULT 0');
-  await projectQuery('ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "lastAnalysisAt" TIMESTAMP(3)');
-  await projectQuery('ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "lastScan" TIMESTAMP(3)');
-  await projectQuery('CREATE INDEX IF NOT EXISTS "Project_userId_idx" ON "Project"("userId")');
-  projectSchemaReady = true;
-}
-
-async function ensureWebsiteScanSchema() {
-  if (websiteScanSchemaReady) return;
-  await ensureProjectSchema();
-  await websiteScanQuery('CREATE TABLE IF NOT EXISTS "WebsiteScan" ("id" TEXT PRIMARY KEY, "projectId" TEXT NOT NULL, "url" TEXT NOT NULL, "status" TEXT NOT NULL, "title" TEXT, "description" TEXT, "h1Count" INTEGER NOT NULL DEFAULT 0, "h2Count" INTEGER NOT NULL DEFAULT 0, "internalLinkCount" INTEGER NOT NULL DEFAULT 0, "externalLinkCount" INTEGER NOT NULL DEFAULT 0, "schemaCount" INTEGER NOT NULL DEFAULT 0, "schemaTypes" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[], "robotsExists" BOOLEAN NOT NULL DEFAULT false, "sitemapExists" BOOLEAN NOT NULL DEFAULT false, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
-  await websiteScanQuery('ALTER TABLE "WebsiteScan" ADD COLUMN IF NOT EXISTS "schemaTypes" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]');
-  await websiteScanQuery('CREATE INDEX IF NOT EXISTS "WebsiteScan_projectId_idx" ON "WebsiteScan"("projectId")');
-  websiteScanSchemaReady = true;
-}
-
-async function ensureGeoAnalysisSchema() {
-  if (geoAnalysisSchemaReady) return;
-  await ensureWebsiteScanSchema();
-  await geoAnalysisQuery(`CREATE TABLE IF NOT EXISTS "GeoAnalysis" ("id" TEXT PRIMARY KEY, "projectId" TEXT NOT NULL, "scanId" TEXT NOT NULL UNIQUE, "totalScore" INTEGER NOT NULL, "entityScore" INTEGER NOT NULL, "schemaScore" INTEGER NOT NULL, "technicalScore" INTEGER NOT NULL, "contentScore" INTEGER NOT NULL, "issues" JSONB NOT NULL DEFAULT '[]'::jsonb, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())`);
-  await geoAnalysisQuery('CREATE INDEX IF NOT EXISTS "GeoAnalysis_projectId_idx" ON "GeoAnalysis"("projectId")');
-  await geoAnalysisQuery('CREATE INDEX IF NOT EXISTS "GeoAnalysis_scanId_idx" ON "GeoAnalysis"("scanId")');
-  geoAnalysisSchemaReady = true;
-}
-
-async function ensureGeoBrainAnalysisSchema() {
-  if (geoBrainAnalysisSchemaReady) return;
-  await ensureProjectSchema();
-  await geoBrainAnalysisQuery('CREATE TABLE IF NOT EXISTS "GeoBrainAnalysis" ("id" TEXT PRIMARY KEY, "projectId" TEXT NOT NULL, "score" INTEGER NOT NULL, "scoreDetails" JSONB NOT NULL DEFAULT \'{}\'::jsonb, "insights" JSONB NOT NULL DEFAULT \'[]\'::jsonb, "problems" JSONB NOT NULL DEFAULT \'[]\'::jsonb, "recommendations" JSONB NOT NULL DEFAULT \'[]\'::jsonb, "aiSummary" TEXT NOT NULL DEFAULT \'\', "provider" TEXT NOT NULL, "model" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
-  await geoBrainAnalysisQuery('ALTER TABLE "GeoBrainAnalysis" ADD COLUMN IF NOT EXISTS "scoreDetails" JSONB NOT NULL DEFAULT \'{}\'::jsonb');
-  await geoBrainAnalysisQuery('ALTER TABLE "GeoBrainAnalysis" ADD COLUMN IF NOT EXISTS "problems" JSONB NOT NULL DEFAULT \'[]\'::jsonb');
-  await geoBrainAnalysisQuery('ALTER TABLE "GeoBrainAnalysis" ADD COLUMN IF NOT EXISTS "aiSummary" TEXT NOT NULL DEFAULT \'\'');
-  await geoBrainAnalysisQuery('CREATE INDEX IF NOT EXISTS "GeoBrainAnalysis_projectId_idx" ON "GeoBrainAnalysis"("projectId")');
-  geoBrainAnalysisSchemaReady = true;
-}
-
-async function ensureOptimizationTaskSchema() {
-  if (optimizationTaskSchemaReady) return;
-  await ensureProjectSchema();
-  await optimizationTaskQuery('CREATE TABLE IF NOT EXISTS "OptimizationTask" ("id" TEXT PRIMARY KEY, "projectId" TEXT NOT NULL, "issueId" TEXT NOT NULL, "title" TEXT NOT NULL, "description" TEXT NOT NULL DEFAULT \'\', "recommendation" TEXT NOT NULL DEFAULT \'\', "severity" TEXT NOT NULL DEFAULT \'Medium\', "category" TEXT NOT NULL DEFAULT \'\', "status" TEXT NOT NULL DEFAULT \'PENDING\', "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
-  await optimizationTaskQuery('CREATE INDEX IF NOT EXISTS "OptimizationTask_projectId_idx" ON "OptimizationTask"("projectId")');
-  await optimizationTaskQuery('CREATE UNIQUE INDEX IF NOT EXISTS "OptimizationTask_projectId_issueId_key" ON "OptimizationTask"("projectId", "issueId")');
-  optimizationTaskSchemaReady = true;
-}
-
-async function ensureQueryTemplateSchema() {
-  if (queryTemplateSchemaReady) return;
-  await ensureProjectSchema();
-  await queryTemplateQuery('CREATE TABLE IF NOT EXISTS "QueryTemplate" ("id" TEXT PRIMARY KEY, "projectId" TEXT NOT NULL, "content" TEXT NOT NULL, "category" TEXT NOT NULL, "intent" TEXT NOT NULL, "priority" TEXT NOT NULL DEFAULT \'medium\', "status" TEXT NOT NULL DEFAULT \'GENERATED\', "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
-  await queryTemplateQuery('CREATE INDEX IF NOT EXISTS "QueryTemplate_projectId_idx" ON "QueryTemplate"("projectId")');
-  queryTemplateSchemaReady = true;
-}
-
-async function ensureGeoCampaignSchema() {
-  if (geoCampaignSchemaReady) return;
-  await ensureProjectSchema();
-  await geoCampaignQuery('CREATE TABLE IF NOT EXISTS "GeoCampaign" ("id" TEXT PRIMARY KEY, "projectId" TEXT NOT NULL, "name" TEXT NOT NULL, "industry" TEXT NOT NULL, "businessDescription" TEXT NOT NULL DEFAULT \'\', "goal" TEXT NOT NULL DEFAULT \'\', "platforms" JSONB NOT NULL DEFAULT \'[]\'::jsonb, "queryCount" INTEGER NOT NULL DEFAULT 0, "status" TEXT NOT NULL DEFAULT \'ACTIVE\', "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
-  await geoCampaignQuery('CREATE INDEX IF NOT EXISTS "GeoCampaign_projectId_idx" ON "GeoCampaign"("projectId")');
-  await geoQueryQuery('CREATE TABLE IF NOT EXISTS "GeoQuery" ("id" TEXT PRIMARY KEY, "campaignId" TEXT NOT NULL, "query" TEXT NOT NULL, "category" TEXT NOT NULL, "intent" TEXT NOT NULL, "priority" TEXT NOT NULL, "status" TEXT NOT NULL DEFAULT \'MONITORING\', "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
-  await geoQueryQuery('CREATE INDEX IF NOT EXISTS "GeoQuery_campaignId_idx" ON "GeoQuery"("campaignId")');
-  geoCampaignSchemaReady = true;
-}
-
-async function ensureEntitySchema() {
-  if (entitySchemaReady) return;
-  await ensureProjectSchema();
-  await entityProfileQuery('CREATE TABLE IF NOT EXISTS "EntityProfile" ("id" TEXT PRIMARY KEY, "projectId" TEXT NOT NULL, "brandName" TEXT NOT NULL, "industry" TEXT NOT NULL, "region" TEXT NOT NULL, "description" TEXT NOT NULL, "services" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[], "products" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[], "advantages" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[], "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
-  await entityProfileQuery('CREATE INDEX IF NOT EXISTS "EntityProfile_projectId_idx" ON "EntityProfile"("projectId")');
-  await entityAttributeQuery('CREATE TABLE IF NOT EXISTS "EntityAttribute" ("id" TEXT PRIMARY KEY, "entityId" TEXT NOT NULL, "key" TEXT NOT NULL, "value" TEXT NOT NULL, "source" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
-  await entityAttributeQuery('CREATE INDEX IF NOT EXISTS "EntityAttribute_entityId_idx" ON "EntityAttribute"("entityId")');
-  entitySchemaReady = true;
-}
-
-async function ensureVisibilitySchema() {
-  if (visibilitySchemaReady) return;
-  await ensureProjectSchema();
-  await visibilityCampaignQuery('CREATE TABLE IF NOT EXISTS "VisibilityCampaign" ("id" TEXT PRIMARY KEY, "projectId" TEXT NOT NULL, "keyword" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
-  await visibilityCampaignQuery('CREATE INDEX IF NOT EXISTS "VisibilityCampaign_projectId_idx" ON "VisibilityCampaign"("projectId")');
-  await visibilityPromptQuery('CREATE TABLE IF NOT EXISTS "VisibilityPrompt" ("id" TEXT PRIMARY KEY, "campaignId" TEXT NOT NULL, "prompt" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
-  await visibilityPromptQuery('CREATE INDEX IF NOT EXISTS "VisibilityPrompt_campaignId_idx" ON "VisibilityPrompt"("campaignId")');
-  await visibilityCheckQuery('CREATE TABLE IF NOT EXISTS "VisibilityCheck" ("id" TEXT PRIMARY KEY, "campaignId" TEXT NOT NULL, "promptId" TEXT, "provider" TEXT NOT NULL, "prompt" TEXT NOT NULL, "answer" TEXT NOT NULL, "brandMentioned" BOOLEAN NOT NULL DEFAULT false, "mentionPosition" INTEGER, "sourceUrls" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[], "score" INTEGER NOT NULL DEFAULT 0, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
-  await visibilityCheckQuery('ALTER TABLE "VisibilityCheck" ADD COLUMN IF NOT EXISTS "promptId" TEXT');
-  await visibilityCheckQuery('ALTER TABLE "VisibilityCheck" ADD COLUMN IF NOT EXISTS "mentionPosition" INTEGER');
-  await visibilityCheckQuery('ALTER TABLE "VisibilityCheck" ADD COLUMN IF NOT EXISTS "sourceUrls" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]');
-  await visibilityCheckQuery('DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = \'VisibilityCheck\' AND column_name = \'position\') THEN UPDATE "VisibilityCheck" SET "mentionPosition" = "position" WHERE "mentionPosition" IS NULL; END IF; END $$;');
-  await visibilityCheckQuery('CREATE INDEX IF NOT EXISTS "VisibilityCheck_campaignId_idx" ON "VisibilityCheck"("campaignId")');
-  await visibilityCheckQuery('CREATE INDEX IF NOT EXISTS "VisibilityCheck_promptId_idx" ON "VisibilityCheck"("promptId")');
-  visibilitySchemaReady = true;
-}
-
-async function ensureSimulationSchema() {
-  if (simulationSchemaReady) return;
-  await ensureGeoCampaignSchema();
-  await simulationTaskQuery('CREATE TABLE IF NOT EXISTS "SimulationTask" ("id" TEXT PRIMARY KEY, "projectId" TEXT NOT NULL, "campaignId" TEXT, "queryId" TEXT, "query" TEXT NOT NULL, "provider" TEXT NOT NULL, "status" TEXT NOT NULL DEFAULT \'PENDING\', "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
-  await simulationTaskQuery('CREATE INDEX IF NOT EXISTS "SimulationTask_projectId_idx" ON "SimulationTask"("projectId")');
-  await simulationTaskQuery('CREATE INDEX IF NOT EXISTS "SimulationTask_campaignId_idx" ON "SimulationTask"("campaignId")');
-  await simulationTaskQuery('CREATE INDEX IF NOT EXISTS "SimulationTask_queryId_idx" ON "SimulationTask"("queryId")');
-  await simulationResultQuery('CREATE TABLE IF NOT EXISTS "SimulationResult" ("id" TEXT PRIMARY KEY, "taskId" TEXT NOT NULL UNIQUE, "probability" INTEGER NOT NULL, "ranking" INTEGER, "confidence" INTEGER NOT NULL, "entityScore" INTEGER NOT NULL, "schemaScore" INTEGER NOT NULL, "authorityScore" INTEGER NOT NULL, "citationScore" INTEGER NOT NULL, "mentioned" BOOLEAN NOT NULL DEFAULT false, "reasons" JSONB NOT NULL DEFAULT \'[]\'::jsonb, "missing" JSONB NOT NULL DEFAULT \'[]\'::jsonb, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
-  await simulationResultQuery('CREATE INDEX IF NOT EXISTS "SimulationResult_taskId_idx" ON "SimulationResult"("taskId")');
-  simulationSchemaReady = true;
-}
-
-async function ensureGrowthSchema() {
-  if (growthSchemaReady) return;
-  await ensureSimulationSchema();
-  await growthSnapshotQuery('CREATE TABLE IF NOT EXISTS "GrowthSnapshot" ("id" TEXT PRIMARY KEY, "projectId" TEXT NOT NULL, "campaignId" TEXT, "simulationId" TEXT, "eventType" TEXT NOT NULL, "triggerType" TEXT NOT NULL DEFAULT \'AUTO\', "sourceId" TEXT NOT NULL, "visibilityScore" INTEGER, "entityScore" INTEGER, "schemaScore" INTEGER, "authorityScore" INTEGER, "citationScore" INTEGER, "overallScore" INTEGER, "metadata" JSONB NOT NULL DEFAULT \'{}\'::jsonb, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT NOW())');
-  await growthSnapshotQuery('CREATE INDEX IF NOT EXISTS "GrowthSnapshot_projectId_idx" ON "GrowthSnapshot"("projectId")');
-  await growthSnapshotQuery('CREATE INDEX IF NOT EXISTS "GrowthSnapshot_campaignId_idx" ON "GrowthSnapshot"("campaignId")');
-  await growthSnapshotQuery('CREATE INDEX IF NOT EXISTS "GrowthSnapshot_simulationId_idx" ON "GrowthSnapshot"("simulationId")');
-  await growthSnapshotQuery('CREATE UNIQUE INDEX IF NOT EXISTS "GrowthSnapshot_projectId_eventType_sourceId_key" ON "GrowthSnapshot"("projectId", "eventType", "sourceId")');
-  growthSchemaReady = true;
-}
+// Database structure is owned exclusively by Prisma migrations.
+// These temporary compatibility shims are intentionally side-effect free while
+// the hand-written query adapter is retired incrementally.
+async function ensureProjectSchema() {}
+async function ensureWebsiteScanSchema() {}
+async function ensureGeoAnalysisSchema() {}
+async function ensureGeoBrainAnalysisSchema() {}
+async function ensureOptimizationTaskSchema() {}
+async function ensureQueryTemplateSchema() {}
+async function ensureGeoCampaignSchema() {}
+async function ensureEntitySchema() {}
+async function ensureVisibilitySchema() {}
+async function ensureSimulationSchema() {}
+async function ensureGrowthSchema() {}
 
 function assignments(data: Data, start = 1) {
   const keys = Object.keys(data);
