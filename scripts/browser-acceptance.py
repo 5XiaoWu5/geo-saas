@@ -117,7 +117,7 @@ def provider_interactions(page: Page, project_id: str, evidence: dict[str, Any])
     )
     if not evidence["providerSecretStorageAvailable"]:
         raise AssertionError("PROVIDER_SECRET_STORAGE_UNAVAILABLE")
-    card = page.locator("article").filter(has_text="OpenAI").first
+    card = page.locator("#OPENAI-api-key").locator("xpath=ancestor::article[1]")
     key_link = card.get_by_role("link", name=re.compile("获取 API Key|Get API Key"))
     docs_link = card.get_by_role("link", name=re.compile("查看官方文档|Official documentation"))
     evidence["providerLinks"] = {
@@ -226,8 +226,8 @@ def locale_and_tooltip(page: Page, project_id: str, evidence: dict[str, Any]) ->
     evidence["englishTitle"] = page.get_by_text("AI Search Command Center", exact=True).count() > 0
     help_button = page.locator('button[aria-label$=" help"]').first
     if help_button.count():
-        help_button.click()
-        page.wait_for_selector('[role="tooltip"]')
+        help_button.hover()
+        page.locator('[role="tooltip"]').wait_for(state="visible")
         evidence["tooltipOpened"] = True
         page.keyboard.press("Escape")
     else:
