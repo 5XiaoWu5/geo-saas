@@ -252,7 +252,12 @@ def viewport_acceptance(context: BrowserContext, project_id: str, results: dict[
         page.set_viewport_size({"width": width, "height": height})
         console_errors: list[str] = []
         page_errors: list[str] = []
-        page.on("console", lambda message: console_errors.append(message.text) if message.type == "error" else None)
+        page.on(
+            "console",
+            lambda message: console_errors.append(
+                f"{page.url} :: {message.location.get('url', '')} :: {message.text}"
+            ) if message.type == "error" else None,
+        )
         page.on("pageerror", lambda error: page_errors.append(str(error)))
         viewport_result: dict[str, Any] = {"width": width, "height": height, "pages": {}}
         for route_name, route in routes.items():
