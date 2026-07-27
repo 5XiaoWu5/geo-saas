@@ -136,7 +136,9 @@ def provider_interactions(page: Page, project_id: str, evidence: dict[str, Any])
     with page.expect_response(lambda response: "/api/ai-search-providers/" in response.url and response.request.method == "PUT") as saved:
         card.get_by_role("button", name=re.compile("保存配置|Save configuration")).click()
     if saved.value.status != 200:
-        raise AssertionError(f"PROVIDER_SAVE_{saved.value.status}")
+        raise AssertionError(
+            f"PROVIDER_SAVE_{saved.value.status}_{api_json(saved.value).get('error')}"
+        )
     page.wait_for_timeout(300)
 
     card = page.locator("article").filter(has_text="OpenAI").first
