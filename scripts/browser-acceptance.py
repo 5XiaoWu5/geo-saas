@@ -274,9 +274,14 @@ def viewport_acceptance(context: BrowserContext, project_id: str, results: dict[
         viewport_result: dict[str, Any] = {"width": width, "height": height, "pages": {}}
         for route_name, route in routes.items():
             response = page.goto(f"{BASE_URL}{route}", wait_until="domcontentloaded", timeout=30_000)
-            page.wait_for_timeout(350)
             if not response or response.status >= 400:
                 raise AssertionError(f"PAGE_LOAD_{label}_{route_name}_{response.status if response else 'none'}")
+            try:
+                page.wait_for_load_state("networkidle", timeout=15_000)
+            except Exception:
+                page.wait_for_timeout(1_000)
+            if route_name == "provider-settings":
+                page.wait_for_selector("#OPENAI-api-key", timeout=15_000)
             metrics = page.evaluate(
                 """() => {
                   const root = document.documentElement;
