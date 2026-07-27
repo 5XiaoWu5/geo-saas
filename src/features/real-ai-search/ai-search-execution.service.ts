@@ -42,6 +42,13 @@ export async function saveProviderConfig(userId: string, projectId: string, inpu
     try {
       encryptedSecret = await encryptProviderApiKey(input.apiKey, projectId, input.provider);
     } catch (error) {
+      console.error("[PROVIDER_SECRET_ENCRYPTION]", {
+        provider: input.provider,
+        name: error instanceof Error ? error.name : typeof error,
+        code: error && typeof error === "object" && "code" in error
+          ? String(error.code)
+          : null,
+      });
       throw new RealAISearchError(normalizeProviderRuntimeError(error), 503);
     }
   }
