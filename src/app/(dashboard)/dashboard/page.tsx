@@ -53,10 +53,15 @@ async function loadDashboard(): Promise<DashboardData> {
   ]);
   const projectId = projectResult.projects[0]?.id;
   if (!projectId) return { projects: projectResult.projects, knowledge, optimization: null, growth: null, assessment: null, benchmark: null, competitors: null, aiIntelligence: null, aiGrowth: null, monitoring: null, agent: null };
+  const hasKnowledgeBase = knowledge.projects.some(
+    project => project.projectId === projectId && project.knowledgeBase !== null,
+  );
   const [optimization, growth, assessment, benchmark, competitors, aiIntelligence, aiGrowth, monitoring, agent] = await Promise.all([
     fetch(`/api/projects/${projectId}/optimization`, { cache: "no-store" }).then(readJson<OptimizationSummary>),
     fetch(`/api/growth?projectId=${encodeURIComponent(projectId)}&range=30d`, { cache: "no-store" }).then(readJson<GrowthWorkspaceResponse>),
-    fetch(`/api/knowledge/${projectId}/assessment`, { cache: "no-store" }).then(readJson<KnowledgeAssessment>),
+    hasKnowledgeBase
+      ? fetch(`/api/knowledge/${projectId}/assessment`, { cache: "no-store" }).then(readJson<KnowledgeAssessment>)
+      : Promise.resolve(null),
     fetch(`/api/benchmark?projectId=${encodeURIComponent(projectId)}`, { cache: "no-store" }).then(readJson<BenchmarkOverviewResponse>),
     fetch(`/api/competitors?projectId=${encodeURIComponent(projectId)}`, { cache: "no-store" }).then(readJson<CompetitorWorkspaceResponse>),
     fetch(`/api/ai-search-intelligence/${projectId}`, { cache: "no-store" }).then(readJson<AISearchIntelligenceResponse>),
