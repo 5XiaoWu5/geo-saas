@@ -6,6 +6,7 @@ import {
   ArrowRight,
   CheckCircle2,
   CircleDot,
+  Globe2,
   Loader2,
   MessageSquareText,
   SearchCheck,
@@ -74,7 +75,7 @@ function nextHref(projectId: string, action: OnboardingNextAction) {
 }
 
 export default function DashboardPage() {
-  const { locale } = useI18n();
+  const { locale, dictionary } = useI18n();
   const language = locale === "zh" ? 0 : 1;
   const [data, setData] = useState<DashboardState | null>(null);
   const [error, setError] = useState("");
@@ -184,6 +185,26 @@ export default function DashboardPage() {
       />
 
       <OnboardingGuide summary={summary} compact />
+
+      <Card className="border-cyan-300/20 bg-[linear-gradient(135deg,rgba(34,211,238,.07),rgba(15,23,42,.65))]">
+        <CardContent className="grid gap-4 p-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:p-6">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-cyan-300/10 text-cyan-200">
+              <Globe2 className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="font-semibold">{dictionary.aiPresence.title}</h2>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">{dictionary.aiPresence.description}</p>
+            </div>
+          </div>
+          <Button asChild variant="outline" className="w-full sm:w-auto">
+            <Link href={`/projects/${project.id}/geo/ai-presence`}>
+              {dictionary.aiPresence.title}
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label={locale === "zh" ? "当前整体状态" : "Current status"}>
         {metrics.map(metric => (

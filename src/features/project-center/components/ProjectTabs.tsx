@@ -11,6 +11,7 @@ const tabs = [
   { labelKey: "nav.growthDashboard", path: "growth/overview" },
   { labelKey: "nav.seoGrowth", path: "seo" },
   { labelKey: "nav.geoGrowth", path: "geo" },
+  { labelKey: "nav.aiPresence", path: "geo/ai-presence" },
   { labelKey: "nav.knowledge", path: "knowledge" },
   { labelKey: "nav.competitors", path: "competitors" },
   { labelKey: "nav.optimization", path: "optimization" },

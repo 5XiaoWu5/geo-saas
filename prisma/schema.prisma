@@ -271,6 +271,56 @@ enum AutomationStepStatus {
   CANCELLED
 }
 
+enum AIPresenceTaskType {
+  CHECK_DISCOVERABILITY
+  FIX_ROBOTS
+  CREATE_SITEMAP
+  SUBMIT_SITEMAP
+  CREATE_BUSINESS_PROFILE
+  SUBMIT_PRODUCT_FEED
+  ADD_ORGANIZATION_SCHEMA
+  ADD_PRODUCT_SCHEMA
+  CREATE_CONTACT_PAGE
+  FIX_COMPANY_INFORMATION
+  ADD_TRUSTED_SOURCES
+  VERIFY_CRAWLING
+  VERIFY_INDEXING
+  VERIFY_AI_MENTION
+  VERIFY_CITATION
+}
+
+enum AIPresencePlatform {
+  WEBSITE
+  OPENAI
+  ANTHROPIC
+  GOOGLE_SEARCH_CONSOLE
+  GOOGLE_BUSINESS_PROFILE
+  GOOGLE_MERCHANT_CENTER
+  BING_WEBMASTER_TOOLS
+  INDEXNOW
+  AI_SEARCH
+}
+
+enum AIPresenceStatus {
+  NOT_STARTED
+  NEEDS_ATTENTION
+  READY
+  SUBMITTED
+  CRAWLED
+  INDEXED
+  MENTIONED
+  CITED
+  UNAVAILABLE
+  FAILED
+}
+
+enum AIPresenceEvidenceStatus {
+  UNVERIFIED
+  USER_DECLARED
+  VERIFIED
+  FAILED
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -418,8 +468,33 @@ model Project {
   growthAgentTasks           GrowthAgentTask[]
   automationRuns             AutomationRun[]
   automationSteps            AutomationStep[]
+  aiPresenceTasks            AIPresenceTask[]
 
   @@index([userId])
+}
+
+model AIPresenceTask {
+  id              String                   @id @default(cuid())
+  projectId       String
+  taskType        AIPresenceTaskType
+  platform        AIPresencePlatform
+  targetUrl       String?
+  status          AIPresenceStatus         @default(NOT_STARTED)
+  source          String
+  submittedAt     DateTime?
+  verifiedAt      DateTime?
+  evidenceStatus  AIPresenceEvidenceStatus @default(UNVERIFIED)
+  evidenceSummary String                   @default("")
+  evidence        Json                     @default("{}")
+  errorCode       String?
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([id, projectId])
+  @@index([projectId, taskType, createdAt])
+  @@index([projectId, platform, status])
 }
 
 model WebsiteScan {

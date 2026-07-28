@@ -25,6 +25,7 @@
     "test:growth-agent": "tsx --test src/features/growth-agent/*.test.ts",
     "test:automation": "tsx --test src/features/automation/*.test.ts",
     "test:ux-security": "tsx --test src/components/shared/*.test.ts src/features/growth-engine/*.test.ts src/lib/server/*.test.ts",
+    "test:ai-presence": "tsx --test src/features/ai-presence/*.test.ts src/lib/server/safe-public-fetch.test.ts",
     "provider-secrets:rotate": "tsx scripts/rotate-provider-secrets.ts",
     "preview": "opennextjs-cloudflare preview",
     "start": "next start",
