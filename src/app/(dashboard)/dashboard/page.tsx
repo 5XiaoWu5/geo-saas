@@ -1,225 +1,269 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type ReactNode } from "react";
-import { ArrowRight, Bot, BrainCircuit, CheckCircle2, CircleDashed, Gauge, Medal, SearchCheck, Sparkles, Target, TrendingUp } from "lucide-react";
-import { MetricHelp } from "@/components/shared/metric-help";
-import { PageHeader } from "@/components/shared/page";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  CircleDot,
+  Loader2,
+  MessageSquareText,
+  SearchCheck,
+} from "lucide-react";
+import {
+  GuidedEmptyState,
+  GuidedPageHeader,
+  OnboardingGuide,
+  TechnicalDetails,
+} from "@/components/shared/guided-experience";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import type { Project } from "@/types/project";
-import type { GeoIssue } from "@/features/geo-analysis/types";
-import type { OptimizationTask } from "@/features/optimization/types";
-import type { GrowthWorkspaceResponse } from "@/features/growth/types";
-import type { KnowledgeAssessment, KnowledgeOverviewResponse } from "@/features/knowledge/types";
-import type { BenchmarkOverviewResponse, CompetitorWorkspaceResponse } from "@/features/competitor-benchmark/types";
-import { buildGrowthOpportunities } from "@/features/growth-engine/opportunities";
-import type { GrowthOpportunity } from "@/features/growth-engine/types";
-import { getHostname } from "@/lib/format";
-import type { AISearchIntelligenceResponse } from "@/features/ai-search-intelligence";
-import type { AISearchGrowthResponse } from "@/features/ai-search-growth";
-import type { MonitoringCenterResponse } from "@/features/monitoring-automation/types";
-import type { GrowthAgentOverview } from "@/features/growth-agent/types";
+import { Card, CardContent } from "@/components/ui/card";
+import type {
+  OnboardingNextAction,
+  ProjectOnboardingSummary,
+} from "@/features/growth-engine/onboarding";
 import { useI18n } from "@/i18n/provider";
+import type { Project } from "@/types/project";
 
-type AnalysisSummary = { totalScore: number; entityScore: number; schemaScore: number; technicalScore: number; contentScore: number; createdAt: string };
-type OptimizationSummary = { tasks: OptimizationTask[]; issues: GeoIssue[]; analysis: AnalysisSummary | null };
-type DashboardData = {
+type DashboardState = {
   projects: Project[];
-  knowledge: KnowledgeOverviewResponse;
-  optimization: OptimizationSummary | null;
-  growth: GrowthWorkspaceResponse | null;
-  assessment: KnowledgeAssessment | null;
-  benchmark: BenchmarkOverviewResponse | null;
-  competitors: CompetitorWorkspaceResponse | null;
-  aiIntelligence: AISearchIntelligenceResponse | null;
-  aiGrowth: AISearchGrowthResponse | null;
-  monitoring: MonitoringCenterResponse | null;
-  agent: GrowthAgentOverview | null;
+  onboarding: ProjectOnboardingSummary | null;
 };
 
 async function readJson<T>(response: Response): Promise<T> {
-  const text = await response.text();
-  const body = text ? JSON.parse(text) as T & { error?: string } : {} as T & { error?: string };
-  if (!response.ok) throw new Error(body.error ?? "请求失败");
+  const body = await response.json().catch(() => ({})) as T & { error?: string };
+  if (!response.ok) throw new Error(body.error ?? "REQUEST_FAILED");
   return body;
 }
 
-async function loadDashboard(): Promise<DashboardData> {
-  const [projectResult, knowledge] = await Promise.all([
-    fetch("/api/projects", { cache: "no-store" }).then(readJson<{ projects: Project[] }>),
-    fetch("/api/knowledge", { cache: "no-store" }).then(readJson<KnowledgeOverviewResponse>),
-  ]);
-  const projectId = projectResult.projects[0]?.id;
-  if (!projectId) return { projects: projectResult.projects, knowledge, optimization: null, growth: null, assessment: null, benchmark: null, competitors: null, aiIntelligence: null, aiGrowth: null, monitoring: null, agent: null };
-  const hasKnowledgeBase = knowledge.projects.some(
-    project => project.projectId === projectId && project.knowledgeBase !== null,
+async function loadDashboard(): Promise<DashboardState> {
+  const { projects } = await readJson<{ projects: Project[] }>(
+    await fetch("/api/projects", { cache: "no-store" }),
   );
-  const [optimization, growth, assessment, benchmark, competitors, aiIntelligence, aiGrowth, monitoring, agent] = await Promise.all([
-    fetch(`/api/projects/${projectId}/optimization`, { cache: "no-store" }).then(readJson<OptimizationSummary>),
-    fetch(`/api/growth?projectId=${encodeURIComponent(projectId)}&range=30d`, { cache: "no-store" }).then(readJson<GrowthWorkspaceResponse>),
-    hasKnowledgeBase
-      ? fetch(`/api/knowledge/${projectId}/assessment`, { cache: "no-store" }).then(readJson<KnowledgeAssessment>)
-      : Promise.resolve(null),
-    fetch(`/api/benchmark?projectId=${encodeURIComponent(projectId)}`, { cache: "no-store" }).then(readJson<BenchmarkOverviewResponse>),
-    fetch(`/api/competitors?projectId=${encodeURIComponent(projectId)}`, { cache: "no-store" }).then(readJson<CompetitorWorkspaceResponse>),
-    fetch(`/api/ai-search-intelligence/${projectId}`, { cache: "no-store" }).then(readJson<AISearchIntelligenceResponse>),
-    fetch(`/api/ai-search-growth/${projectId}`, { cache: "no-store" }).then(readJson<AISearchGrowthResponse>),
-    fetch(`/api/ai-search-monitoring/${projectId}`, { cache: "no-store" }).then(readJson<MonitoringCenterResponse>),
-    fetch(`/api/projects/${projectId}/agent-tasks`, { cache: "no-store" }).then(readJson<GrowthAgentOverview>),
-  ]);
-  return { projects: projectResult.projects, knowledge, optimization, growth, assessment, benchmark, competitors, aiIntelligence, aiGrowth, monitoring, agent };
+  const project = projects[0];
+  if (!project) return { projects, onboarding: null };
+  const onboarding = await readJson<ProjectOnboardingSummary>(
+    await fetch(`/api/projects/${project.id}/onboarding`, { cache: "no-store" }),
+  );
+  return { projects, onboarding };
+}
+
+const NEXT_COPY: Record<OnboardingNextAction, [string, string]> = {
+  CONNECT_PROVIDER: ["连接 AI 平台", "Connect an AI platform"],
+  FIX_PROVIDER: ["修复 AI 连接", "Fix the AI connection"],
+  ADD_QUERY: ["添加第一个检测问题", "Add the first check question"],
+  RUN_CHECK: ["运行第一次检测", "Run the first check"],
+  RETRY_CHECK: ["解决问题并重新检测", "Resolve the issue and retry"],
+  REVIEW_RESULTS: ["查看检测结果", "Review check results"],
+  CREATE_ACTION: ["创建第一个优化行动", "Create the first growth action"],
+  START_ACTION: ["开始执行优先行动", "Start the priority action"],
+  VIEW_REPORT: ["查看本周期增长报告", "Review this period’s report"],
+};
+
+function nextHref(projectId: string, action: OnboardingNextAction) {
+  if (action === "CONNECT_PROVIDER" || action === "FIX_PROVIDER") {
+    return `/projects/${projectId}/geo/monitoring#ai-connections`;
+  }
+  if (["ADD_QUERY", "RUN_CHECK", "RETRY_CHECK", "REVIEW_RESULTS"].includes(action)) {
+    return `/projects/${projectId}/geo/monitoring#saved-questions`;
+  }
+  if (action === "CREATE_ACTION" || action === "START_ACTION") {
+    return `/projects/${projectId}/growth/actions`;
+  }
+  return `/projects/${projectId}/reports`;
 }
 
 export default function DashboardPage() {
   const { locale } = useI18n();
-  const [data, setData] = useState<DashboardData | null>(null);
+  const language = locale === "zh" ? 0 : 1;
+  const [data, setData] = useState<DashboardState | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let active = true;
-    void loadDashboard().then((result) => { if (active) setData(result); }).catch((requestError) => { if (active) setError(requestError instanceof Error ? requestError.message : "数据加载失败"); });
-    return () => { active = false; };
+    void loadDashboard()
+      .then(result => {
+        if (active) setData(result);
+      })
+      .catch(requestError => {
+        if (active) {
+          setError(requestError instanceof Error ? requestError.message : "REQUEST_FAILED");
+        }
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const project = data?.projects[0] ?? null;
-  const knowledgeSummary = project ? data?.knowledge.projects.find((item) => item.projectId === project.id) ?? null : null;
-  const opportunities = project && data?.optimization ? buildGrowthOpportunities({ projectId: project.id, analysisIssues: data.optimization.issues, knowledgeGaps: data.assessment?.missing, benchmarkGaps: data.benchmark?.gaps, trackedTasks: data.optimization.tasks }) : [];
+  const summary = data?.onboarding ?? null;
+  const primary = summary
+    ? {
+        label: NEXT_COPY[summary.nextAction][language],
+        href: nextHref(summary.project.id, summary.nextAction),
+      }
+    : null;
+  const metrics = useMemo(() => {
+    if (!summary) return [];
+    return [
+      {
+        label: locale === "zh" ? "已完成 AI 检测" : "Completed AI checks",
+        value: summary.facts.succeededResultCount,
+        detail: locale === "zh" ? "来自真实 AISearchResult" : "From real AISearchResult records",
+        icon: SearchCheck,
+      },
+      {
+        label: locale === "zh" ? "品牌被提及" : "Brand mentions",
+        value: summary.facts.mentionedResultCount,
+        detail: locale === "zh" ? "成功回答中的真实提及" : "Real mentions in successful answers",
+        icon: MessageSquareText,
+      },
+      {
+        label: locale === "zh" ? "需要处理的问题" : "Issues to address",
+        value: summary.facts.openRecommendationCount,
+        detail: locale === "zh" ? "尚未完成的优化任务" : "Open optimization tasks",
+        icon: CircleDot,
+      },
+      {
+        label: locale === "zh" ? "本周期已完成行动" : "Completed actions",
+        value: summary.facts.completedActionCount,
+        detail: locale === "zh" ? "已完成或已验证的行动" : "Completed or verified actions",
+        icon: CheckCircle2,
+      },
+    ];
+  }, [locale, summary]);
 
-  if (locale === "en") return <EnglishDashboard data={data} error={error} project={project} opportunities={opportunities} knowledgeScore={data?.assessment?.completeness ?? knowledgeSummary?.knowledgeBase?.completenessScore ?? null} />;
+  if (!data && !error) {
+    return (
+      <div className="flex min-h-72 items-center justify-center gap-3 text-sm text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" />
+        {locale === "zh" ? "正在读取企业增长状态…" : "Loading company growth status…"}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <GuidedEmptyState
+        title={locale === "zh" ? "暂时无法读取首页状态" : "Dashboard status is unavailable"}
+        reason={locale === "zh" ? "系统没有生成任何替代数据。" : "No substitute data was generated."}
+        instruction={locale === "zh" ? "请刷新页面；如果问题持续，请检查服务状态。" : "Refresh the page. If the issue continues, check the service status."}
+        action={<Button onClick={() => window.location.reload()} className="min-h-11">{locale === "zh" ? "重新读取首页" : "Reload dashboard"}</Button>}
+      />
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="space-y-6">
+        <GuidedPageHeader
+          title={locale === "zh" ? "首页" : "Home"}
+          description={locale === "zh" ? "从一个企业项目开始建立真实的 SEO 与 AI 搜索增长记录。" : "Start with a company project to build real SEO and AI search growth records."}
+          status={locale === "zh" ? "尚未创建企业项目" : "No company project yet"}
+          action={<Button asChild className="min-h-11 w-full sm:w-auto"><Link href="/projects">{locale === "zh" ? "创建企业项目" : "Create company project"}<ArrowRight className="h-4 w-4" /></Link></Button>}
+        />
+        <GuidedEmptyState
+          title={locale === "zh" ? "创建第一个企业项目" : "Create your first company project"}
+          reason={locale === "zh" ? "项目用于隔离网站、企业资料、检测问题和增长结果。" : "A project keeps the website, company information, check questions, and growth results isolated."}
+          instruction={locale === "zh" ? "填写企业名称和网站地址。" : "Add the company name and website address."}
+          action={<Button asChild className="min-h-11"><Link href="/projects">{locale === "zh" ? "创建企业项目" : "Create company project"}</Link></Button>}
+        />
+      </div>
+    );
+  }
+
+  if (!summary || !primary) return null;
 
   return (
     <div className="min-w-0 space-y-6 overflow-x-hidden">
-      <PageHeader title="增长指挥中心" description="用真实项目数据统一查看 SEO Visibility、AI Search Visibility、企业知识与当前最大增长机会。" action={<Button asChild className="min-h-11"><Link href="/growth/overview">查看增长总览 <ArrowRight className="h-4 w-4" /></Link></Button>} />
-      {error ? <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">Dashboard 数据加载失败：{error}</div> : null}
-      {!data && !error ? <DashboardLoading /> : data && !project ? <EmptyDashboard /> : data && project && data.optimization ? <>
-        <ExecutiveSummary project={project} data={data} opportunities={opportunities} />
-        <ProjectPulse project={project} analysis={data.optimization.analysis} knowledgeScore={data.assessment?.completeness ?? knowledgeSummary?.knowledgeBase?.completenessScore ?? null} opportunityCount={opportunities.filter((item) => !item.trackedTaskId).length} tasks={data.optimization.tasks} benchmark={data.benchmark} />
-        <AgentPulse project={project} agent={data.agent} />
-        <AIRecommendationReadiness project={project} intelligence={data.aiIntelligence} />
-        <EnterpriseAIGrowthHealth project={project} growth={data.aiGrowth} opportunityCount={opportunities.length} />
-        <MonitoringPulse project={project} monitoring={data.monitoring} />
-        <section className="grid gap-5 xl:grid-cols-3">
-          <SeoStatus project={project} analysis={data.optimization.analysis} issues={data.optimization.issues} />
-          <AiSearchStatus project={project} analysis={data.optimization.analysis} knowledgeScore={data.assessment?.completeness ?? null} benchmark={data.benchmark} growth={data.growth} />
-          <CompetitiveStatus project={project} benchmark={data.benchmark} competitorCount={data.competitors?.competitors.length ?? 0} />
-        </section>
-        <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-          <PriorityActions project={project} opportunities={opportunities} />
-          <GrowthFlow analysis={data.optimization.analysis} project={project} hasKnowledge={Boolean(knowledgeSummary?.knowledgeBase)} hasBenchmark={data.benchmark?.status === "available"} opportunityCount={opportunities.length} taskCount={data.optimization.tasks.length} snapshotCount={data.growth?.snapshots.length ?? 0} />
-        </section>
-        <RecentProjects projects={data.projects} />
-      </> : null}
+      <GuidedPageHeader
+        title={locale === "zh" ? "企业增长首页" : "Company growth home"}
+        description={locale === "zh" ? "快速了解当前 AI 搜索表现、最重要的问题以及现在应该做什么。" : "See current AI search performance, the most important issue, and what to do next."}
+        status={summary.complete ? (locale === "zh" ? "基础设置已完成" : "Initial setup is complete") : (locale === "zh" ? "正在完成首次 AI 搜索检测" : "Setting up the first AI search check")}
+        action={<Button asChild className="min-h-11 w-full sm:w-auto"><Link href={primary.href}>{primary.label}<ArrowRight className="h-4 w-4" /></Link></Button>}
+      />
+
+      <OnboardingGuide summary={summary} compact />
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label={locale === "zh" ? "当前整体状态" : "Current status"}>
+        {metrics.map(metric => (
+          <Card key={metric.label} className="border-white/10 bg-card/70">
+            <CardContent className="p-5">
+              <metric.icon className="h-5 w-5 text-cyan-200" />
+              <p className="mt-4 text-sm text-muted-foreground">{metric.label}</p>
+              <p className="mt-2 text-3xl font-semibold">{metric.value}</p>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">{metric.detail}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </section>
+
+      <section className="grid gap-5 lg:grid-cols-[1.1fr_.9fr]">
+        <Card className="overflow-hidden border-cyan-300/20 bg-[linear-gradient(135deg,rgba(34,211,238,.08),rgba(15,23,42,.8))]">
+          <CardContent className="p-5 sm:p-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-200">
+              {locale === "zh" ? "建议您现在处理" : "Recommended now"}
+            </p>
+            <h2 className="mt-3 text-xl font-semibold">{primary.label}</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              {locale === "zh"
+                ? "该建议由当前项目的真实连接、问题、检测和执行记录推导。"
+                : "This recommendation is derived from the project’s real connections, questions, checks, and execution records."}
+            </p>
+            <Button asChild className="mt-5 min-h-11 w-full sm:w-auto">
+              <Link href={primary.href}>{primary.label}<ArrowRight className="h-4 w-4" /></Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="border-white/10 bg-card/70">
+          <CardContent className="p-5 sm:p-6">
+            <h2 className="flex items-center gap-2 text-lg font-semibold">
+              <CheckCircle2 className="h-5 w-5 text-emerald-300" />
+              {locale === "zh" ? "最近完成" : "Recently completed"}
+            </h2>
+            {summary.recentCompletions.length ? (
+              <ul className="mt-4 space-y-3">
+                {summary.recentCompletions.slice(0, 4).map(item => (
+                  <li key={`${item.type}:${item.id}`} className="flex items-start justify-between gap-3 rounded-2xl border border-white/10 p-3">
+                    <div>
+                      <p className="text-sm font-medium">{completionLabel(item.type, locale)}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{new Date(item.completedAt).toLocaleString(locale === "zh" ? "zh-CN" : "en-US")}</p>
+                    </div>
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-300" />
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-4 rounded-2xl border border-dashed border-white/10 p-4 text-sm leading-6 text-muted-foreground">
+                {locale === "zh" ? "尚无已完成记录。完成上方推荐步骤后，这里会显示真实结果。" : "No completed record yet. Real results will appear here after the recommended step is completed."}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </section>
+
+      <TechnicalDetails>
+        <div className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-3">
+          <p>{locale === "zh" ? "检测问题" : "Saved questions"}：{summary.facts.queryCount}</p>
+          <p>{locale === "zh" ? "检测尝试" : "Check attempts"}：{summary.facts.resultCount}</p>
+          <p>{locale === "zh" ? "历史报告" : "Historical reports"}：{summary.facts.reportCount}</p>
+        </div>
+      </TechnicalDetails>
     </div>
   );
 }
 
-function ExecutiveSummary({ project, data, opportunities }: { project: Project; data: DashboardData; opportunities: GrowthOpportunity[] }) {
-  const openTasks = data.optimization?.tasks.filter(task => task.status !== "COMPLETED").length ?? 0;
-  const topOpportunity = opportunities[0] ?? null;
-  return <Card className="overflow-hidden border-violet-300/20 bg-[radial-gradient(circle_at_top_right,rgba(139,92,246,.16),transparent_45%)]"><CardContent className="grid gap-5 p-5 lg:grid-cols-[1fr_auto] lg:items-center"><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-200">老板摘要（Executive Summary）</p><h2 className="mt-2 text-xl font-semibold">当前状态：{data.aiGrowth?.score.overallScore === null || data.aiGrowth?.score.overallScore === undefined ? "AI 增长健康度暂无足够证据" : `AI 增长健康度 ${data.aiGrowth.score.overallScore}/100`}</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">发现的问题：{topOpportunity?.title ?? "当前没有可追溯的新增长问题"}</p><p className="mt-1 text-sm leading-6 text-muted-foreground">推荐下一步：{openTasks > 0 ? `处理 ${openTasks} 个待完成优化任务` : "运行一次安全预演，查看系统可执行的真实步骤"}</p></div><div className="grid gap-2 sm:grid-cols-2 lg:min-w-80"><Button asChild className="min-h-11"><Link href={`/projects/${project.id}/automation`}><Bot className="h-4 w-4" />开始自动优化</Link></Button><Button asChild variant="outline" className="min-h-11"><Link href={`/projects/${project.id}/optimization`}>查看优化中心<ArrowRight className="h-4 w-4" /></Link></Button></div></CardContent></Card>;
+function completionLabel(
+  type: ProjectOnboardingSummary["recentCompletions"][number]["type"],
+  locale: "zh" | "en",
+) {
+  const copy: Record<typeof type, [string, string]> = {
+    PROVIDER: ["已连接并验证 AI 平台", "AI platform connected and verified"],
+    AI_SEARCH: ["已完成 AI 搜索检测", "AI search check completed"],
+    ACTION: ["已完成增长行动", "Growth action completed"],
+    AUTOMATION: ["已完成自动执行", "Automation completed"],
+    REPORT: ["已生成增长报告", "Growth report generated"],
+  };
+  return copy[type][locale === "zh" ? 0 : 1];
 }
-
-function EnglishDashboard({ data, error, project, opportunities, knowledgeScore }: { data: DashboardData | null; error: string; project: Project | null; opportunities: GrowthOpportunity[]; knowledgeScore: number | null }) {
-  if (error) return <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">Dashboard data could not be loaded: {error}</div>;
-  if (!data) return <DashboardLoading />;
-  if (!project || !data.optimization) return <Card className="glass-panel border-white/10"><CardContent className="flex min-h-96 flex-col items-center justify-center p-8 text-center"><Gauge className="h-8 w-8 text-primary" /><h2 className="mt-4 text-xl font-semibold">Create your first growth project</h2><p className="mt-2 max-w-md text-sm text-muted-foreground">Add a company website to establish real SEO, AI search, knowledge, competitor, and optimization baselines.</p><Button asChild className="mt-6 min-h-11"><Link href="/projects">Create project</Link></Button></CardContent></Card>;
-  const seo = seoHealthScore(data.optimization.analysis);
-  const scoreValue = data.aiGrowth?.score.overallScore ?? null;
-  const openTasks = data.optimization.tasks.filter(task => task.status !== "COMPLETED").length;
-  const metrics = [
-    { label: "SEO health", value: score(seo, "en"), source: "GeoAnalysis", what: "The technical, schema, and content health of the website.", improve: "Resolve persisted website and schema issues." },
-    { label: "AI search health", value: scoreValue === null ? "Unavailable" : `${scoreValue}`, source: "AISearchGrowthScore", what: "The evidence-backed readiness of the business for AI search recommendations.", improve: "Strengthen entity, knowledge, visibility, and citation evidence." },
-    { label: "Knowledge completeness", value: score(knowledgeScore, "en"), source: "CompanyKnowledgeProfile", what: "The coverage of usable company, product, service, proof, and FAQ evidence.", improve: "Add missing product detail, customer proof, technical evidence, and FAQs." },
-    { label: "Open optimization tasks", value: String(openTasks), source: "OptimizationTask", what: "Persisted optimization tasks that are not completed.", improve: "Open the Optimization Center and complete the highest-impact tasks first." },
-  ];
-  return <div className="min-w-0 space-y-6 overflow-x-hidden"><PageHeader title="Growth Command Center" description="A business-level view of real SEO, AI search, knowledge, and execution evidence." action={<Button asChild className="min-h-11"><Link href="/growth/overview">View growth overview<ArrowRight className="h-4 w-4" /></Link></Button>} /><Card className="overflow-hidden border-violet-300/20 bg-[radial-gradient(circle_at_top_right,rgba(139,92,246,.16),transparent_45%)]"><CardContent className="grid gap-5 p-5 lg:grid-cols-[1fr_auto] lg:items-center"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-200">Executive Summary</p><h2 className="mt-2 text-xl font-semibold">Current status: {scoreValue === null ? "AI growth health is unavailable" : `AI growth health is ${scoreValue}/100`}</h2><p className="mt-2 text-sm text-muted-foreground">Detected issue: {opportunities[0] ? `A ${opportunities[0].severity.toLowerCase()}-priority ${opportunities[0].dimension.toLowerCase()} opportunity requires attention.` : "No new traceable growth issue is available."}</p><p className="mt-1 text-sm text-muted-foreground">Recommended next step: {openTasks ? `Complete ${openTasks} open optimization tasks.` : "Run a safe preview to inspect the next executable steps."}</p></div><div className="grid gap-2 sm:grid-cols-2"><Button asChild className="min-h-11"><Link href={`/projects/${project.id}/automation`}><Bot className="h-4 w-4" />Start Auto Mode</Link></Button><Button asChild variant="outline" className="min-h-11"><Link href={`/projects/${project.id}/optimization`}>Optimization Center</Link></Button></div></CardContent></Card><section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{metrics.map(metric => <Card key={metric.label} className="glass-panel border-white/10"><CardContent className="p-5"><div className="flex items-center justify-between gap-2"><p className="text-xs text-muted-foreground">{metric.label}</p><MetricHelp label={metric.label} content={{ what: metric.what, why: "This metric helps prioritize the next evidence-backed growth action.", source: metric.source, improve: metric.improve }} /></div><p className="mt-3 text-3xl font-semibold">{metric.value}</p></CardContent></Card>)}</section><section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><EnglishModule title="SEO Growth" detail="Website health, technical issues, content, and schema." href={`/projects/${project.id}/seo`} /><EnglishModule title="AI Search Growth" detail="Entity understanding, visibility, citations, and recommendation readiness." href={`/projects/${project.id}/geo/command-center`} /><EnglishModule title="Growth Actions" detail={`${opportunities.length} evidence-backed opportunities are currently available.`} href={`/projects/${project.id}/growth/actions`} /><EnglishModule title="Growth Reports" detail="Create and review immutable historical growth snapshots." href={`/projects/${project.id}/reports`} /></section></div>;
-}
-
-function EnglishModule({ title, detail, href }: { title: string; detail: string; href: string }) { return <Card className="glass-panel border-white/10"><CardContent className="flex h-full flex-col p-5"><h3 className="font-semibold">{title}</h3><p className="mt-2 flex-1 text-sm leading-6 text-muted-foreground">{detail}</p><Button asChild variant="outline" className="mt-4 min-h-11 w-full"><Link href={href}>Open module<ArrowRight className="h-4 w-4" /></Link></Button></CardContent></Card>; }
-
-function AgentPulse({ project, agent }: { project: Project; agent: GrowthAgentOverview | null }) {
-  const items = [["Agent 完成率", `${agent?.summary.completionRate ?? 0}%`], ["AI 自动建议", `${agent?.summary.suggestionCount ?? 0}`], ["预计影响指标", `${agent?.summary.expectedMetricCount ?? 0}`], ["预计增长值", "unavailable"]] as const;
-  return <Card className="glass-panel overflow-hidden border-violet-300/20"><CardContent className="grid gap-5 p-5 lg:grid-cols-[0.72fr_0.28fr]"><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{items.map(([label, value]) => <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.025] p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-2 text-xl font-semibold">{value}</p></div>)}</div><div className="rounded-2xl border border-violet-300/20 bg-violet-300/[0.04] p-4"><p className="flex items-center gap-2 text-sm font-medium text-violet-200"><BrainCircuit className="h-5 w-5" />AI Growth Agent</p><p className="mt-2 text-sm text-muted-foreground">把真实增长行动拆解为执行与验证计划。</p><Button asChild variant="outline" className="mt-4 min-h-11 w-full"><Link href={`/projects/${project.id}/growth/agent`}>进入 Agent <ArrowRight className="h-4 w-4" /></Link></Button></div></CardContent></Card>;
-}
-
-function MonitoringPulse({ project, monitoring }: { project: Project; monitoring: MonitoringCenterResponse | null }) {
-  const items = [
-    ["最近一次检测", monitoring?.summary.lastCheckAt ? new Date(monitoring.summary.lastCheckAt).toLocaleString("zh-CN") : "unavailable"],
-    ["最近下降", String(monitoring?.summary.recentDrops ?? 0)],
-    ["最近提升", String(monitoring?.summary.recentImprovements ?? 0)],
-    ["待处理变化", String(monitoring?.summary.pendingChanges ?? 0)],
-  ] as const;
-  return <Card className="glass-panel overflow-hidden border-amber-300/20"><CardContent className="grid gap-4 p-5 lg:grid-cols-[0.72fr_0.28fr]"><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{items.map(([label, value]) => <div key={label} className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.025] p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-2 break-words text-lg font-semibold">{value}</p></div>)}</div><div className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.04] p-4"><p className="text-sm font-medium text-amber-200">Top Alert</p><p className="mt-2 break-words text-sm font-semibold">{monitoring?.summary.topAlert?.title ?? "unavailable"}</p><Button asChild variant="outline" className="mt-4 min-h-11 w-full"><Link href={`/projects/${project.id}/geo/monitoring-center`}>进入持续监控中心 <ArrowRight className="h-4 w-4" /></Link></Button></div></CardContent></Card>;
-}
-
-function EnterpriseAIGrowthHealth({ project, growth, opportunityCount }: { project: Project; growth: AISearchGrowthResponse | null; opportunityCount: number }) {
-  const items = [["SEO 健康度", growth?.relationship.seoAnalysisAvailable ? "已建立" : "待建立"], ["AI 搜索健康度", growth?.score.visibilityScore === null || growth?.score.visibilityScore === undefined ? "unavailable" : `${growth.score.visibilityScore}`], ["知识完整度", growth?.score.knowledgeScore === null || growth?.score.knowledgeScore === undefined ? "unavailable" : `${growth.score.knowledgeScore}`], ["竞争优势", growth?.score.competitionScore === null || growth?.score.competitionScore === undefined ? "unavailable" : `${growth.score.competitionScore}`], ["增长机会", `${opportunityCount} 项`]] as const;
-  return <Card className="glass-panel overflow-hidden border-cyan-300/20"><CardContent className="grid gap-5 p-5 lg:grid-cols-[0.3fr_0.7fr]"><div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/[0.04] p-5"><p className="flex items-center gap-2 text-sm font-medium text-cyan-200"><TrendingUp className="h-5 w-5" />企业 AI 增长健康度</p><p className="mt-4 text-5xl font-semibold text-cyan-100">{growth?.score.overallScore ?? "—"}<span className="text-base text-muted-foreground">{growth?.score.overallScore === null || growth?.score.overallScore === undefined ? "" : "/100"}</span></p><p className="mt-2 text-xs text-muted-foreground">{growth?.score.status === "available" ? `真实证据可信度 ${growth.score.confidence}%` : "unavailable · 尚无足够增长证据"}</p><Button asChild variant="outline" className="mt-5 min-h-11 w-full"><Link href={`/projects/${project.id}/geo/command-center`}>查看商业增长分析 <ArrowRight className="h-4 w-4" /></Link></Button></div><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{items.map(([label, value]) => <div key={label} className="flex min-h-24 min-w-0 flex-col justify-center rounded-2xl border border-white/10 bg-white/[0.025] p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-2 break-words text-lg font-semibold">{value}</p></div>)}</div></CardContent></Card>;
-}
-
-function AIRecommendationReadiness({ project, intelligence }: { project: Project; intelligence: AISearchIntelligenceResponse | null }) {
-  const suggestions = intelligence?.analysis.issues.slice(0, 3) ?? [];
-  return <Card className="glass-panel overflow-hidden border-violet-300/20"><CardContent className="grid gap-5 p-5 lg:grid-cols-[0.38fr_0.62fr]"><div className="rounded-2xl border border-violet-300/20 bg-violet-300/[0.04] p-5"><div className="flex items-center gap-2 text-sm font-medium text-violet-200"><BrainCircuit className="h-5 w-5" />AI 推荐准备度</div><p className="mt-4 text-5xl font-semibold text-violet-200">{intelligence?.analysis.healthScore ?? "--"}<span className="text-lg text-muted-foreground">%</span></p><p className="mt-2 text-xs text-muted-foreground">{intelligence?.analysis.status === "available" ? `证据覆盖置信度 ${intelligence.analysis.confidence ?? 0}%` : "unavailable · 尚无足够诊断证据"}</p><Button asChild variant="outline" className="mt-5 min-h-11 w-full"><Link href={`/projects/${project.id}/geo/intelligence`}>查看 AI 搜索诊断 <ArrowRight className="h-4 w-4" /></Link></Button></div><div className="min-w-0"><p className="text-sm font-medium">Top 3 提升建议</p><div className="mt-3 space-y-2">{suggestions.length ? suggestions.map((issue, index) => <Link key={issue.type} href={`/projects/${project.id}/geo/intelligence`} className="flex min-h-12 min-w-0 items-start gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-3 transition hover:border-violet-300/30"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-300/10 text-xs text-violet-200">{index + 1}</span><span className="min-w-0"><span className="block break-words text-sm font-medium">{issue.reason}</span><span className="mt-1 block text-xs text-muted-foreground">{issue.severity} · {issue.signalType}</span></span></Link>) : <div className="rounded-xl border border-white/10 bg-white/[0.025] p-4 text-sm text-muted-foreground">当前没有可追溯的 AI 推荐改进建议。完成企业知识、实体或可见性数据后重新诊断。</div>}</div></div></CardContent></Card>;
-}
-
-function ProjectPulse({ project, analysis, knowledgeScore, opportunityCount, tasks, benchmark }: { project: Project; analysis: AnalysisSummary | null; knowledgeScore: number | null; opportunityCount: number; tasks: OptimizationTask[]; benchmark: BenchmarkOverviewResponse | null }) {
-  const recommendation = benchmark?.results.find((item) => item.targetType === "OWN")?.simulationScore ?? null;
-  const items = [
-    { label: "SEO 健康度", value: score(seoHealthScore(analysis)), detail: "技术、Schema 与内容", tone: "text-emerald-300" },
-    { label: "AI 可见性", value: score(project.visibilityScore), detail: "项目当前可见性信号", tone: "text-violet-300" },
-    { label: "知识完整度", value: score(knowledgeScore), detail: "严格证据模式", tone: "text-cyan-300" },
-    { label: "AI 推荐概率", value: score(recommendation), detail: recommendation === null ? "尚无模拟证据" : "规则模拟证据", tone: "text-fuchsia-300" },
-    { label: "优先行动", value: `${opportunityCount}`, detail: `${tasks.filter((task) => task.status !== "COMPLETED").length} 个任务待完成`, tone: "text-amber-300" },
-  ];
-  return <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{items.map((item) => <Card key={item.label} className="glass-panel min-w-0 border-white/10"><CardContent className="p-4"><p className="text-xs text-muted-foreground">{item.label}</p><p className={`mt-3 text-3xl font-semibold ${item.tone}`}>{item.value}</p><p className="mt-2 truncate text-xs text-muted-foreground" title={item.detail}>{item.detail}</p></CardContent></Card>)}</section>;
-}
-
-function SeoStatus({ project, analysis, issues }: { project: Project; analysis: AnalysisSummary | null; issues: GeoIssue[] }) {
-  const pageIssues = issues.filter((issue) => issue.category !== "entity").length;
-  const schemaScore = analysis ? Math.round((analysis.schemaScore / 25) * 100) : null;
-  return <StatusPanel icon={<SearchCheck className="h-5 w-5" />} title="SEO Visibility" accent="text-emerald-300" href={`/projects/${project.id}/seo`}><StatusMetric label="网站健康度" value={score(seoHealthScore(analysis))} progress={seoHealthScore(analysis)} /><StatusMetric label="技术与页面问题" value={`${pageIssues} 项`} /><StatusMetric label="Schema 状态" value={score(schemaScore)} progress={schemaScore} /></StatusPanel>;
-}
-
-function AiSearchStatus({ project, analysis, knowledgeScore, benchmark, growth }: { project: Project; analysis: AnalysisSummary | null; knowledgeScore: number | null; benchmark: BenchmarkOverviewResponse | null; growth: GrowthWorkspaceResponse | null }) {
-  const own = benchmark?.results.find((item) => item.targetType === "OWN") ?? null;
-  const entityScore = analysis ? Math.round((analysis.entityScore / 30) * 100) : null;
-  const latestCitation = growth?.snapshots.find((item) => item.citationScore !== null)?.citationScore ?? own?.citationScore ?? null;
-  return <StatusPanel icon={<Sparkles className="h-5 w-5" />} title="AI Search Visibility" accent="text-violet-300" href={`/projects/${project.id}/geo`}><StatusMetric label="品牌实体完整度" value={score(entityScore)} progress={entityScore} /><StatusMetric label="Knowledge 完整度" value={score(knowledgeScore)} progress={knowledgeScore} /><StatusMetric label="AI 推荐概率" value={score(own?.simulationScore ?? null)} /><StatusMetric label="Citation 情况" value={score(latestCitation)} /></StatusPanel>;
-}
-
-function CompetitiveStatus({ project, benchmark, competitorCount }: { project: Project; benchmark: BenchmarkOverviewResponse | null; competitorCount: number }) {
-  const own = benchmark?.results.find((result) => result.targetType === "OWN") ?? null;
-  const gap = benchmark?.gaps.find((item) => item.actionable) ?? null;
-  return <StatusPanel icon={<Medal className="h-5 w-5" />} title="竞争状态" accent="text-amber-300" href={`/projects/${project.id}/competitors`}><StatusMetric label="Benchmark 排名" value={own?.ranking ? `第 ${own.ranking} 名` : "暂无结果"} /><StatusMetric label="已管理竞品" value={`${competitorCount} 家`} /><div className="rounded-2xl border border-white/10 bg-white/[0.025] p-3"><p className="text-xs text-muted-foreground">主要差距</p><p className="mt-2 text-sm font-medium">{gap ? `${gap.leadingCompetitor ?? "领先竞品"}在${benchmarkMetricLabel(gap.metric)}领先${Math.abs(gap.difference ?? 0)}分` : "暂无可用的竞争差距"}</p></div></StatusPanel>;
-}
-
-function StatusPanel({ icon, title, accent, href, children }: { icon: ReactNode; title: string; accent: string; href: string; children: ReactNode }) {
-  return <Card className="glass-panel min-w-0 border-white/10"><CardHeader className="flex-row items-center justify-between gap-3"><CardTitle className={`flex items-center gap-2 text-lg ${accent}`}>{icon}{title}</CardTitle><Button asChild variant="ghost" size="sm" className="min-h-11"><Link href={href}>查看 <ArrowRight className="h-4 w-4" /></Link></Button></CardHeader><CardContent className="space-y-3">{children}</CardContent></Card>;
-}
-
-function StatusMetric({ label, value, progress }: { label: string; value: string; progress?: number | null }) {
-  return <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-3"><div className="flex items-center justify-between gap-3 text-sm"><span className="text-muted-foreground">{label}</span><strong>{value}</strong></div>{typeof progress === "number" ? <Progress value={progress} className="mt-3" /> : null}</div>;
-}
-
-function PriorityActions({ project, opportunities }: { project: Project; opportunities: GrowthOpportunity[] }) {
-  return <Card className="glass-panel min-w-0 border-white/10"><CardHeader className="flex-row items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Growth Opportunities</p><CardTitle className="mt-2 flex items-center gap-2 text-xl"><Target className="h-5 w-5 text-primary" />当前最大增长机会</CardTitle></div><Button asChild variant="outline" className="min-h-11"><Link href={`/projects/${project.id}/optimization`}>进入优化中心</Link></Button></CardHeader><CardContent className="space-y-3">{opportunities.length ? opportunities.slice(0, 5).map((opportunity) => <Link key={`${opportunity.source}-${opportunity.id}`} href={`/projects/${project.id}/optimization`} className="flex min-h-16 min-w-0 items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.025] p-3 transition hover:border-primary/30"><span className={`mt-1 inline-flex min-w-14 shrink-0 justify-center rounded-full px-2 py-1 text-[10px] font-semibold ${severityStyle(opportunity.severity)}`}>{severityLabel(opportunity.severity)}</span><span className="min-w-0 flex-1"><span className="block text-xs text-muted-foreground">{opportunity.sourceLabel} · {opportunity.impact}</span><span className="mt-1 block break-words text-sm font-medium">{opportunity.title}</span></span><ArrowRight className="mt-2 h-4 w-4 shrink-0 text-muted-foreground" /></Link>) : <p className="text-sm text-muted-foreground">当前没有真实数据支持的待处理增长机会。</p>}</CardContent></Card>;
-}
-
-function GrowthFlow({ analysis, project, hasKnowledge, hasBenchmark, opportunityCount, taskCount, snapshotCount }: { analysis: AnalysisSummary | null; project: Project; hasKnowledge: boolean; hasBenchmark: boolean; opportunityCount: number; taskCount: number; snapshotCount: number }) {
-  const steps = [["企业网站", Boolean(project.lastScan)], ["SEO 分析", Boolean(analysis)], ["GEO AI 理解", Boolean(analysis)], ["企业知识画像", hasKnowledge], ["AI 搜索模拟", hasBenchmark], ["竞品比较", hasBenchmark], ["增长机会", opportunityCount > 0], ["优化与追踪", taskCount > 0 || snapshotCount > 0]] as const;
-  return <Card className="glass-panel min-w-0 border-white/10"><CardHeader><CardTitle className="text-lg">增长数据流</CardTitle><p className="text-sm text-muted-foreground">底层模块保持独立，企业增长中心统一呈现状态。</p></CardHeader><CardContent className="grid gap-2 sm:grid-cols-2">{steps.map(([label, ready], index) => <div key={label} className="flex min-h-12 items-center gap-3 rounded-xl border border-white/10 bg-white/[0.025] px-3"><span className="font-mono text-xs text-muted-foreground">{String(index + 1).padStart(2, "0")}</span>{ready ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" /> : <CircleDashed className="h-4 w-4 shrink-0 text-muted-foreground" />}<span className="text-sm">{label}</span></div>)}</CardContent></Card>;
-}
-
-function RecentProjects({ projects }: { projects: Project[] }) {
-  return <section><div className="mb-3 flex items-center justify-between"><h2 className="text-base font-semibold">项目增长概览</h2><Button asChild variant="ghost" className="min-h-11"><Link href="/projects">全部项目 <ArrowRight className="h-4 w-4" /></Link></Button></div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{projects.slice(0, 6).map((project) => <Link href={`/projects/${project.id}/overview`} key={project.id} className="glass-panel min-h-28 min-w-0 rounded-2xl p-4 transition hover:border-primary/30"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-medium">{project.name}</p><p className="mt-1 truncate text-xs text-muted-foreground">{getHostname(project.websiteUrl)}</p></div><span className="shrink-0 font-mono text-lg text-primary">{project.geoScore || "—"}</span></div><div className="mt-4 flex items-center justify-between text-xs text-muted-foreground"><span>SEO + GEO 增长项目</span><span>可见性 {project.visibilityScore}</span></div></Link>)}</div></section>;
-}
-
-function DashboardLoading() { return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{Array.from({ length: 5 }, (_, index) => <div key={index} className="h-32 animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />)}</div>; }
-function EmptyDashboard() { return <Card className="glass-panel border-white/10"><CardContent className="flex min-h-96 flex-col items-center justify-center p-8 text-center"><Gauge className="h-8 w-8 text-primary" /><h2 className="mt-4 text-xl font-semibold">创建第一个企业增长项目</h2><p className="mt-2 max-w-md text-sm text-muted-foreground">添加企业网站后，GeoPilot AI 会逐步建立 SEO、AI 搜索、知识、竞争与优化基线。</p><Button asChild className="mt-6 min-h-11"><Link href="/projects">创建项目</Link></Button></CardContent></Card>; }
-function seoHealthScore(analysis: AnalysisSummary | null) { return analysis ? Math.min(100, Math.round(((analysis.technicalScore + analysis.schemaScore + analysis.contentScore) / 70) * 100)) : null; }
-function score(value: number | null, locale: "zh" | "en" = "zh") { return value === null ? (locale === "en" ? "Unavailable" : "暂无") : `${Math.round(value)}`; }
-function benchmarkMetricLabel(metric: string) { return ({ overall: "综合评分", visibility: "AI 可见性", entity: "实体理解", schema: "Schema", authority: "权威性", citation: "引用能力", simulation: "推荐概率" } as Record<string, string>)[metric] ?? metric; }
-function severityLabel(severity: GrowthOpportunity["severity"]) { return severity === "critical" ? "HIGH" : severity === "warning" ? "MEDIUM" : "LOW"; }
-function severityStyle(severity: GrowthOpportunity["severity"]) { return severity === "critical" ? "bg-rose-400/15 text-rose-300" : severity === "warning" ? "bg-amber-400/15 text-amber-300" : "bg-sky-400/15 text-sky-300"; }

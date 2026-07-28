@@ -5,6 +5,7 @@ import { jsonArray } from "./database";
 import { providerRegistry } from "./provider-adapters";
 import { normalizeProviderRuntimeError } from "./provider-errors";
 import { decryptProviderApiKey, encryptProviderApiKey } from "./provider-secret";
+import { aiSearchQueryRepository } from "./query-repository";
 import {
   issueProviderVerificationToken,
   providerCredentialFingerprint,
@@ -134,9 +135,12 @@ async function resolveProviderInput(
 }
 
 export async function getRealAISearchMonitoring(userId: string, projectId: string) {
-  const data = await realAISearchRepository.monitoring(userId, projectId);
+  const [data, queries] = await Promise.all([
+    realAISearchRepository.monitoring(userId, projectId),
+    aiSearchQueryRepository.list(userId, projectId),
+  ]);
   if (!data) throw new RealAISearchError("PROJECT_FORBIDDEN", 403);
-  return data;
+  return { ...data, queries };
 }
 
 export async function listProviderModels(
@@ -350,29 +354,43 @@ export async function removeProviderConfig(userId: string, projectId: string, pr
 
 export async function executeRealAISearch(
   userId: string,
-  input: { projectId: string; provider: AISearchProviderType; query: string; intent: AISearchIntent },
+  input: {
+    projectId: string;
+    provider: AISearchProviderType;
+    queryId?: string;
+    query?: string;
+    intent: AISearchIntent;
+  },
 ) {
-  enforceRateLimit(`${userId}:${input.projectId}`);
   const project = await realAISearchRepository.projectForUser(userId, input.projectId);
   if (!project) throw new RealAISearchError("PROJECT_FORBIDDEN", 403);
+
+  const queryRecord = input.queryId
+    ? await aiSearchQueryRepository.owned(userId, input.projectId, input.queryId)
+    : input.query
+      ? await aiSearchQueryRepository.upsert(userId, input.projectId, {
+          query: input.query,
+          intent: input.intent,
+        })
+      : null;
+  if (!queryRecord) throw new RealAISearchError("AI_SEARCH_QUERY_NOT_FOUND", 404);
+
   const config = await realAISearchRepository.internalConfig(userId, input.projectId, input.provider);
-  if (!config || !config.enabled) throw new RealAISearchError("PROVIDER_DISABLED", 422);
-  if (config.modelVerificationStatus !== "VERIFIED_AVAILABLE") {
-    throw new RealAISearchError("MODEL_VERIFICATION_REQUIRED", 422);
-  }
-  const connectionType = normalizedConnectionType(input.provider, config.connectionType);
+  const connectionType = normalizedConnectionType(input.provider, config?.connectionType);
   const source = detectionSource(connectionType);
-  const pending = await realAISearchRepository.createPending(userId, {
-    ...input,
-    targetEntity: String(project.targetEntity),
-    industry: String(project.industry),
+  const pending = await aiSearchQueryRepository.createResult(userId, {
+    projectId: input.projectId,
+    queryId: String(queryRecord.id),
+    provider: input.provider,
     detectionSource: source,
   });
   if (!pending) throw new RealAISearchError("PROJECT_FORBIDDEN", 403);
+  const executionQuery = String(queryRecord.query);
+  const executionIntent = String(queryRecord.intent) as AISearchIntent;
   const startedAt = new Date();
   const started = startedAt.getTime();
   let attempts = 0;
-  const fail = async (code: string) => {
+  const fail = async (code: string, status = 422) => {
     const endedAt = new Date();
     const durationMs = endedAt.getTime() - started;
     await realAISearchRepository.markFailed(userId, input.projectId, pending.resultId, code, durationMs, attempts);
@@ -389,8 +407,18 @@ export async function executeRealAISearch(
     } catch (automationError) {
       console.error("[MONITORING AUTOMATION FAILURE]", automationError);
     }
-    throw new RealAISearchError(code, 422);
+    throw new RealAISearchError(code, status);
   };
+
+  try {
+    enforceRateLimit(`${userId}:${input.projectId}`);
+  } catch {
+    return fail("AI_SEARCH_RATE_LIMITED", 429);
+  }
+  if (!config || !config.enabled) return fail("PROVIDER_DISABLED");
+  if (config.modelVerificationStatus !== "VERIFIED_AVAILABLE") {
+    return fail("MODEL_VERIFICATION_REQUIRED");
+  }
 
   let apiKey;
   try {
@@ -412,8 +440,8 @@ export async function executeRealAISearch(
     try {
       response = await provider.query(
         {
-          query: input.query,
-          intent: input.intent,
+          query: executionQuery,
+          intent: executionIntent,
           targetEntity: String(project.targetEntity),
           industry: String(project.industry),
         },
@@ -447,7 +475,7 @@ export async function executeRealAISearch(
   );
   await realAISearchRepository.syncVisibility(userId, input.projectId, {
     provider: input.provider,
-    query: input.query,
+    query: executionQuery,
     answer: response.text,
     parsed,
   });

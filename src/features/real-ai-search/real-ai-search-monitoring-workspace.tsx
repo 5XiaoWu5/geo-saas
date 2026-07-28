@@ -19,9 +19,13 @@ import {
   Trash2,
   XCircle,
 } from "lucide-react";
+import {
+  GuidedEmptyState,
+  GuidedPageHeader,
+  TechnicalDetails,
+} from "@/components/shared/guided-experience";
 import { OperationFeedback, type OperationStatus } from "@/components/shared/operation-feedback";
 import { ProviderLogo } from "@/components/shared/provider-logo";
-import { PageHeader } from "@/components/shared/page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,7 +37,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/i18n/provider";
 import { PROVIDER_METADATA } from "./provider-metadata";
 import { GatewayConnectionsPanel } from "./gateway-connections-panel";
-import { growthNextStepLabel, selectGrowthNextStep } from "@/features/growth-engine/next-step";
+import type { ProjectOnboardingSummary } from "@/features/growth-engine/onboarding";
 import {
   AI_SEARCH_PROVIDER_TYPES,
   PROVIDER_LABELS,
@@ -60,11 +64,25 @@ export function RealAISearchMonitoringWorkspace({ projectId }: { projectId: stri
   const [error, setError] = useState("");
   const [provider, setProvider] = useState<AISearchProviderType>("OPENAI");
   const [query, setQuery] = useState("");
+  const [selectedQueryId, setSelectedQueryId] = useState("");
   const [intent, setIntent] = useState("RESEARCH");
   const [executionStatus, setExecutionStatus] = useState<OperationStatus>("IDLE");
+  const [queryStatus, setQueryStatus] = useState<OperationStatus>("IDLE");
+  const [onboarding, setOnboarding] = useState<ProjectOnboardingSummary | null>(null);
+  const [archiveTargetId, setArchiveTargetId] = useState("");
 
   const load = useCallback(async () => {
-    setData(await json<MonitoringResponse>(await fetch(`/api/ai-search-execution/${projectId}`, { cache: "no-store" })));
+    const [monitoring, onboardingSummary] = await Promise.all([
+      json<MonitoringResponse>(await fetch(`/api/ai-search-execution/${projectId}`, { cache: "no-store" })),
+      json<ProjectOnboardingSummary>(await fetch(`/api/projects/${projectId}/onboarding`, { cache: "no-store" })),
+    ]);
+    setData(monitoring);
+    setOnboarding(onboardingSummary);
+    setSelectedQueryId(current =>
+      monitoring.queries.some(item => item.id === current)
+        ? current
+        : monitoring.queries[0]?.id ?? "",
+    );
   }, [projectId]);
 
   useEffect(() => {
@@ -83,19 +101,12 @@ export function RealAISearchMonitoringWorkspace({ projectId }: { projectId: stri
     () => data?.providers.filter(item => item.config.enabled && item.config.configured).length ?? 0,
     [data?.providers],
   );
-  const tested = data?.providers.filter(item => item.config.lastTestStatus === "SUCCEEDED").length ?? 0;
-  const nextStep = growthNextStepLabel(selectGrowthNextStep({
-    configuredProviderCount: connected,
-    testedProviderCount: tested,
-    monitoringQueryCount: data?.results.length ? 1 : 0,
-    aiSearchResultCount: data?.results.length ?? 0,
-    unresolvedIssueCount: 0,
-    actionCount: 0,
-    openActionCount: 0,
-  }), locale);
+  const readyProviderCount = onboarding?.facts.readyProviderCount ?? 0;
+  const savedQueryCount = data?.queries.length ?? 0;
+  const successfulResultCount = onboarding?.facts.succeededResultCount ?? 0;
 
   async function execute() {
-    if (busy || query.trim().length < 3) return;
+    if (busy || !selectedQueryId) return;
     setBusy("execute");
     setError("");
     setExecutionStatus("RUNNING");
@@ -103,7 +114,7 @@ export function RealAISearchMonitoringWorkspace({ projectId }: { projectId: stri
       setData(await json<MonitoringResponse>(await fetch(`/api/ai-search-execution/${projectId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, query, intent }),
+        body: JSON.stringify({ provider, queryId: selectedQueryId, intent }),
       })));
       setExecutionStatus("COMPLETED");
     } catch (requestError) {
@@ -111,6 +122,55 @@ export function RealAISearchMonitoringWorkspace({ projectId }: { projectId: stri
       setError(code);
       setExecutionStatus("FAILED");
       await load().catch(() => undefined);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function saveQuery() {
+    if (busy || query.trim().length < 3) return;
+    setBusy("save-query");
+    setError("");
+    setQueryStatus("CREATING");
+    try {
+      const response = await json<{ query: { id: string } }>(
+        await fetch(`/api/projects/${projectId}/ai-search-queries`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query, intent }),
+        }),
+      );
+      setSelectedQueryId(response.query.id);
+      setQuery("");
+      await load();
+      setQueryStatus("COMPLETED");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "AI_SEARCH_QUERY_REQUEST_FAILED");
+      setQueryStatus("FAILED");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function archiveQuery(queryId: string) {
+    if (busy) return;
+    setArchiveTargetId(queryId);
+  }
+
+  async function confirmArchiveQuery() {
+    if (busy || !archiveTargetId) return;
+    const queryId = archiveTargetId;
+    setBusy(`archive:${queryId}`);
+    try {
+      await json<{ archived: boolean }>(
+        await fetch(`/api/projects/${projectId}/ai-search-queries/${queryId}`, {
+          method: "DELETE",
+        }),
+      );
+      await load();
+      setArchiveTargetId("");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "AI_SEARCH_QUERY_ARCHIVE_FAILED");
     } finally {
       setBusy("");
     }
@@ -127,16 +187,29 @@ export function RealAISearchMonitoringWorkspace({ projectId }: { projectId: stri
 
   return (
     <div className="min-w-0 space-y-6 overflow-x-hidden">
-      <PageHeader
-        title={locale === "zh" ? "真实 AI 搜索监控" : "Real AI Search Monitoring"}
+      <GuidedPageHeader
+        title={locale === "zh" ? "AI 搜索检测" : "AI search checks"}
         description={locale === "zh"
-          ? "连接 AI 平台、运行真实检测并保留可核对的成功与失败记录。"
-          : "Connect AI platforms, run real checks, and retain auditable success and failure records."}
+          ? "检测您的品牌是否出现在 AI 回答中，并查看引用来源和竞争对手表现。"
+          : "Check whether your brand appears in AI answers and review citations and competitors."}
+        status={readyProviderCount === 0
+          ? (locale === "zh" ? "尚未连接可用的 AI 平台" : "No usable AI platform connected")
+          : savedQueryCount === 0
+            ? (locale === "zh" ? "尚未添加检测问题" : "No check question added")
+            : successfulResultCount === 0
+              ? (locale === "zh" ? `已准备 ${savedQueryCount} 个问题，尚未完成检测` : `${savedQueryCount} questions are ready; no check has completed`)
+              : (locale === "zh" ? `已完成 ${successfulResultCount} 次真实检测` : `${successfulResultCount} real checks completed`)}
         action={(
-          <Button asChild variant="outline" className="min-h-11 w-full sm:w-auto">
-            <Link href={`/projects/${projectId}/geo`}>
-              <ArrowRight className="h-4 w-4 rotate-180" />
-              {locale === "zh" ? "返回 AI 搜索增长" : "Back to AI Search Growth"}
+          <Button asChild className="min-h-11 w-full sm:w-auto">
+            <Link href={readyProviderCount === 0 ? "#ai-connections" : savedQueryCount === 0 ? "#saved-questions" : successfulResultCount === 0 ? "#run-real-check" : "#recent-checks"}>
+              {readyProviderCount === 0
+                ? (locale === "zh" ? "连接 AI 平台" : "Connect an AI platform")
+                : savedQueryCount === 0
+                  ? (locale === "zh" ? "添加第一个检测问题" : "Add the first question")
+                  : successfulResultCount === 0
+                    ? (locale === "zh" ? "运行第一次检测" : "Run the first check")
+                    : (locale === "zh" ? "查看检测结果" : "Review check results")}
+              <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>
         )}
@@ -149,14 +222,16 @@ export function RealAISearchMonitoringWorkspace({ projectId }: { projectId: stri
         />
       ) : null}
 
-      <Card className="overflow-hidden border-violet-300/20 bg-[radial-gradient(circle_at_top_right,rgba(139,92,246,.12),transparent_42%)]">
+      <Card id="ai-connections" className="scroll-mt-24 overflow-hidden border-violet-300/20 bg-[radial-gradient(circle_at_top_right,rgba(139,92,246,.12),transparent_42%)]">
         <CardContent className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[1fr_auto] lg:items-center">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-violet-200">
               <KeyRound className="h-5 w-5" />
               <h2 className="text-lg font-semibold">{t("providerUx.title")}</h2>
             </div>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{t("providerUx.description")}</p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+              {locale === "zh" ? "选择官方平台或第三方兼容接口。连接成功后即可保存问题并运行检测。" : "Choose an official platform or a third-party compatible interface. Once connected, save questions and run checks."}
+            </p>
             <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-sky-100">
               {locale === "zh"
                 ? "API Key 用于运行 AI 检测和分析建议；连接 API 不会把网站提交给 ChatGPT，也不能保证品牌一定被推荐。"
@@ -171,7 +246,12 @@ export function RealAISearchMonitoringWorkspace({ projectId }: { projectId: stri
                 style={{ width: `${connected / AI_SEARCH_PROVIDER_TYPES.length * 100}%` }}
               />
             </div>
-            <p className="mt-3 text-xs text-muted-foreground"><strong>{t("providerUx.nextStep")}：</strong>{nextStep}</p>
+            <p className="mt-3 text-xs text-muted-foreground">
+              <strong>{locale === "zh" ? "下一步：" : "Next: "}</strong>
+              {readyProviderCount > 0
+                ? (locale === "zh" ? "添加需要检测的问题" : "Add a question to check")
+                : (locale === "zh" ? "完成一个模型的真实验证" : "Complete real verification for one model")}
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -202,91 +282,180 @@ export function RealAISearchMonitoringWorkspace({ projectId }: { projectId: stri
         ))}
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-        <Card id="run-real-check" className="glass-panel min-w-0 scroll-mt-24 border-white/10">
-          <CardHeader>
-            <CardTitle>{locale === "zh" ? "配置流程" : "Setup process"}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ol className="grid gap-3 sm:grid-cols-5">
-              {(["get", "signIn", "create", "paste", "test"] as const).map((step, index) => (
-                <li key={step} className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
-                  <span className="text-xs text-violet-300">{locale === "zh" ? `第 ${index + 1} 步` : `Step ${index + 1}`}</span>
-                  <p className="mt-2 text-sm font-medium">{t(`providerUx.setupSteps.${step}`)}</p>
-                </li>
-              ))}
-            </ol>
-          </CardContent>
-        </Card>
+      <TechnicalDetails label={locale === "zh" ? "查看 AI 连接配置流程" : "View AI connection setup"}>
+        <ol className="grid gap-3 sm:grid-cols-5">
+          {(["get", "signIn", "create", "paste", "test"] as const).map((step, index) => (
+            <li key={step} className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+              <span className="text-xs text-violet-300">{locale === "zh" ? `第 ${index + 1} 步` : `Step ${index + 1}`}</span>
+              <p className="mt-2 text-sm font-medium">{t(`providerUx.setupSteps.${step}`)}</p>
+            </li>
+          ))}
+        </ol>
+      </TechnicalDetails>
 
-        <Card className="glass-panel min-w-0 border-white/10">
+      <section id="saved-questions" className="scroll-mt-24 grid gap-5 xl:grid-cols-[.9fr_1.1fr]">
+        <Card className="min-w-0 border-cyan-300/20 bg-card/70">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Play className="h-5 w-5 text-emerald-300" />
-              {locale === "zh" ? "运行真实检测" : "Run a real check"}
-            </CardTitle>
+            <CardTitle>{locale === "zh" ? "添加需要检测的问题" : "Add a question to check"}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="real-provider">{locale === "zh" ? "AI 平台" : "AI provider"}</Label>
-                <Select id="real-provider" className="min-h-11" value={provider} onChange={event => setProvider(event.target.value as AISearchProviderType)}>
-                  {AI_SEARCH_PROVIDER_TYPES.map(value => <option value={value} key={value}>{PROVIDER_LABELS[value]}</option>)}
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="real-intent">{locale === "zh" ? "搜索意图" : "Search intent"}</Label>
-                <Select id="real-intent" className="min-h-11" value={intent} onChange={event => setIntent(event.target.value)}>
-                  <option value="RESEARCH">{locale === "zh" ? "行业研究" : "Research"}</option>
-                  <option value="BUYING">{locale === "zh" ? "购买决策" : "Buying"}</option>
-                  <option value="COMPARISON">{locale === "zh" ? "方案比较" : "Comparison"}</option>
-                  <option value="LOCAL_SEARCH">{locale === "zh" ? "本地搜索" : "Local search"}</option>
-                  <option value="TECHNICAL">{locale === "zh" ? "技术评估" : "Technical"}</option>
-                </Select>
-              </div>
-            </div>
+            <p className="text-sm leading-6 text-muted-foreground">
+              {locale === "zh"
+                ? "问题会先保存，只有点击运行检测后才会调用 AI 平台。"
+                : "The question is saved first. The AI platform is called only when you run the check."}
+            </p>
             <div className="space-y-2">
-              <Label htmlFor="real-query">{locale === "zh" ? "真实查询问题" : "Real search query"}</Label>
+              <Label htmlFor="real-query">{locale === "zh" ? "检测问题" : "Check question"}</Label>
               <Textarea
                 id="real-query"
                 value={query}
                 onChange={event => setQuery(event.target.value)}
-                placeholder={locale === "zh" ? "例如：推荐广州环保设备厂家" : "Example: Recommend environmental equipment manufacturers"}
+                placeholder={locale === "zh" ? "例如：哪些公司提供 AI 搜索优化服务？" : "Example: Which companies provide AI search optimization services?"}
                 className="min-h-28"
               />
             </div>
-            {executionStatus !== "IDLE" ? (
+            <div className="space-y-2">
+              <Label htmlFor="real-intent">{locale === "zh" ? "这个问题的用途" : "Purpose of this question"}</Label>
+              <Select id="real-intent" className="min-h-11" value={intent} onChange={event => setIntent(event.target.value)}>
+                <option value="RESEARCH">{locale === "zh" ? "了解行业信息" : "Industry research"}</option>
+                <option value="BUYING">{locale === "zh" ? "寻找购买建议" : "Buying recommendation"}</option>
+                <option value="COMPARISON">{locale === "zh" ? "比较不同方案" : "Compare options"}</option>
+                <option value="LOCAL_SEARCH">{locale === "zh" ? "寻找本地服务商" : "Find local providers"}</option>
+                <option value="TECHNICAL">{locale === "zh" ? "评估技术能力" : "Evaluate technical capability"}</option>
+              </Select>
+            </div>
+            {queryStatus !== "IDLE" ? (
               <OperationFeedback
-                status={executionStatus}
-                message={executionStatus === "COMPLETED"
-                  ? (locale === "zh" ? "真实检测结果已写入监控历史。" : "The real result was saved to monitoring history.")
+                status={queryStatus}
+                message={queryStatus === "COMPLETED"
+                  ? (locale === "zh" ? "检测问题已保存，尚未调用 AI 平台。" : "The question was saved. No AI platform was called.")
                   : undefined}
               />
             ) : null}
             <Button
               className="min-h-11 w-full sm:w-auto"
               disabled={busy !== "" || query.trim().length < 3}
-              onClick={() => void execute()}
+              onClick={() => void saveQuery()}
             >
-              {busy === "execute" ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Play className="h-4 w-4" />}
-              {locale === "zh" ? "运行真实检测" : "Run real check"}
+              {busy === "save-query" ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Save className="h-4 w-4" />}
+              {locale === "zh" ? "保存检测问题" : "Save check question"}
             </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="min-w-0 border-white/10 bg-card/70">
+          <CardHeader>
+            <CardTitle>{locale === "zh" ? "已保存的问题" : "Saved questions"}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {data?.queries.length ? (
+              <div className="grid gap-3">
+                {data.queries.map(item => (
+                  <article
+                    key={item.id}
+                    className={`rounded-2xl border p-4 ${selectedQueryId === item.id ? "border-cyan-300/35 bg-cyan-300/[0.06]" : "border-white/10"}`}
+                  >
+                    <label className="flex min-h-11 cursor-pointer items-start gap-3">
+                      <input
+                        type="radio"
+                        name="selected-query"
+                        value={item.id}
+                        checked={selectedQueryId === item.id}
+                        onChange={() => setSelectedQueryId(item.id)}
+                        className="mt-1 h-4 w-4 accent-cyan-300"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <strong className="block break-words text-sm">{item.query}</strong>
+                        <span className="mt-1 block text-xs text-muted-foreground">
+                          {item.resultCount === 0
+                            ? (locale === "zh" ? "尚未检测" : "Not checked yet")
+                            : (locale === "zh" ? `已有 ${item.resultCount} 次历史检测` : `${item.resultCount} historical checks`)}
+                        </span>
+                      </span>
+                    </label>
+                    <div className="mt-3 flex justify-end">
+                      <Button
+                        variant="ghost"
+                        className="min-h-11 text-muted-foreground"
+                        disabled={busy !== ""}
+                        onClick={() => void archiveQuery(item.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        {locale === "zh" ? "归档这个问题" : "Archive this question"}
+                      </Button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-2xl border border-dashed border-white/10 p-5 text-sm leading-6 text-muted-foreground">
+                {locale === "zh" ? "尚未添加问题。保存左侧问题后，它会出现在这里。" : "No question has been added. Save one and it will appear here."}
+              </p>
+            )}
           </CardContent>
         </Card>
       </section>
 
-      <Card className="glass-panel min-w-0 border-white/10">
+      {data?.queries.length ? (
+        <Card id="run-real-check" className="scroll-mt-24 border-emerald-300/20 bg-card/70">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Play className="h-5 w-5 text-emerald-300" />
+              {locale === "zh" ? "运行 AI 搜索检测" : "Run AI search check"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="real-provider">{locale === "zh" ? "使用哪个 AI 平台" : "AI platform"}</Label>
+                <Select id="real-provider" className="min-h-11" value={provider} onChange={event => setProvider(event.target.value as AISearchProviderType)}>
+                  {AI_SEARCH_PROVIDER_TYPES.map(value => <option value={value} key={value}>{PROVIDER_LABELS[value]}</option>)}
+                </Select>
+              </div>
+              <div className="rounded-2xl border border-white/10 p-4">
+                <p className="text-xs text-muted-foreground">{locale === "zh" ? "即将检测" : "Question to check"}</p>
+                <p className="mt-2 break-words text-sm font-medium">{data.queries.find(item => item.id === selectedQueryId)?.query}</p>
+              </div>
+            </div>
+            {executionStatus !== "IDLE" ? (
+              <OperationFeedback
+                status={executionStatus}
+                message={executionStatus === "COMPLETED"
+                  ? (locale === "zh" ? "检测已完成，并新增一条历史结果。" : "The check completed and a new historical result was added.")
+                  : undefined}
+              />
+            ) : null}
+            <Button
+              className="min-h-11 w-full sm:w-auto"
+              disabled={busy !== "" || !selectedQueryId || readyProviderCount === 0}
+              onClick={() => void execute()}
+            >
+              {busy === "execute" ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Play className="h-4 w-4" />}
+              {successfulResultCount === 0
+                ? (locale === "zh" ? "运行第一次检测" : "Run the first check")
+                : (locale === "zh" ? "再次检测并保留历史" : "Run again and preserve history")}
+            </Button>
+            {readyProviderCount === 0 ? (
+              <p className="text-sm text-amber-100">
+                {locale === "zh" ? "请先完成一个可用模型的真实验证。" : "Complete real verification for one usable model first."}
+              </p>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <Card id="recent-checks" className="scroll-mt-24 min-w-0 border-white/10 bg-card/70">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Radar className="h-5 w-5 text-violet-300" />
-            {locale === "zh" ? "最近真实检测" : "Recent real checks"}
+            {locale === "zh" ? "检测结果摘要" : "Check result summary"}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {data?.results.length ? data.results.map(result => (
             <article key={result.id} className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.025] p-4">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant={result.status === "SUCCEEDED" ? "success" : result.status === "FAILED" ? "warning" : "outline"}>{result.status}</Badge>
+                <Badge variant={result.status === "SUCCEEDED" ? "success" : result.status === "FAILED" ? "warning" : "outline"}>{resultStatusLabel(result.status, locale)}</Badge>
                 <Badge variant="outline">{PROVIDER_LABELS[result.provider]}</Badge>
                 <Badge variant="muted">
                   {detectionSourceLabel(result.detectionSource, locale)}
@@ -300,8 +469,12 @@ export function RealAISearchMonitoringWorkspace({ projectId }: { projectId: stri
                 ) : null}
               </div>
               <p className="mt-3 break-words text-sm font-medium">{result.query}</p>
-              <p className="mt-2 line-clamp-3 break-words text-sm text-muted-foreground">
-                {result.rawResponse ?? providerErrorMessage(t, result.errorCode ?? "PROVIDER_UNKNOWN_ERROR")}
+              <p className="mt-2 break-words text-sm text-muted-foreground">
+                {result.status === "SUCCEEDED"
+                  ? (result.mentioned
+                      ? (locale === "zh" ? "该回答提到了您的品牌。" : "The answer mentioned your brand.")
+                      : (locale === "zh" ? "该回答没有提到您的品牌。" : "The answer did not mention your brand."))
+                  : providerErrorMessage(t, result.errorCode ?? "PROVIDER_UNKNOWN_ERROR")}
               </p>
               {result.detectionSource === "COMPATIBLE_GATEWAY" ? (
                 <p className="mt-2 text-xs leading-5 text-amber-100">
@@ -316,13 +489,24 @@ export function RealAISearchMonitoringWorkspace({ projectId }: { projectId: stri
                     : "Source: official API. API results are not the same as the web or mobile product experience."}
                 </p>
               ) : null}
+              <TechnicalDetails className="mt-3">
+                <p className="whitespace-pre-wrap break-words text-xs leading-5 text-muted-foreground">
+                  {result.rawResponse ?? (locale === "zh" ? "失败记录没有保存伪造回答。" : "No fabricated answer was stored for this failed result.")}
+                </p>
+                <dl className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+                  <div><dt>{locale === "zh" ? "尝试次数" : "Attempts"}</dt><dd>{result.attemptCount}</dd></div>
+                  <div><dt>{locale === "zh" ? "耗时" : "Duration"}</dt><dd>{result.durationMs === null ? (locale === "zh" ? "暂无" : "Unavailable") : `${result.durationMs}ms`}</dd></div>
+                  <div><dt>{locale === "zh" ? "引用数量" : "Citations"}</dt><dd>{result.citations.length}</dd></div>
+                </dl>
+              </TechnicalDetails>
             </article>
           )) : (
-            <p className="rounded-2xl border border-white/10 bg-white/[0.025] p-5 text-sm text-muted-foreground">
-              {locale === "zh"
-                ? "暂无真实检测记录。完成平台配置后运行首次检测。"
-                : "No real checks yet. Configure a provider to run the first check."}
-            </p>
+            <GuidedEmptyState
+              title={locale === "zh" ? "尚未运行 AI 搜索检测" : "No AI search check has run"}
+              reason={locale === "zh" ? "完成第一次检测后，这里会显示品牌提及、竞争对手和引用来源。" : "After the first check, this area will show brand mentions, competitors, and citations."}
+              instruction={data?.queries.length ? (locale === "zh" ? "选择已保存的问题并运行检测。" : "Select a saved question and run the check.") : (locale === "zh" ? "先添加第一个检测问题。" : "Add the first check question.")}
+              action={<Button asChild className="min-h-11"><Link href={data?.queries.length ? "#run-real-check" : "#saved-questions"}>{data?.queries.length ? (locale === "zh" ? "运行第一次检测" : "Run the first check") : (locale === "zh" ? "添加第一个检测问题" : "Add the first question")}</Link></Button>}
+            />
           )}
         </CardContent>
       </Card>
@@ -338,6 +522,23 @@ export function RealAISearchMonitoringWorkspace({ projectId }: { projectId: stri
           </Link>
         </Button>
       </div>
+      <Dialog open={Boolean(archiveTargetId)} onOpenChange={open => { if (!open && !busy) setArchiveTargetId(""); }}>
+        <DialogContent>
+          <DialogTitle>{locale === "zh" ? "归档这个检测问题？" : "Archive this check question?"}</DialogTitle>
+          <DialogDescription className="mt-2 leading-6">
+            {locale === "zh"
+              ? "问题会从当前列表隐藏，但所有历史检测结果和引用证据都会继续保留。"
+              : "The question will be hidden from the active list, while every historical result and citation will remain preserved."}
+          </DialogDescription>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <DialogClose asChild><Button variant="outline" className="min-h-11">{locale === "zh" ? "取消" : "Cancel"}</Button></DialogClose>
+            <Button className="min-h-11" disabled={Boolean(busy)} onClick={() => void confirmArchiveQuery()}>
+              {busy.startsWith("archive:") ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {locale === "zh" ? "确认归档" : "Archive question"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -922,6 +1123,16 @@ function providerErrorMessage(t: (key: string, values?: Record<string, string | 
   const key = `providerUx.errors.${code}`;
   const translated = t(key);
   return translated === key ? t("providerUx.errors.PROVIDER_UNKNOWN_ERROR") : translated;
+}
+
+function resultStatusLabel(status: string, locale: "zh" | "en") {
+  const labels: Record<string, [string, string]> = {
+    PENDING: ["准备中", "Preparing"],
+    RUNNING: ["正在检测", "Running"],
+    SUCCEEDED: ["检测完成", "Completed"],
+    FAILED: ["检测失败", "Failed"],
+  };
+  return (labels[status] ?? ["状态未知", "Unknown status"])[locale === "zh" ? 0 : 1];
 }
 
 function detectionSourceLabel(source: string, locale: "zh" | "en") {

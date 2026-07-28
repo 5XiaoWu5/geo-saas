@@ -1,34 +1,26 @@
-import { Bell, Building2, Shield } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { PageHeader } from "@/components/shared/page";
+"use client";
 
-const settings = [
-  { icon: Building2, title: "工作空间", text: "GeoPilot AI 企业版" },
-  { icon: Shield, title: "安全设置", text: "预留单点登录与审计控制" },
-  { icon: Bell, title: "通知", text: "已启用每周管理摘要" },
-];
+import Link from "next/link";
+import { Building2, FolderOpen, ShieldCheck } from "lucide-react";
+import { GuidedPageHeader } from "@/components/shared/guided-experience";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { useI18n } from "@/i18n/provider";
 
 export default function SettingsPage() {
+  const { locale } = useI18n();
+  const zh = locale === "zh";
   return (
-    <div>
-      <PageHeader title="设置" description="企业工作空间设置，已为后续配置模块预留。" />
-      <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-        <div className="space-y-4">
-          {settings.map((item) => {
-            const Icon = item.icon;
-            return <Card key={item.title} className="glass-panel border-white/10"><CardContent className="flex gap-4 p-5"><Icon className="h-5 w-5 text-primary" /><div><p className="font-medium">{item.title}</p><p className="text-sm text-muted-foreground">{item.text}</p></div></CardContent></Card>;
-          })}
-        </div>
-        <Card className="glass-panel border-white/10">
-          <CardHeader><CardTitle>组织资料</CardTitle></CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="grid gap-2"><Label>公司名称</Label><Input defaultValue="GeoPilot AI Demo" /></div>
-            <div className="grid gap-2"><Label>主域名</Label><Input defaultValue="geopilot.ai" /></div>
-            <div className="grid gap-2"><Label>区域</Label><Input defaultValue="北美" /></div>
-          </CardContent>
-        </Card>
+    <div className="space-y-6">
+      <GuidedPageHeader
+        title={zh ? "项目设置" : "Project Settings"}
+        description={zh ? "企业名称、网站和行业等信息会直接影响网站分析与 AI 搜索检测。请选择项目后查看和更新真实资料。" : "Company, website, and industry details directly affect website analysis and AI search checks. Select a project to review and update real data."}
+        status={zh ? "需要先选择一个项目" : "Select a project first"}
+        action={<Button asChild className="min-h-11 w-full sm:w-auto"><Link href="/projects"><FolderOpen className="h-4 w-4" />{zh ? "选择项目" : "Select project"}</Link></Button>}
+      />
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card><CardContent className="p-5"><Building2 className="h-5 w-5 text-cyan-300" /><h2 className="mt-4 font-semibold">{zh ? "这些资料会影响什么？" : "What do these details affect?"}</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">{zh ? "企业名称用于品牌提及判断，网站用于 SEO 分析，行业信息用于理解检测问题的业务场景。" : "The company name is used for brand-mention detection, the website powers SEO analysis, and the industry gives business context to check questions."}</p></CardContent></Card>
+        <Card><CardContent className="p-5"><ShieldCheck className="h-5 w-5 text-emerald-300" /><h2 className="mt-4 font-semibold">{zh ? "数据隔离" : "Data isolation"}</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">{zh ? "每个项目的企业资料、检测问题、结果和报告独立保存，不会与其他客户项目混用。" : "Company details, check questions, results, and reports are stored independently for every project and are never mixed with another client project."}</p></CardContent></Card>
       </div>
     </div>
   );

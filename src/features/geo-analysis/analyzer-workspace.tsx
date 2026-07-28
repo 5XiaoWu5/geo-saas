@@ -10,7 +10,7 @@ import type { GeoAnalysis, GeoIssue } from "@/features/geo-analysis/types";
 import { buildOptimizationSuggestions, categoryLabel, diagnoseIssues, type DiagnosedIssue, type OptimizationSuggestion } from "@/features/geo-analysis/recommendations";
 import { GeoBrainScoreCard } from "@/features/geo-brain/components/GeoBrainScoreCard";
 import type { GeoBrainAnalysis } from "@/features/geo-brain/types";
-import { ComingSoon, PageHeader } from "@/components/shared/page";
+import { GuidedEmptyState, GuidedPageHeader } from "@/components/shared/guided-experience";
 import { MetricHelp, type MetricHelpContent } from "@/components/shared/metric-help";
 import { OperationFeedback, type OperationStatus } from "@/components/shared/operation-feedback";
 import { Badge } from "@/components/ui/badge";
@@ -88,7 +88,7 @@ export function AnalyzerWorkspace() {
   if (loading) {
     return (
       <div>
-        <PageHeader title="GEO 分析器" description="基于真实网站扫描结果的 AI 搜索可见性分析。" />
+        <GuidedPageHeader title={locale === "zh" ? "网站与 AI 理解分析" : "Website and AI Understanding Analysis"} description={locale === "zh" ? "读取真实网站扫描，找出最影响搜索引擎与 AI 理解的问题。" : "Read real website scans and identify the issues that most affect search engine and AI understanding."} status={locale === "zh" ? "正在读取分析数据" : "Loading analysis data"} />
         <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> 正在加载真实 GEO 分析数据...
         </div>
@@ -99,7 +99,7 @@ export function AnalyzerWorkspace() {
   if (error) {
     return (
       <div>
-        <PageHeader title="GEO 分析器" description="基于真实网站扫描结果的 AI 搜索可见性分析。" />
+        <GuidedPageHeader title={locale === "zh" ? "网站与 AI 理解分析" : "Website and AI Understanding Analysis"} description={locale === "zh" ? "读取真实网站扫描，找出最影响搜索引擎与 AI 理解的问题。" : "Read real website scans and identify the issues that most affect search engine and AI understanding."} status={locale === "zh" ? "分析数据暂时无法读取" : "Analysis data is temporarily unavailable"} />
         <div className="flex gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
           <AlertCircle className="h-4 w-4 shrink-0" /> {error}
         </div>
@@ -110,22 +110,8 @@ export function AnalyzerWorkspace() {
   if (!data || data.analyzedCount === 0 || !data.summary) {
     return (
       <div>
-        <PageHeader title="GEO 分析器" description="基于真实网站扫描结果的 AI 搜索可见性分析。" />
-        <ComingSoon
-          icon={<Sparkles className="h-6 w-6" />}
-          badge="等待首次分析"
-          title="还没有可分析的数据"
-          description="GEO 分析器读取你项目的真实扫描结果。创建项目并在项目详情页运行一次「开始分析」后，这里会展示真实的 GEO 综合评分、问题诊断与优化建议。"
-          featuresLabel="分析器能力"
-          features={["综合与分项 GEO 评分", "基于扫描结果的问题诊断", "规则引擎生成的可执行优化建议"]}
-          action={
-            <Button asChild>
-              <Link href="/projects">
-                前往项目 <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
-          }
-        />
+        <GuidedPageHeader title={locale === "zh" ? "网站与 AI 理解分析" : "Website and AI Understanding Analysis"} description={locale === "zh" ? "读取真实网站扫描，找出最影响搜索引擎与 AI 理解的问题。" : "Read real website scans and identify the issues that most affect search engine and AI understanding."} status={locale === "zh" ? "尚未运行第一次网站分析" : "The first website analysis has not been run"} />
+        <div className="mt-6"><GuidedEmptyState title={locale === "zh" ? "还没有可分析的数据" : "No analysis data yet"} reason={locale === "zh" ? "分析器只读取真实网站扫描，不会生成演示分数。" : "The analyzer only reads real website scans and never generates demo scores."} instruction={locale === "zh" ? "选择项目并运行第一次分析。" : "Select a project and run the first analysis."} action={<Button asChild className="min-h-11"><Link href="/projects">{locale === "zh" ? "选择项目" : "Select project"}<ArrowRight className="h-4 w-4" /></Link></Button>} /></div>
       </div>
     );
   }
@@ -169,7 +155,7 @@ export function AnalyzerWorkspace() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="GEO 分析器" description="基于真实网站扫描结果的 AI 搜索可见性分析。" />
+      <GuidedPageHeader title={locale === "zh" ? "网站与 AI 理解分析" : "Website and AI Understanding Analysis"} description={locale === "zh" ? "优先处理最影响搜索引擎和 AI 理解的问题，再重新分析验证变化。" : "Resolve the issues that most affect search engine and AI understanding, then rerun the analysis to verify changes."} status={locale === "zh" ? `发现 ${diagnosed.length} 个问题，当前评分 ${activeProject.analysis.totalScore}/100` : `${diagnosed.length} issues found, current score ${activeProject.analysis.totalScore}/100`} action={<Button onClick={() => void runGeoBrain()} disabled={brainLoading} className="min-h-11 w-full sm:w-auto">{brainLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}{locale === "zh" ? "重新分析" : "Rerun analysis"}</Button>} />
       {brainFeedback ? <OperationFeedback status={brainFeedback.status} message={brainFeedback.message} /> : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

@@ -1,5 +1,5 @@
 ﻿import type { LucideIcon } from "lucide-react";
-import { BookOpen, Bot, BrainCircuit, CircleDot, ClipboardList, CreditCard, FileText, Gauge, HelpCircle, KeyRound, LineChart, SearchCheck, Sparkles, Swords, UserCircle } from "lucide-react";
+import { Activity, BookOpen, Bot, BrainCircuit, CircleDot, ClipboardList, CreditCard, FileSearch, FileText, Gauge, HelpCircle, KeyRound, LineChart, SearchCheck, Settings, Sparkles, Swords, UserCircle } from "lucide-react";
 
 export type NavItem = {
   titleKey: string;
@@ -7,6 +7,7 @@ export type NavItem = {
   icon: LucideIcon;
   badge?: string;
   activePrefixes?: string[];
+  projectHref?: string;
 };
 
 export type NavSection = {
@@ -23,32 +24,25 @@ export const mainNavSections: NavSection[] = [
   {
     titleKey: "nav.overviewGroup",
     items: [
-      { titleKey: "nav.dashboard", href: "/dashboard", icon: Gauge },
+      { titleKey: "nav.dashboard", href: "/dashboard", icon: Gauge, projectHref: "/projects/:projectId/overview" },
+      { titleKey: "nav.aiSearchChecks", href: "/geo", projectHref: "/projects/:projectId/geo/monitoring", icon: SearchCheck, activePrefixes: ["/monitoring", "/visibility"] },
+      { titleKey: "nav.websiteAnalysis", href: "/seo", projectHref: "/projects/:projectId/seo", icon: FileSearch, activePrefixes: ["/crawl", "/inventory", "/analyzer"] },
+      { titleKey: "nav.optimizationTasks", href: "/optimization", projectHref: "/projects/:projectId/optimization", icon: ClipboardList },
+      { titleKey: "nav.automationExecution", href: "/automation", projectHref: "/projects/:projectId/automation", icon: Bot },
+      { titleKey: "nav.reportsSimple", href: "/reports", projectHref: "/projects/:projectId/reports", icon: FileText },
+      { titleKey: "nav.aiConnections", href: "/geo#ai-connections", projectHref: "/projects/:projectId/geo/monitoring#ai-connections", icon: Activity },
+      { titleKey: "nav.projectSettings", href: "/settings", icon: Settings },
     ],
   },
   {
-    titleKey: "nav.growthEngines",
+    titleKey: "nav.advanced",
     items: [
-      { titleKey: "nav.seoGrowth", href: "/seo", icon: SearchCheck, activePrefixes: ["/crawl", "/inventory", "/analyzer", "/query-generator"] },
-      { titleKey: "nav.geoGrowth", href: "/geo", icon: Sparkles, activePrefixes: ["/entity", "/simulator", "/visibility", "/campaigns", "/insights"] },
       { titleKey: "nav.growthCenter", href: "/growth/overview", icon: LineChart, activePrefixes: ["/growth"] },
-      { titleKey: "nav.growthReports", href: "/reports", icon: FileText },
-    ],
-  },
-  {
-    titleKey: "nav.assetManagement",
-    items: [
       { titleKey: "nav.knowledgeCenter", href: "/knowledge", icon: BookOpen },
       { titleKey: "nav.competitorCenter", href: "/competitors", icon: Swords },
-    ],
-  },
-  {
-    titleKey: "nav.executionCenter",
-    items: [
-      { titleKey: "nav.optimizationCenter", href: "/optimization", icon: ClipboardList },
       { titleKey: "nav.growthActions", href: "/actions", icon: CircleDot },
       { titleKey: "nav.growthAgent", href: "/agent", icon: BrainCircuit },
-      { titleKey: "nav.automation", href: "/automation", icon: Bot },
+      { titleKey: "nav.geoGrowth", href: "/geo", icon: Sparkles },
     ],
   },
 ];

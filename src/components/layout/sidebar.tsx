@@ -12,17 +12,22 @@ import { Button } from "@/components/ui/button";
 function NavGroup({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
   const { t } = useI18n();
+  const projectId = pathname.match(/^\/projects\/([^/]+)/)?.[1];
 
   return (
     <nav className="grid gap-1">
       {items.map((item) => {
         const Icon = item.icon;
-        const active = pathname === item.href || pathname.startsWith(`${item.href}/`) || item.activePrefixes?.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+        const href = projectId && item.projectHref
+          ? item.projectHref.replace(":projectId", encodeURIComponent(projectId))
+          : item.href;
+        const activeHref = href.split("#")[0] ?? href;
+        const active = pathname === activeHref || pathname.startsWith(`${activeHref}/`) || item.activePrefixes?.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 
         return (
           <Link
-            key={item.href}
-            href={item.href}
+            key={item.titleKey}
+            href={href}
             className={cn(
               "group flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground transition hover:bg-white/[0.06] hover:text-foreground",
               active && "bg-primary/12 text-primary ring-1 ring-primary/20"

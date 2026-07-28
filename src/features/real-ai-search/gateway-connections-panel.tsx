@@ -27,6 +27,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { TechnicalDetails } from "@/components/shared/guided-experience";
 import { useI18n } from "@/i18n/provider";
 import {
   AI_SEARCH_GATEWAY_PROTOCOLS,
@@ -56,7 +57,10 @@ function gatewayError(code: string, zh: boolean) {
   const messages: Record<string, [string, string]> = {
     API_KEY_INVALID: ["API Key 无效，请确认后重试。", "The API key is invalid."],
     API_KEY_PERMISSION_DENIED: ["该 Key 没有读取模型或调用模型的权限。", "This key cannot list or call models."],
-    ACCOUNT_BALANCE_INSUFFICIENT: ["账户余额不足，无法验证模型。", "The account has insufficient balance."],
+    ACCOUNT_BALANCE_INSUFFICIENT: [
+      "当前账户余额不足。GeoPilot 已成功连接到该服务商，但服务商拒绝执行模型请求。请充值服务商账户，或更换一个有余额的 API Key。",
+      "The gateway connection succeeded, but the provider rejected the model request because the account has insufficient balance. Add credit to the provider account or use an API key with available balance.",
+    ],
     GATEWAY_MODELS_EMPTY: ["连接成功，但该网关没有返回可用模型。", "Connected, but the gateway returned no models."],
     GATEWAY_NAME_EXISTS: ["该项目已经存在同名连接。", "A connection with this name already exists."],
     COMPATIBLE_BASE_URL_PRIVATE_NETWORK: ["出于安全原因，不能连接私网或本机地址。", "Private or local addresses are blocked."],
@@ -289,17 +293,11 @@ export function GatewayConnectionsPanel({ projectId }: { projectId: string }) {
                         {zh ? "可用" : "Ready"}
                       </Badge>
                     </div>
-                    <p className="mt-1 truncate text-sm text-slate-400">{connection.baseUrlHost}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-px bg-white/10">
-                  <div className="bg-slate-950/90 p-4">
-                    <p className="text-xs text-slate-500">{zh ? "协议" : "Protocol"}</p>
-                    <p className="mt-1 text-sm text-slate-200">{PROTOCOL_LABELS[connection.protocol]}</p>
-                  </div>
-                  <div className="bg-slate-950/90 p-4">
-                    <p className="text-xs text-slate-500">{zh ? "密钥" : "Credential"}</p>
-                    <p className="mt-1 font-mono text-sm text-slate-200">{connection.keyMask}</p>
+                    <p className="mt-1 text-sm text-slate-400">
+                      {zh
+                        ? `${connection.models.length} 个模型已验证，可以开始检测`
+                        : `${connection.models.length} verified models, ready for checks`}
+                    </p>
                   </div>
                 </div>
                 <div className="p-5">
@@ -312,14 +310,38 @@ export function GatewayConnectionsPanel({ projectId }: { projectId: string }) {
                       </span>
                     ))}
                   </div>
-                  <div className="mt-4 flex items-center justify-between gap-3">
-                    <p className="text-xs text-slate-500">
-                      {zh ? `${connection.models.length} 个模型已验证` : `${connection.models.length} verified models`}
-                    </p>
-                    <Button variant="outline" className="min-h-11 gap-2" onClick={() => setDeleteTarget(connection)}>
-                      <Trash2 className="h-4 w-4" />
-                      {zh ? "删除" : "Delete"}
-                    </Button>
+                  <div className="mt-4 space-y-3">
+                    <TechnicalDetails
+                      label={zh ? "查看连接技术信息" : "View connection details"}
+                      className="min-w-0"
+                    >
+                      <dl className="grid gap-3 text-sm sm:grid-cols-3">
+                        <div>
+                          <dt className="text-slate-500">{zh ? "服务地址" : "Service host"}</dt>
+                          <dd className="mt-1 break-all text-slate-200">{connection.baseUrlHost}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-slate-500">{zh ? "兼容协议" : "Protocol"}</dt>
+                          <dd className="mt-1 text-slate-200">{PROTOCOL_LABELS[connection.protocol]}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-slate-500">{zh ? "加密凭据" : "Encrypted credential"}</dt>
+                          <dd className="mt-1 font-mono text-slate-200">{connection.keyMask}</dd>
+                        </div>
+                      </dl>
+                    </TechnicalDetails>
+                    <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                      <Button asChild className="min-h-11 justify-between">
+                        <a href="#saved-questions">
+                          {zh ? "使用这个连接开始检测" : "Run a check with this connection"}
+                          <ChevronRight className="h-4 w-4" />
+                        </a>
+                      </Button>
+                      <Button variant="ghost" className="min-h-11 gap-2 text-muted-foreground" onClick={() => setDeleteTarget(connection)}>
+                        <Trash2 className="h-4 w-4" />
+                        {zh ? "删除这个中转站" : "Delete this gateway"}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -367,12 +389,6 @@ export function GatewayConnectionsPanel({ projectId }: { projectId: string }) {
                   <Label htmlFor="gateway-name">{zh ? "服务名称" : "Service name"}</Label>
                   <Input id="gateway-name" className="min-h-11" value={name} onChange={event => { setName(event.target.value); setModels([]); }} placeholder={zh ? "例如：公司 AI 网关" : "e.g. Company AI Gateway"} />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="gateway-protocol">{zh ? "兼容协议" : "Protocol"}</Label>
-                  <Select id="gateway-protocol" className="min-h-11" value={protocol} onChange={event => { setProtocol(event.target.value as AISearchGatewayProtocol); setModels([]); }}>
-                    {AI_SEARCH_GATEWAY_PROTOCOLS.map(value => <option key={value} value={value}>{PROTOCOL_LABELS[value]}</option>)}
-                  </Select>
-                </div>
                 <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="gateway-url">{zh ? "API 地址" : "Base URL"}</Label>
                   <Input id="gateway-url" className="min-h-11" value={baseUrl} onChange={event => { setBaseUrl(event.target.value); setModels([]); }} placeholder="https://gateway.example.com" />
@@ -383,6 +399,17 @@ export function GatewayConnectionsPanel({ projectId }: { projectId: string }) {
                   <Input id="gateway-key" type="password" autoComplete="new-password" className="min-h-11 font-mono" value={apiKey} onChange={event => { setApiKey(event.target.value); setModels([]); }} placeholder={zh ? "粘贴中转站提供的 Key" : "Paste the gateway key"} />
                 </div>
               </div>
+              <TechnicalDetails label={zh ? "高级连接设置" : "Advanced connection settings"}>
+                <div className="space-y-2">
+                  <Label htmlFor="gateway-protocol">{zh ? "兼容协议" : "Protocol"}</Label>
+                  <Select id="gateway-protocol" className="min-h-11" value={protocol} onChange={event => { setProtocol(event.target.value as AISearchGatewayProtocol); setModels([]); }}>
+                    {AI_SEARCH_GATEWAY_PROTOCOLS.map(value => <option key={value} value={value}>{PROTOCOL_LABELS[value]}</option>)}
+                  </Select>
+                  <p className="text-xs leading-5 text-slate-500">
+                    {zh ? "默认使用 OpenAI 兼容协议。只有服务商明确要求时才需要修改。" : "OpenAI-compatible is the default. Change it only when your provider explicitly requires another protocol."}
+                  </p>
+                </div>
+              </TechnicalDetails>
 
               {!models.length ? (
                 <Button className="min-h-11 w-full gap-2" disabled={busy !== null || !name.trim() || !baseUrl.trim() || apiKey.trim().length < 8} onClick={() => void discover()}>
@@ -412,9 +439,14 @@ export function GatewayConnectionsPanel({ projectId }: { projectId: string }) {
                             </button>
                             <button type="button" className="min-h-11 min-w-0 flex-1 text-left" onClick={() => toggleModel(candidate)}>
                               <span className="block truncate text-sm font-medium text-white">{candidate.displayName}</span>
-                              <span className="block truncate text-xs text-slate-500">{candidate.modelId}</span>
                             </button>
                           </div>
+                          <TechnicalDetails
+                            label={zh ? "查看模型标识" : "View model identifier"}
+                            className="mt-2"
+                          >
+                            <p className="break-all font-mono text-xs text-slate-400">{candidate.modelId}</p>
+                          </TechnicalDetails>
                           {active ? (
                             <div className="mt-3 grid gap-2 border-t border-white/10 pt-3 sm:grid-cols-[1fr_auto]">
                               <Select className="min-h-11" value={active.family} onChange={event => changeFamily(candidate.modelId, event.target.value as AISearchModelFamily)}>
