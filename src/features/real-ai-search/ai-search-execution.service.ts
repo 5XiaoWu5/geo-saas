@@ -122,7 +122,9 @@ async function resolveProviderInput(
     try {
       baseUrl = await assertSafeCompatibleBaseUrl(supplied, { signal: controller.signal });
     } catch (error) {
-      const code = error instanceof Error ? error.message : "COMPATIBLE_BASE_URL_INVALID";
+      const code = error instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(error.message)
+        ? error.message
+        : normalizeProviderRuntimeError(error);
       throw new RealAISearchError(code, 400);
     } finally {
       clearTimeout(timer);

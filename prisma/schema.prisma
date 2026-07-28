@@ -113,6 +113,19 @@ enum AISearchConnectionType {
   NATIVE
 }
 
+enum AISearchGatewayProtocol {
+  OPENAI_COMPATIBLE
+  ANTHROPIC_COMPATIBLE
+  GEMINI_COMPATIBLE
+}
+
+enum AISearchModelFamily {
+  OPENAI
+  GEMINI
+  CLAUDE
+  PERPLEXITY
+}
+
 enum AIModelVerificationStatus {
   LISTED_NOT_TESTED
   VERIFYING
@@ -364,45 +377,47 @@ model Project {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  user                    User?                         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  websiteScans            WebsiteScan[]
-  geoAnalyses             GeoAnalysis[]
-  optimizationTasks       OptimizationTask[]
-  visibilityCampaigns     VisibilityCampaign[]
-  queryTemplates          QueryTemplate[]
-  entityProfiles          EntityProfile[]
-  geoBrainAnalyses        GeoBrainAnalysis[]
-  geoCampaigns            GeoCampaign[]
-  simulationTasks         SimulationTask[]
-  growthSnapshots         GrowthSnapshot[]
-  competitorProfiles      CompetitorProfile[]
-  benchmarkRuns           BenchmarkRun[]
-  knowledgeBase           CompanyKnowledgeBase?
-  knowledgeProfile        CompanyKnowledgeProfile?
-  knowledgeSources        KnowledgeSource[]
-  knowledgeDocuments      KnowledgeDocument[]
-  productEntities         ProductEntity[]
-  serviceEntities         ServiceEntity[]
-  customerCases           CustomerCase[]
-  technicalDocuments      TechnicalDocument[]
-  knowledgeChunks         KnowledgeChunk[]
-  knowledgeImportJobs     KnowledgeImportJob[]
-  knowledgeExtractions    KnowledgeExtractionResult[]
-  simulationEvaluations   SimulationEvaluationProfile[]
-  aiSearchProviderConfigs AISearchProviderConfig[]
-  aiSearchMonitors        AISearchMonitor[]
-  aiSearchQueries         AISearchQuery[]
-  aiSearchResults         AISearchResult[]
-  aiSearchCitations       AISearchCitation[]
-  aiSearchGrowthScores    AISearchGrowthScore[]
-  monitoringSchedule      MonitoringSchedule?
-  monitoringHistories     MonitoringHistory[]
-  notifications           Notification[]
-  growthReports           GrowthReport[]
-  growthActions           GrowthAction[]
-  growthAgentTasks        GrowthAgentTask[]
-  automationRuns          AutomationRun[]
-  automationSteps         AutomationStep[]
+  user                       User?                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  websiteScans               WebsiteScan[]
+  geoAnalyses                GeoAnalysis[]
+  optimizationTasks          OptimizationTask[]
+  visibilityCampaigns        VisibilityCampaign[]
+  queryTemplates             QueryTemplate[]
+  entityProfiles             EntityProfile[]
+  geoBrainAnalyses           GeoBrainAnalysis[]
+  geoCampaigns               GeoCampaign[]
+  simulationTasks            SimulationTask[]
+  growthSnapshots            GrowthSnapshot[]
+  competitorProfiles         CompetitorProfile[]
+  benchmarkRuns              BenchmarkRun[]
+  knowledgeBase              CompanyKnowledgeBase?
+  knowledgeProfile           CompanyKnowledgeProfile?
+  knowledgeSources           KnowledgeSource[]
+  knowledgeDocuments         KnowledgeDocument[]
+  productEntities            ProductEntity[]
+  serviceEntities            ServiceEntity[]
+  customerCases              CustomerCase[]
+  technicalDocuments         TechnicalDocument[]
+  knowledgeChunks            KnowledgeChunk[]
+  knowledgeImportJobs        KnowledgeImportJob[]
+  knowledgeExtractions       KnowledgeExtractionResult[]
+  simulationEvaluations      SimulationEvaluationProfile[]
+  aiSearchProviderConfigs    AISearchProviderConfig[]
+  aiSearchGatewayConnections AISearchGatewayConnection[]
+  aiSearchGatewayModels      AISearchGatewayModel[]
+  aiSearchMonitors           AISearchMonitor[]
+  aiSearchQueries            AISearchQuery[]
+  aiSearchResults            AISearchResult[]
+  aiSearchCitations          AISearchCitation[]
+  aiSearchGrowthScores       AISearchGrowthScore[]
+  monitoringSchedule         MonitoringSchedule?
+  monitoringHistories        MonitoringHistory[]
+  notifications              Notification[]
+  growthReports              GrowthReport[]
+  growthActions              GrowthAction[]
+  growthAgentTasks           GrowthAgentTask[]
+  automationRuns             AutomationRun[]
+  automationSteps            AutomationStep[]
 
   @@index([userId])
 }
@@ -1054,6 +1069,55 @@ model AISearchProviderConfig {
 
   @@unique([projectId, provider])
   @@index([projectId, enabled])
+}
+
+model AISearchGatewayConnection {
+  id              String                  @id @default(cuid())
+  projectId       String
+  name            String
+  baseUrl         String
+  protocol        AISearchGatewayProtocol @default(OPENAI_COMPATIBLE)
+  enabled         Boolean                 @default(true)
+  encryptedApiKey String
+  apiKeyIv        String
+  apiKeyAuthTag   String
+  apiKeyHint      String
+  secretVersion   Int                     @default(1)
+  lastTestStatus  String?
+  lastTestError   String?
+  lastTestedAt    DateTime?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  project Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  models  AISearchGatewayModel[]
+
+  @@unique([projectId, name])
+  @@index([projectId, enabled])
+}
+
+model AISearchGatewayModel {
+  id                 String                       @id @default(cuid())
+  projectId          String
+  connectionId       String
+  modelId            String
+  displayName        String
+  family             AISearchModelFamily
+  enabled            Boolean                      @default(true)
+  isDefault          Boolean                      @default(false)
+  verificationStatus AIModelVerificationStatus    @default(LISTED_NOT_TESTED)
+  verifiedAt         DateTime?
+  capabilitiesJson   Json                         @default("{}")
+  compatibilityLevel AIProviderCompatibilityLevel @default(NOT_TESTED)
+  createdAt          DateTime                     @default(now())
+  updatedAt          DateTime                     @updatedAt
+
+  project    Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  connection AISearchGatewayConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, modelId])
+  @@index([projectId, family, enabled])
+  @@index([connectionId, enabled])
 }
 
 model AISearchMonitor {

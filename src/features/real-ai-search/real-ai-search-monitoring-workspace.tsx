@@ -32,6 +32,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/i18n/provider";
 import { PROVIDER_METADATA } from "./provider-metadata";
+import { GatewayConnectionsPanel } from "./gateway-connections-panel";
 import { growthNextStepLabel, selectGrowthNextStep } from "@/features/growth-engine/next-step";
 import {
   AI_SEARCH_PROVIDER_TYPES,
@@ -175,6 +176,18 @@ export function RealAISearchMonitoringWorkspace({ projectId }: { projectId: stri
         </CardContent>
       </Card>
 
+      <GatewayConnectionsPanel projectId={projectId} />
+
+      <div>
+        <h2 className="text-lg font-semibold text-white">
+          {locale === "zh" ? "官方 Provider 直连" : "Official provider connections"}
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {locale === "zh"
+            ? "官方连接与第三方网关分开管理，避免来源和模型归属混淆。"
+            : "Official providers stay separate from third-party gateways to preserve source clarity."}
+        </p>
+      </div>
       <section className="grid gap-4 xl:grid-cols-2">
         {data?.providers.map(item => (
           <ProviderCard
@@ -349,9 +362,7 @@ function ProviderCard({
   const { locale, t } = useI18n();
   const meta = PROVIDER_METADATA[stats.provider];
   const [enabled, setEnabled] = useState(stats.config.id ? stats.config.enabled : true);
-  const [connectionType, setConnectionType] = useState<AISearchConnectionType>(stats.config.connectionType);
-  const [displayName, setDisplayName] = useState(stats.config.displayName ?? "");
-  const [baseUrl, setBaseUrl] = useState("");
+  const connectionType: AISearchConnectionType = stats.provider === "OPENAI" ? "OPENAI_OFFICIAL" : "NATIVE";
   const [models, setModels] = useState<ProviderModelOption[]>([]);
   const [model, setModel] = useState(stats.config.selectedModelId ?? "");
   const [connectionTested, setConnectionTested] = useState(false);
@@ -367,12 +378,10 @@ function ProviderCard({
 
   useEffect(() => {
     setEnabled(stats.config.id ? stats.config.enabled : true);
-    setConnectionType(stats.config.connectionType);
-    setDisplayName(stats.config.displayName ?? "");
     setModel(stats.config.selectedModelId ?? "");
     setVerifiedCapabilities(stats.config.capabilities);
     setConfigurationDirty(false);
-  }, [stats.config.capabilities, stats.config.connectionType, stats.config.displayName, stats.config.enabled, stats.config.id, stats.config.selectedModelId]);
+  }, [stats.config.capabilities, stats.config.enabled, stats.config.id, stats.config.selectedModelId]);
 
   const testing = busy === `test:${stats.provider}`;
   const retrievingModels = busy === `models:${stats.provider}`;
@@ -405,16 +414,15 @@ function ProviderCard({
     unavailable: t("providerUx.unavailableStatus"),
     disabled: t("providerUx.disabled"),
   }[status];
-  const canTest = (apiKey.trim().length >= 8 || stats.config.configured)
-    && (connectionType !== "OPENAI_COMPATIBLE" || Boolean(baseUrl.trim() || stats.config.baseUrlHost));
+  const canTest = apiKey.trim().length >= 8 || stats.config.configured;
   const canSave = Boolean(verificationToken && model);
 
   function connectionPayload() {
     return {
       provider: stats.provider,
       connectionType,
-      displayName: connectionType === "OPENAI_COMPATIBLE" ? displayName.trim() || null : null,
-      baseUrl: connectionType === "OPENAI_COMPATIBLE" && baseUrl.trim() ? baseUrl.trim() : null,
+      displayName: null,
+      baseUrl: null,
       ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
     };
   }
@@ -584,17 +592,9 @@ function ProviderCard({
         <div className="flex min-w-0 gap-3">
           <ProviderLogo provider={stats.provider} connectionType={connectionType} />
           <div className="min-w-0">
-            <h3 className="font-semibold">
-              {connectionType === "OPENAI_COMPATIBLE"
-                ? displayName || (locale === "zh" ? "第三方 AI 接口" : "Third-party AI interface")
-                : meta.name}
-            </h3>
+            <h3 className="font-semibold">{meta.name}</h3>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              {connectionType === "OPENAI_COMPATIBLE"
-                ? (locale === "zh"
-                  ? "通过第三方 OpenAI 兼容接口运行检测；不代表 OpenAI 官方产品结果。"
-                  : "Runs checks through a third-party OpenAI-compatible interface; this is not an official OpenAI product result.")
-                : meta.description[locale]}
+              {meta.description[locale]}
             </p>
           </div>
         </div>
@@ -657,86 +657,6 @@ function ProviderCard({
       </details>
 
       <div className="mt-4 grid gap-4">
-        {stats.provider === "OPENAI" ? (
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-medium">
-              {locale === "zh" ? "第一步：选择连接方式" : "Step 1: Choose a connection"}
-            </legend>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {(["OPENAI_OFFICIAL", "OPENAI_COMPATIBLE"] as const).map(value => (
-                <label
-                  key={value}
-                  className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border px-3 text-sm ${
-                    connectionType === value ? "border-violet-300/60 bg-violet-300/10" : "border-white/10"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name={`${stats.provider}-connection-type`}
-                    value={value}
-                    checked={connectionType === value}
-                    onChange={() => {
-                      setConnectionType(value);
-                      setBaseUrl("");
-                      invalidateConnection();
-                    }}
-                  />
-                  {value === "OPENAI_OFFICIAL"
-                    ? (locale === "zh" ? "OpenAI 官方 API" : "Official OpenAI API")
-                    : (locale === "zh" ? "第三方兼容接口" : "Third-party compatible API")}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-        ) : null}
-
-        {connectionType === "OPENAI_COMPATIBLE" ? (
-          <div className="space-y-4 rounded-2xl border border-amber-300/20 bg-amber-300/[0.05] p-4">
-            <p className="text-xs leading-5 text-amber-100">
-              {locale === "zh"
-                ? "您正在连接第三方 AI 接口。费用、数据处理、模型真实性和稳定性由该服务商负责；GeoPilot AI 只能验证接口能否调用。"
-                : "You are connecting a third-party AI interface. Pricing, data handling, model authenticity, and reliability are the provider's responsibility; GeoPilot AI can only verify that the interface responds."}
-            </p>
-            <div>
-              <Label htmlFor={`${stats.provider}-display-name`}>
-                {locale === "zh" ? "服务名称" : "Service name"}
-              </Label>
-              <Input
-                id={`${stats.provider}-display-name`}
-                className="mt-2 min-h-11"
-                value={displayName}
-                onChange={event => {
-                  setDisplayName(event.target.value);
-                  invalidateConnection();
-                }}
-                placeholder={locale === "zh" ? "例如：企业 AI 网关" : "Example: Enterprise AI gateway"}
-              />
-            </div>
-            <div>
-              <Label htmlFor={`${stats.provider}-base-url`}>
-                {locale === "zh" ? "API 地址" : "API address"}
-              </Label>
-              <Input
-                id={`${stats.provider}-base-url`}
-                type="url"
-                inputMode="url"
-                className="mt-2 min-h-11"
-                value={baseUrl}
-                onChange={event => {
-                  setBaseUrl(event.target.value);
-                  invalidateConnection();
-                }}
-                placeholder={stats.config.baseUrlHost
-                  ? (locale === "zh" ? `已保存：${stats.config.baseUrlHost}` : `Saved: ${stats.config.baseUrlHost}`)
-                  : "https://api.example.com/v1"}
-              />
-              <p className="mt-2 text-xs text-muted-foreground">
-                {locale === "zh" ? "生产环境只接受公开 HTTPS 地址。" : "Production accepts public HTTPS addresses only."}
-              </p>
-            </div>
-          </div>
-        ) : null}
-
         <div>
           <Label htmlFor={`${stats.provider}-api-key`}>
             {locale === "zh" ? "第二步：填写 API Key" : "Step 2: Enter the API Key"}
@@ -960,8 +880,8 @@ function ProviderCard({
           </DialogTitle>
           <DialogDescription className="mt-3 text-sm leading-6 text-muted-foreground">
             {locale === "zh"
-              ? `即将向 ${connectionType === "OPENAI_COMPATIBLE" ? displayName || "第三方服务" : meta.name} 的 ${model} 模型发送 1 次最小请求，可能产生少量费用。`
-              : `One minimal request will be sent to ${connectionType === "OPENAI_COMPATIBLE" ? displayName || "the third-party service" : meta.name} using ${model}. It may consume a small amount of credit.`}
+              ? `即将向 ${meta.name} 的 ${model} 模型发送 1 次最小请求，可能产生少量费用。`
+              : `One minimal request will be sent to ${meta.name} using ${model}. It may consume a small amount of credit.`}
           </DialogDescription>
           <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <DialogClose asChild>

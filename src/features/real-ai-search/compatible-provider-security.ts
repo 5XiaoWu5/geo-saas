@@ -79,8 +79,11 @@ async function defaultResolver(hostname: string, signal: AbortSignal) {
   for (const type of ["A", "AAAA"]) {
     const response = await fetch(
       `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(hostname)}&type=${type}`,
-      { headers: { Accept: "application/dns-json" }, redirect: "error", signal },
+      { headers: { Accept: "application/dns-json" }, redirect: "manual", signal },
     );
+    if (response.status >= 300 && response.status < 400) {
+      throw new Error("COMPATIBLE_BASE_URL_DNS_FAILED");
+    }
     if (!response.ok) throw new Error("COMPATIBLE_BASE_URL_DNS_FAILED");
     const body = await response.json() as { Answer?: Array<{ data?: string; type?: number }> };
     for (const answer of body.Answer ?? []) {
@@ -116,10 +119,9 @@ async function stablePublicUrl(
   options: { production?: boolean; signal: AbortSignal; resolveHost?: Resolver },
 ) {
   const first = await resolveSafeCompatibleBaseUrl(input, options);
-  const second = await resolveSafeCompatibleBaseUrl(input, options);
-  if (first.addresses.join(",") !== second.addresses.join(",")) {
-    throw new Error("COMPATIBLE_BASE_URL_DNS_REBINDING");
-  }
+  // Resolve twice so an attacker cannot pass a single public answer and then
+  // switch to a private target. Public CDN pools are allowed to rotate IPs.
+  await resolveSafeCompatibleBaseUrl(input, options);
   return first.normalized;
 }
 

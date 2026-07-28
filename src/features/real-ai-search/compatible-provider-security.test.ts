@@ -54,15 +54,31 @@ test("redirects are revalidated and cannot reach private networks", async () => 
   }
 });
 
-test("inconsistent DNS answers are treated as a rebinding risk", async () => {
+test("public CDN address rotation is allowed", async () => {
+  let resolution = 0;
+  const previous = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ data: [] }), { status: 200 });
+  try {
+    const result = await safeCompatibleJsonRequest("https://gateway.example/v1/models", { method: "GET" }, {
+      production: true,
+      signal: new AbortController().signal,
+      resolveHost: async () => [resolution++ === 0 ? "203.0.113.10" : "203.0.113.11"],
+    });
+    assert.deepEqual(result, { data: [] });
+  } finally {
+    globalThis.fetch = previous;
+  }
+});
+
+test("a public-to-private DNS switch is rejected as a rebinding risk", async () => {
   let resolution = 0;
   await assert.rejects(
     safeCompatibleJsonRequest("https://gateway.example/v1/models", { method: "GET" }, {
       production: true,
       signal: new AbortController().signal,
-      resolveHost: async () => [resolution++ === 0 ? "203.0.113.10" : "203.0.113.11"],
+      resolveHost: async () => [resolution++ === 0 ? "203.0.113.10" : "10.0.0.8"],
     }),
-    /DNS_REBINDING/,
+    /PRIVATE_NETWORK/,
   );
 });
 

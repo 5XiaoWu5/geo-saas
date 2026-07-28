@@ -47,14 +47,16 @@ test("model selection is a server-fed dropdown and cannot be freely typed", asyn
 });
 
 test("official OpenAI and compatible gateways have distinct identity and logos", async () => {
-  const [workspace, logo, metadata] = await Promise.all([
+  const [workspace, gatewayPanel, logo, metadata] = await Promise.all([
     readFile("src/features/real-ai-search/real-ai-search-monitoring-workspace.tsx", "utf8"),
+    readFile("src/features/real-ai-search/gateway-connections-panel.tsx", "utf8"),
     readFile("src/components/shared/provider-logo.tsx", "utf8"),
     readFile("src/features/real-ai-search/provider-metadata.ts", "utf8"),
   ]);
   assert.match(workspace, /OPENAI_OFFICIAL/);
-  assert.match(workspace, /OPENAI_COMPATIBLE/);
-  assert.match(workspace, /Third-party compatible API/);
+  assert.match(workspace, /GatewayConnectionsPanel/);
+  assert.match(gatewayPanel, /OPENAI_COMPATIBLE/);
+  assert.match(gatewayPanel, /Third-party AI gateways/);
   assert.match(logo, /<Network/);
   assert.match(metadata, /provider-logos\/openai\.svg/);
   assert.match(logo, /onError/);
